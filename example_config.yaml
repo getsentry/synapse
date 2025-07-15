@@ -1,0 +1,35 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+cells:
+  us:
+    url: "10.0.0.1:8080"
+  us2:
+    url: "10.0.0.2:8080"
+  de:
+    url: "10.0.0.3:8080"
+
+routes:
+  - match:
+      host: us.sentry.io
+      path_prefix_pattern: /organizations/{organization_id_or_slug}/
+    route:
+      dynamic_to: resolve_cell_from_organization
+      default: us
+  - match:
+      host: us.sentry.io
+      path_prefix_pattern: /cell/{cell_id}/
+    route:
+      dynamic_to: resolve_cell_from_id
+  - match:
+      host: de.sentry.io
+    route:
+      to: de
+
+logging:
+  sentry_dsn: "your_sentry_dsn_here"
+
+metrics:
+  statsd_host: "127.0.0.1"
+  statsd_port: 8126

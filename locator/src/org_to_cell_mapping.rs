@@ -1,7 +1,8 @@
+use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
-use std::{collections::HashMap, sync::RwLock};
 
 #[derive(Debug)]
 pub struct LookupError {
@@ -73,31 +74,30 @@ impl OrgToCell {
         // Returns an `Option<Cell>` if found, or `None` if not found.
         // Returns an error if locality is passed and the org_id/locality pair is not valid.
         // Or if a locality is passed but no defualt cell is found for that locality
-        let guard = self.inner.read().unwrap();
+        let read_guard = self.inner.read();
 
-        let cell = guard.mapping.get(org_id);
+        let cell = read_guard.mapping.get(org_id);
 
         match cell {
             Some(cell) => {
                 if let Some(loc) = locality {
                     if cell.locality.as_str() != loc {
-                        return Err(LookupError::new(&format!("locality mismatch")));
+                        return Err(LookupError::new("locality mismatch"));
                     }
                 }
-                return Ok(Some(cell.clone()));
+                Ok(Some(cell.clone()))
             }
             None => {
                 if let Some(locality) = locality {
-                    if let Some(default_cell) = guard.locality_to_default_cell.get(locality) {
-                        return Ok(Some(default_cell.clone()));
+                    if let Some(default_cell) = read_guard.locality_to_default_cell.get(locality) {
+                        Ok(Some(default_cell.clone()))
                     } else {
-                        return Err(LookupError::new(&format!(
-                            "No cell found for org_id '{}' and locality '{}'",
-                            org_id, locality
-                        )));
+                        Err(LookupError::new(&format!(
+                            "No cell found for org_id '{org_id}' and locality '{locality}'"
+                        )))
                     }
                 } else {
-                    return Ok(None);
+                    Ok(None)
                 }
             }
         }
@@ -110,7 +110,7 @@ impl OrgToCell {
     pub fn load_placeholder_data(&self) {
         std::thread::sleep(std::time::Duration::from_secs(10)); // fake sleep
 
-        let cells = vec![
+        let cells = [
             Cell::new("us1", "us"),
             Cell::new("us2", "us"),
             Cell::new("de", "de"),
@@ -118,11 +118,11 @@ impl OrgToCell {
 
         let mut dummy_data = HashMap::new();
         for i in 0..10 {
-            dummy_data.insert(format!("org_{}", i), cells[i % cells.len()].clone());
+            dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].clone());
         }
 
-        let mut guard = self.inner.write().unwrap();
-        guard.mapping = dummy_data;
-        guard.last_updated = Some(SystemTime::now());
+        let mut write_guard = self.inner.write();
+        write_guard.mapping = dummy_data;
+        write_guard.last_updated = Some(SystemTime::now());
     }
 }

@@ -76,7 +76,7 @@ async fn handler(
     match cell {
         Ok(maybe_cell) => Ok(maybe_cell.into()),
         Err(e) => {
-            eprintln!("Error looking up cell: {}", e);
+            eprintln!("Error looking up cell: {e}");
             Err(ApiErrorResponse {
                 error_message: e.to_string(),
             })

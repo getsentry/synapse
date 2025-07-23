@@ -4,7 +4,6 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-
 #[derive(Debug)]
 pub struct LookupError {
     message: String,

@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use std::fs::File;
 use std::error::Error;
+use std::fs::File;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -27,7 +27,6 @@ pub struct RouteAction {
     pub to: Option<String>,
     pub default: Option<String>,
 }
-
 
 pub fn load_from_file(path: &str) -> Result<Config, Box<dyn Error>> {
     let file = File::open(path)?;

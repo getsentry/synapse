@@ -1,8 +1,7 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::fmt;
 use std::sync::Arc;
 use std::time::SystemTime;
-use std::fmt;
-
+use std::{collections::HashMap, sync::RwLock};
 
 #[derive(Debug)]
 pub struct LookupError {
@@ -23,13 +22,11 @@ impl fmt::Display for LookupError {
     }
 }
 
-
 #[derive(Clone)]
 pub struct Cell {
     pub id: Arc<String>,
     pub locality: Arc<String>,
 }
-
 
 impl Cell {
     pub fn new<I, L>(id: I, locality: L) -> Self
@@ -51,7 +48,6 @@ struct OrgToCellInner {
     last_updated: Option<SystemTime>,
 }
 
-
 #[derive(Clone)]
 pub struct OrgToCell {
     inner: Arc<RwLock<OrgToCellInner>>,
@@ -68,7 +64,11 @@ impl OrgToCell {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Option<Cell>, LookupError> {
+    pub fn lookup(
+        &self,
+        org_id: &str,
+        locality: Option<&str>,
+    ) -> Result<Option<Cell>, LookupError> {
         // Looks up the cell for a given organization ID and locality.
         // Returns an `Option<Cell>` if found, or `None` if not found.
         // Returns an error if locality is passed and the org_id/locality pair is not valid.
@@ -85,14 +85,16 @@ impl OrgToCell {
                     }
                 }
                 return Ok(Some(cell.clone()));
-
             }
             None => {
                 if let Some(locality) = locality {
                     if let Some(default_cell) = guard.locality_to_default_cell.get(locality) {
                         return Ok(Some(default_cell.clone()));
                     } else {
-                        return Err(LookupError::new(&format!("No cell found for org_id '{}' and locality '{}'", org_id, locality)));
+                        return Err(LookupError::new(&format!(
+                            "No cell found for org_id '{}' and locality '{}'",
+                            org_id, locality
+                        )));
                     }
                 } else {
                     return Ok(None);
@@ -119,11 +121,8 @@ impl OrgToCell {
             dummy_data.insert(format!("org_{}", i), cells[i % cells.len()].clone());
         }
 
-
         let mut guard = self.inner.write().unwrap();
         guard.mapping = dummy_data;
         guard.last_updated = Some(SystemTime::now());
     }
-
-
 }

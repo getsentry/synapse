@@ -1,12 +1,11 @@
 use axum::{
-    routing::get,
-    Router,
-    Json,
+    Json, Router,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    routing::get,
 };
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
 mod org_to_cell_mapping;
@@ -50,7 +49,6 @@ impl IntoResponse for ApiErrorResponse {
     }
 }
 
-
 #[derive(Deserialize, Debug)]
 struct Params {
     org_id: String,
@@ -67,12 +65,11 @@ async fn main() {
     let app = Router::new().route("/", get(handler)).with_state(routes);
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
-
 }
 
 async fn handler(
     State(org_to_cell): State<OrgToCell>,
-    Query(params): Query<Params>
+    Query(params): Query<Params>,
 ) -> Result<ApiResponse, ApiErrorResponse> {
     let cell = org_to_cell.lookup(&params.org_id, params.locality.as_deref());
 
@@ -85,5 +82,4 @@ async fn handler(
             })
         }
     }
-
 }

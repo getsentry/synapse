@@ -10,9 +10,8 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct Route {
     #[serde(rename = "match")]
-    pub match_criteria: Match,
-    #[serde(rename = "route")]
-    pub route_action: RouteAction,
+    pub r#match: Match,
+    pub route: RouteAction,
 }
 
 #[derive(Debug, Deserialize)]

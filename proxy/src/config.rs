@@ -22,7 +22,7 @@ pub struct Match {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)] 
+#[serde(untagged)]
 pub enum RouteAction {
     Dynamic {
         dynamic_to: String,

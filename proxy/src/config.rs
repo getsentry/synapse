@@ -22,10 +22,15 @@ pub struct Match {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RouteAction {
-    pub dynamic_to: Option<String>,
-    pub to: Option<String>,
-    pub default: Option<String>,
+#[serde(untagged)] 
+pub enum RouteAction {
+    Dynamic {
+        dynamic_to: String,
+        default: Option<String>,
+    },
+    Static {
+        to: String,
+    },
 }
 
 pub fn load_from_file(path: &str) -> Result<Config, Box<dyn Error>> {

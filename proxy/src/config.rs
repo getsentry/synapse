@@ -18,7 +18,7 @@ pub struct Route {
 #[derive(Debug, Deserialize)]
 pub struct Match {
     pub host: String,
-    pub path_prefix_pattern: String,
+    pub path_prefix_pattern: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

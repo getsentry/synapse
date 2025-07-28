@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
+mod org_cell_fetching;
 mod org_to_cell_mapping;
 use org_to_cell_mapping::{Cell, OrgToCell};
 

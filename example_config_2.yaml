@@ -1,0 +1,13 @@
+mode: fan-out-router | proxy | locator | proxy + locator combined
+
+common:
+  statsd_host: localhost
+  etc: blah
+  log_level: INFO
+
+proxy:
+  routes: {}
+
+fan-out-router:
+
+locator: {}

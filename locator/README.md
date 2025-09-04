@@ -29,10 +29,10 @@ It can also be bundled together with the proxy module, allowing dynamic proxying
 On initial bootstrap, the locator service requests a snapshot of all mappings from the control plane in pages. 
 
 ```
-$ curl sentry-control.internal/org-cell-mappings?cursor=abc123&limit=100000
+$ curl sentry-control.internal/org-cell-mappings?cursor=org12345&limit=100000
 
 # headers
-# Link: <https://internal-proxy.local/org-cell-mappings?cursor=def456&limit=100000; rel="next",    
+# Link: <https://internal-proxy.local/org-cell-mappings?cursor=org12345&limit=100000; rel="next",    
 # body
 {
    "mappings": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....]

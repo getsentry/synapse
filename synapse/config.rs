@@ -13,7 +13,7 @@ struct CommonConfig {
     logging: Option<LoggingConfig>,
 }
 
-struct FanOutRouterConfig {}
+struct IngestRouterConfig {}
 
 struct ProxyConfig {}
 
@@ -23,7 +23,7 @@ struct LocatorConfig {}
 struct Config {
     #[serde(flatten)]
     common: CommonConfig,
-    fan_out_router: Option<FanOutRouterConfig>,
+    ingest_router: Option<IngestRouterConfig>,
     proxy: Option<ProxyConfig>,
     locator: Option<LocatorConfig>,
 }

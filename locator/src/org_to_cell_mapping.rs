@@ -2,7 +2,10 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::SystemTime;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
 pub struct LookupError {
@@ -21,6 +24,11 @@ impl fmt::Display for LookupError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)
     }
+}
+
+#[derive(Debug)]
+pub struct LoadError {
+    message: String,
 }
 
 #[derive(Clone)]
@@ -43,15 +51,35 @@ impl Cell {
 }
 
 #[derive(Clone)]
+struct Cursor {
+    // seconds since 1970-01-01 00:00:00 UTC
+    last_updated: u64,
+    // None org_id means no more results
+    org_id: Option<i64>,
+}
+
+enum Command {
+    // Trigger incremental mapping refresh outside of the normal internal
+    Refresh(oneshot::Sender<Result<()>>),
+    // Trigger the loader to shudown gracefully
+    Shutdown,
+}
+
+#[derive(Clone)]
 struct OrgToCellInner {
     mapping: HashMap<String, Cell>,
     locality_to_default_cell: HashMap<String, Cell>,
-    last_updated: Option<SystemTime>,
+    last_cursor: Option<Cursor>,
 }
 
 #[derive(Clone)]
 pub struct OrgToCell {
     inner: Arc<RwLock<OrgToCellInner>>,
+    update_lock: Arc<Semaphore>,
+    // Used by the healthcheck. Initially false and set to true once any snapshot
+    // has been loaded and mappings are available.
+    ready: Arc<AtomicBool>,
+    // last_update: Arc<RwLock<Option<SystemTime>>>,
 }
 
 impl OrgToCell {
@@ -60,8 +88,10 @@ impl OrgToCell {
             inner: Arc::new(RwLock::new(OrgToCellInner {
                 mapping: HashMap::new(),
                 locality_to_default_cell: HashMap::new(),
-                last_updated: None,
+                last_cursor: None,
             })),
+            update_lock: Arc::new(Semaphore::new(1)),
+            ready: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -107,7 +137,13 @@ impl OrgToCell {
         // })
     }
 
-    pub fn load_placeholder_data(&self) {
+    /// Performs an initial full load, then periodically reloads
+    /// mappings at the configured interval or on demand when the Refresh
+    /// command is received. The loop runs indefinitely until the Shutdown
+    /// is received.
+    pub async fn run_loader(&self, mut rx: mpsc::Receiver<Command>) {}
+
+    async fn load_placeholder_data(&self) {
         std::thread::sleep(std::time::Duration::from_secs(10)); // fake sleep
 
         let cells = [
@@ -123,6 +159,44 @@ impl OrgToCell {
 
         let mut write_guard = self.inner.write();
         write_guard.mapping = dummy_data;
-        write_guard.last_updated = Some(SystemTime::now());
+        write_guard.last_cursor = Some(Cursor {
+            last_updated: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            org_id: None,
+        });
+    }
+
+    /// Loads the entire mapping in pages from the control plane.
+    /// If the control plane is unreachable, fall back to stored local copy.
+    async fn load_snapshot(&self) -> Result<(), LoadError> {
+        // Hold permit for the duration of this function
+        let _permit = self.get_permit()?;
+
+        // Do loading
+
+        Ok(())
+    }
+
+    /// Load incremental updates from the control plane.
+    pub async fn load_incremental(&self) -> Result<(), LoadError> {
+        // Hold permit for the duration of this function
+        let _permit = self.get_permit()?;
+
+        // Do loading
+
+        Ok(())
+    }
+
+    /// Guard that ensures only one load operation is in progress at a time.
+    fn get_permit(&self) -> Result<OwnedSemaphorePermit, LoadError> {
+        if let Ok(permit) = self.update_lock.clone().try_acquire_owned() {
+            Ok(permit)
+        } else {
+            return Err(LoadError {
+                message: "Another load operation is in progress".into(),
+            });
+        }
     }
 }

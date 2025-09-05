@@ -33,18 +33,15 @@ On initial bootstrap, the locator service requests a snapshot of all mappings fr
 ```
 $ curl sentry-control.internal/org-cell-mappings?cursor=abcdef&limit=100000
 
-# headers
-# Link: <https://internal-proxy.local/org-cell-mappings?cursor=abcdef&limit=100000; rel="next",    
-# body
 {
-   "mappings": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....],
+   "data": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....],
    "metadata": {
-    "last_timestamp": 1757030409
+    "cursor": "ghijkl"
    }
 }
 ```
 
-The cursor here represents a base64-encoded composite sort key comprised of the update date and the organization ID of the row.
+The cursor represents a base64-encoded composite sort key comprised of the last updated timestamp and the organization ID of the row.
 
 ```python
 cursor = {
@@ -65,9 +62,6 @@ cursor = {
   "id": SENTINEL_VALUE
 }
 ```
-
-
-
 
 The locator service also periodically requests incremental mapping updates from the control plane, by requesting updates that occured after a specific timestamp.
 The incremental API is called periodically, as well as on demand if a cache miss occurs.

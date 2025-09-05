@@ -1,28 +1,30 @@
 # Synapse: Locator
 
 ### Overview
-The locator is a lightweight, read-only service that returns the cell for a given organization (by ID or slug).
-It periodically syncs with the authoritative route mappings from the control plane.
-
-The service is optimized for low-latency reads, and keeps a copy of all cell routes in memory at all times.
-Additionally, it stores the last durable local copy of all routes in a durable storage, and is designed to function normally in the event of control plane unavailability.
+The locator is a lightweight, read-only service that returns the cell for a given organization by either ID or slug. It periodically syncs with the authoritative route mappings from the control plane. The service is optimized for low-latency reads, and keeps a copy of all cell routes in memory at all times. Additionally, it stores the last copy of all routes in a durable storage, and is designed to function normally and be safe to restart in the event of control plane unavailability.
 
 ### Usage examples
-The locator can run in two modes:
+There are two ways in which the locator can be used:
 
+1. Independent service
 
-It can be deployed as an independent service with requests made over HTTP:
+    The locator can be deployed as an independent service serving requests over HTTP:
 
-```
-$ curl http://synapse.local/locator?org=1
+    ```
+    $ curl http://synapse.local/locator?org=1
 
-{
-  "1": "us1"
-}
-```
+    {
+      "1": "us1"
+    }
+    ```
 
-It can also be bundled together with the proxy module, allowing dynamic proxying decisions to be made in-process in a single container without the need for the HTTP call.
+2. Bundled with proxy
 
+    The locator can also be bundled together with the proxy module, allowing dynamic proxying decisions to be made in-process in a single container without the need for the HTTP call.
+
+    ```rust
+    let cell: Option<Cell> = synapse::locator::get("1").await?;
+    ```
 
 ### Syncing to the control plane
 

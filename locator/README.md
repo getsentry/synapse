@@ -5,13 +5,13 @@ The locator is a lightweight, read-only service that returns the cell for a give
 It periodically syncs with the authoritative route mappings from the control plane.
 
 The service is optimized for low-latency reads, and keeps a copy of all cell routes in memory at all times.
-Additionally, it stores the last durable local copy of all routes, and is designed to function normally in the event of control plane unavailability.
+Additionally, it stores the last durable local copy of all routes in a durable storage, and is designed to function normally in the event of control plane unavailability.
 
 ### Usage examples
 The locator can run in two modes:
 
 
-It can be deployed as an independent service and requests made over HTTP:
+It can be deployed as an independent service with requests made over HTTP:
 
 ```
 $ curl http://synapse.local/locator?org=1
@@ -21,7 +21,7 @@ $ curl http://synapse.local/locator?org=1
 }
 ```
 
-It can also be bundled together with the proxy module, allowing dynamic proxying decisions to be made in-process in a single container without the need for a HTTP call.
+It can also be bundled together with the proxy module, allowing dynamic proxying decisions to be made in-process in a single container without the need for the HTTP call.
 
 
 ### Syncing to the control plane
@@ -29,21 +29,48 @@ It can also be bundled together with the proxy module, allowing dynamic proxying
 On initial bootstrap, the locator service requests a snapshot of all mappings from the control plane in pages. 
 
 ```
-$ curl sentry-control.internal/org-cell-mappings?cursor=org12345&limit=100000
+$ curl sentry-control.internal/org-cell-mappings?cursor=abcdef&limit=100000
 
 # headers
-# Link: <https://internal-proxy.local/org-cell-mappings?cursor=org12345&limit=100000; rel="next",    
+# Link: <https://internal-proxy.local/org-cell-mappings?cursor=abcdef&limit=100000; rel="next",    
 # body
 {
-   "mappings": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....]
+   "mappings": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....],
+   "metadata": {
+    "last_timestamp": 1757030409
+   }
 }
 ```
 
-The locator service also periodically requests incremental mapping updates from the control plane.
-The incremental API is called periodically, as well as on demand if a cache miss occurs.
+The cursor here represents a base64-encoded composite sort key comprised of the update date and the organization ID of the row.
 
+```python
+cursor = {
+  "updated_at": 1757030409,
+  "id": "999"
+}
+
+>>> base64.b64encode(json.dumps(cursor).encode('utf-8'))
+
+b'eyJ1cGRhdGVkX2F0IjogMTc1NzAzMDQwOSwgImlkIjogIjk5OSJ9'
 ```
-$ curl sentry-control.sentry.internal/org-cell-mappings?after=1752621331
+
+When there are no more pages to return, the cursor contains a sentinel value in the ID field, so incremental polling can pick up from this point.
+
+```python
+cursor = {
+  "updated_at": 1757030409,
+  "id": SENTINEL_VALUE
+}
+```
+
+
+
+
+The locator service also periodically requests incremental mapping updates from the control plane, by requesting updates that occured after a specific timestamp.
+The incremental API is called periodically, as well as on demand if a cache miss occurs.
+```
+$ curl sentry-control.sentry.internal/org-cell-mappings?after=1757030409
 ```
 
 The locator service also periodically flushes a copy of the mapping to a local storage. If the control plane is unavailable, this fallback copy is loaded instead.

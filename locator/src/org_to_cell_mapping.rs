@@ -2,8 +2,8 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, SystemTime};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::sync::{mpsc, oneshot};
 
@@ -58,9 +58,10 @@ struct Cursor {
     org_id: Option<i64>,
 }
 
-enum Command {
-    // Trigger incremental mapping refresh outside of the normal internal
-    Refresh(oneshot::Sender<Result<()>>),
+pub enum Command {
+    // Trigger incremental mapping refresh outside of the normal interval.
+    // The worker sends Ok(()) when the refresh attempt finishes.
+    Refresh(oneshot::Sender<Result<(), LoadError>>),
     // Trigger the loader to shudown gracefully
     Shutdown,
 }
@@ -141,9 +142,14 @@ impl OrgToCell {
     /// mappings at the configured interval or on demand when the Refresh
     /// command is received. The loop runs indefinitely until the Shutdown
     /// is received.
-    pub async fn run_loader(&self, mut rx: mpsc::Receiver<Command>) {}
+    pub async fn run_loader_worker(&self, rx: mpsc::Receiver<Command>) {
+        if let Ok(()) = self.load_snapshot().await {
+            self.ready.store(true, Ordering::Relaxed);
+        }
+    }
 
-    async fn load_placeholder_data(&self) {
+
+    pub async fn load_placeholder_data(&self) {
         std::thread::sleep(std::time::Duration::from_secs(10)); // fake sleep
 
         let cells = [
@@ -173,6 +179,9 @@ impl OrgToCell {
     async fn load_snapshot(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
         let _permit = self.get_permit()?;
+
+        let retries = 3;
+        let retry_delay = Duration::from_secs(5);
 
         // Do loading
 

@@ -7,9 +7,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
 mod org_to_cell_mapping;
-use org_to_cell_mapping::{Cell, OrgToCell};
+use org_to_cell_mapping::{Cell, Command, OrgToCell};
 
 #[derive(Serialize)]
 struct ApiResponse {
@@ -58,16 +59,18 @@ struct Params {
 #[tokio::main]
 async fn main() {
     let routes = OrgToCell::new();
-    println!("Loading placeholder data...");
 
+    // Channel to send comamnds to the worker thread.
+    let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(64);
 
     // Spawn the loader thread. All loading should happen from this thread.
+    let routes_clone = routes.clone();
     tokio::spawn(async move {
-        // TODO: routes.run_loader();
-
+        routes_clone.run_loader_worker(cmd_rx).await;
     });
 
-    routes.load_placeholder_data();
+    println!("Loading placeholder data.");
+    routes.load_placeholder_data().await;
     println!("Placeholder data loaded.");
 
     let app = Router::new().route("/", get(handler)).with_state(routes);

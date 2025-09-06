@@ -59,6 +59,14 @@ struct Params {
 async fn main() {
     let routes = OrgToCell::new();
     println!("Loading placeholder data...");
+
+
+    // Spawn the loader thread. All loading should happen from this thread.
+    tokio::spawn(async move {
+        // TODO: routes.run_loader();
+
+    });
+
     routes.load_placeholder_data();
     println!("Placeholder data loaded.");
 

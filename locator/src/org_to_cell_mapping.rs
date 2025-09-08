@@ -111,10 +111,10 @@ impl OrgToCell {
 
         match cell {
             Some(cell) => {
-                if let Some(loc) = locality {
-                    if cell.locality.as_str() != loc {
-                        return Err(LookupError::new("locality mismatch"));
-                    }
+                if let Some(loc) = locality
+                    && cell.locality.as_str() != loc
+                {
+                    return Err(LookupError::new("locality mismatch"));
                 }
                 Ok(Some(cell.clone()))
             }

@@ -1,4 +1,4 @@
-mode: fan-out-router | proxy | locator | proxy + locator combined
+mode: ingest-router | proxy | locator | proxy + locator combined
 
 common:
   statsd_host: localhost
@@ -8,6 +8,6 @@ common:
 proxy:
   routes: {}
 
-fan-out-router:
+ingest-router:
 
 locator: {}

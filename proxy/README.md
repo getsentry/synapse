@@ -17,8 +17,7 @@ The Synapse proxy service is one of two core components in the Synapse system (a
 
 - **RulesEngine** (`src/proxy.rs:8`): Main routing logic that matches incoming requests against configured routes
 - **Config** (`src/config.rs:7`): Configuration structure and YAML parsing
-- **IncomingRequest** (`src/proxy.rs:3`): Request representation with host and path information
-- **Resolver Functions**: Integration points with the locator service for dynamic routing
+- **proxy** resolves to a route
 
 ### Routing Logic
 

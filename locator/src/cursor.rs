@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 #[derive(Clone)]
 pub struct Cursor {
     // seconds since 1970-01-01 00:00:00 UTC

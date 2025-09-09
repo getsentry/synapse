@@ -1,13 +1,18 @@
+use serde::Deserialize;
+
+#[derive(Deserialize)]
 enum Adapter {
     None,
     File { path: String },
     Gcs { bucket: String },
 }
 
-struct FallbackRouteMap {
+#[derive(Deserialize)]
+struct BackupRoutes {
     r#type: Adapter,
 }
 
-struct Config {
-    fallback_route_map: Option<FallbackRouteMap>
+#[derive(Deserialize)]
+pub struct LocatorConfig {
+    backup_routes: Option<BackupRoutes>
 }

@@ -1,8 +1,9 @@
+#![allow(dead_code, unused_variables)]
+
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
 use crate::types::Cell;
 use std::collections::HashMap;
-
 
 type RouteMap = HashMap<String, Cell>;
 
@@ -21,13 +22,14 @@ pub trait BackupRouteProvider: Send + Sync {
     fn store(&self, route_data: &RouteData) -> Result<(), BackupError>;
 }
 
-
 // No-op backup route provider for testing
 pub struct NoopRouteProvider {}
 
 impl BackupRouteProvider for NoopRouteProvider {
     fn load(&self) -> Result<RouteData, BackupError> {
-        println!("Warning: loading backup routes from the no-op provider. This is unsafe for production use.");
+        println!(
+            "Warning: loading backup routes from the no-op provider. This is unsafe for production use."
+        );
 
         Ok(RouteData {
             routes: HashMap::new(),
@@ -39,7 +41,6 @@ impl BackupRouteProvider for NoopRouteProvider {
         // Do nothing
         Ok(())
     }
-
 }
 
 // Temporary. Generates placeholder data for testing.
@@ -69,7 +70,6 @@ impl BackupRouteProvider for PlaceholderRouteProvider {
         Ok(())
     }
 }
-
 
 pub struct FilesystemRouteProvider {}
 

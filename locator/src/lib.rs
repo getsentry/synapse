@@ -1,3 +1,4 @@
+
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -16,7 +17,6 @@ mod types;
 
 use org_to_cell_mapping::{Command, OrgToCell};
 use types::Cell;
-
 
 #[derive(Serialize)]
 struct ApiResponse {
@@ -65,6 +65,7 @@ struct Params {
 pub fn run() {
     if tokio::runtime::Handle::try_current().is_ok() {
         println!("Already inside a tokio runtime, use run_async() directly");
+        return;
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -75,13 +76,13 @@ pub fn run() {
 }
 
 pub async fn run_async() {
-    // Dummy data for testing
+    // Dummy data for testing. The real provider implementation should be selected based on config.
     let route_provider = backup_routes::PlaceholderRouteProvider {};
 
     let routes = OrgToCell::new(route_provider);
 
     // Channel to send commands to the worker thread.
-    let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(64);
+    let (_cmd_tx, cmd_rx) = mpsc::channel::<Command>(64);
 
     // Spawn the loader thread. All loading should happen from this thread.
     let routes_clone = routes.clone();
@@ -92,9 +93,7 @@ pub async fn run_async() {
     let app = Router::new().route("/", get(handler)).with_state(routes);
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
-
 }
-
 
 async fn handler(
     State(org_to_cell): State<OrgToCell>,

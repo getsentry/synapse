@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-
 #[derive(Clone)]
 pub struct Cell {
     pub id: Arc<String>,

@@ -62,10 +62,10 @@ pub fn run() {
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .build().unwrap();
+        .build()
+        .unwrap();
     rt.block_on(run_async());
 }
-
 
 pub async fn run_async() {
     let routes = OrgToCell::new();

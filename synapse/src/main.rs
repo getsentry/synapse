@@ -1,14 +1,11 @@
 use clap::{Parser, Subcommand};
 
-
 #[derive(Parser)]
 enum CliCommand {
     Locator,
     Proxy,
     IngestRouter,
 }
-
-
 
 fn main() {
     let cli = CliCommand::parse();
@@ -25,6 +22,4 @@ fn main() {
             println!("Starting ingest-router");
         }
     }
-
 }
-

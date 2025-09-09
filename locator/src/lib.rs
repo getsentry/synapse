@@ -63,7 +63,7 @@ struct Params {
 }
 
 #[tokio::main]
-async fn main() {
+pub async fn run() {
     // Dummy data for testing
     let route_provider = backup_routes::PlaceholderRouteProvider {};
 

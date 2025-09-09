@@ -55,8 +55,19 @@ struct Params {
     locality: Option<String>,
 }
 
-#[tokio::main]
-async fn main() {
+pub fn run() {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        println!("Already inside a tokio runtime, use run_async() directly");
+    }
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(run_async());
+}
+
+pub async fn run_async() {
     let routes = OrgToCell::new();
     println!("Loading placeholder data...");
     routes.load_placeholder_data();

@@ -9,8 +9,14 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+mod backup_routes;
+mod cursor;
 mod org_to_cell_mapping;
-use org_to_cell_mapping::{Cell, Command, OrgToCell};
+mod types;
+
+use org_to_cell_mapping::{Command, OrgToCell};
+use types::Cell;
+
 
 #[derive(Serialize)]
 struct ApiResponse {
@@ -58,9 +64,12 @@ struct Params {
 
 #[tokio::main]
 async fn main() {
-    let routes = OrgToCell::new();
+    // Dummy data for testing
+    let route_provider = backup_routes::PlaceholderRouteProvider {};
 
-    // Channel to send comamnds to the worker thread.
+    let routes = OrgToCell::new(route_provider);
+
+    // Channel to send commands to the worker thread.
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(64);
 
     // Spawn the loader thread. All loading should happen from this thread.
@@ -69,9 +78,6 @@ async fn main() {
         routes_clone.run_loader_worker(cmd_rx).await;
     });
 
-    println!("Loading placeholder data.");
-    routes.load_placeholder_data().await;
-    println!("Placeholder data loaded.");
 
     let app = Router::new().route("/", get(handler)).with_state(routes);
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();

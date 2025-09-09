@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::sync::{mpsc, oneshot};
+use crate::backup_routes::{BackupRouteProvider, RouteData};
+use crate::types::Cell;
 
 #[derive(Debug)]
 pub struct LookupError {
@@ -31,32 +33,6 @@ pub struct LoadError {
     message: String,
 }
 
-#[derive(Clone)]
-pub struct Cell {
-    pub id: Arc<String>,
-    pub locality: Arc<String>,
-}
-
-impl Cell {
-    pub fn new<I, L>(id: I, locality: L) -> Self
-    where
-        I: Into<String>,
-        L: Into<String>,
-    {
-        Cell {
-            id: Arc::new(id.into()),
-            locality: Arc::new(locality.into()),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct Cursor {
-    // seconds since 1970-01-01 00:00:00 UTC
-    last_updated: u64,
-    // None org_id means no more results
-    org_id: Option<i64>,
-}
 
 pub enum Command {
     // Trigger incremental mapping refresh outside of the normal interval.
@@ -70,7 +46,7 @@ pub enum Command {
 struct OrgToCellInner {
     mapping: HashMap<String, Cell>,
     locality_to_default_cell: HashMap<String, Cell>,
-    last_cursor: Option<Cursor>,
+    last_cursor: Option<String>,
 }
 
 #[derive(Clone)]
@@ -81,10 +57,11 @@ pub struct OrgToCell {
     // has been loaded and mappings are available.
     ready: Arc<AtomicBool>,
     // last_update: Arc<RwLock<Option<SystemTime>>>,
+    backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
 }
 
 impl OrgToCell {
-    pub fn new() -> Self {
+    pub fn new(backup_routes: impl BackupRouteProvider + 'static) -> Self {
         OrgToCell {
             inner: Arc::new(RwLock::new(OrgToCellInner {
                 mapping: HashMap::new(),
@@ -93,6 +70,7 @@ impl OrgToCell {
             })),
             update_lock: Arc::new(Semaphore::new(1)),
             ready: Arc::new(AtomicBool::new(false)),
+            backup_routes: Arc::new(backup_routes)
         }
     }
 
@@ -132,10 +110,6 @@ impl OrgToCell {
                 }
             }
         }
-
-        // Ok(guard.mapping.get(org_id).cloned().or_else(|| {
-        //     guard.locality_to_default_cell.get(locality).cloned()
-        // })
     }
 
     /// Performs an initial full load, then periodically reloads
@@ -148,48 +122,31 @@ impl OrgToCell {
         }
     }
 
-
-    pub async fn load_placeholder_data(&self) {
-        std::thread::sleep(std::time::Duration::from_secs(10)); // fake sleep
-
-        let cells = [
-            Cell::new("us1", "us"),
-            Cell::new("us2", "us"),
-            Cell::new("de", "de"),
-        ];
-
-        let mut dummy_data = HashMap::new();
-        for i in 0..10 {
-            dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].clone());
-        }
-
-        let mut write_guard = self.inner.write();
-        write_guard.mapping = dummy_data;
-        write_guard.last_cursor = Some(Cursor {
-            last_updated: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            org_id: None,
-        });
-    }
-
     /// Loads the entire mapping in pages from the control plane.
     /// If the control plane is unreachable, fall back to stored local copy.
     async fn load_snapshot(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
         let _permit = self.get_permit()?;
 
+        // TODO: Attempt to fetch fresh routes from the control plane
         let retries = 3;
         let retry_delay = Duration::from_secs(5);
 
-        // Do loading
+        // Testing - load from the backup route provider
+        let route_data: RouteData = self.backup_routes.load().unwrap();
+
+
+        let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, OrgToCellInner> = self.inner.write();
+
+        write_guard.mapping = route_data.routes;
+        write_guard.last_cursor = Some(route_data.last_cursor);
+
 
         Ok(())
     }
 
     /// Load incremental updates from the control plane.
-    pub async fn load_incremental(&self) -> Result<(), LoadError> {
+    async fn load_incremental(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
         let _permit = self.get_permit()?;
 

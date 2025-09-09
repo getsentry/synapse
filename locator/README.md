@@ -63,6 +63,10 @@ cursor = {
 }
 ```
 
+Getsentry requirement:
+- This requires the control plane database to have a new `date_updated` column. The column must be indexed.
+- The organization ID is already the primary key in the `organizationmapping` table.
+
 The locator service also periodically requests incremental mapping updates from the control plane, by requesting updates that occured after a specific timestamp.
 The incremental API is called periodically, as well as on demand if a cache miss occurs.
 ```

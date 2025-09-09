@@ -1,6 +1,4 @@
-use clap::{Parser, Subcommand};
-use locator::run;
-
+use clap::Parser;
 
 #[derive(Parser)]
 enum CliCommand {
@@ -9,22 +7,19 @@ enum CliCommand {
     IngestRouter,
 }
 
-
-
 fn main() {
     let cli = CliCommand::parse();
 
     match &cli {
         CliCommand::Locator => {
-            println!("run locator");
+            println!("Starting locator");
+            locator::run();
         }
         CliCommand::Proxy => {
-            println!("run proxy");
+            println!("Starting proxy");
         }
         CliCommand::IngestRouter => {
-            println!("run ingest router");
+            println!("Starting ingest-router");
         }
     }
-
 }
-

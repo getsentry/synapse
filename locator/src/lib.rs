@@ -62,8 +62,19 @@ struct Params {
     locality: Option<String>,
 }
 
-#[tokio::main]
-pub async fn run() {
+pub fn run() {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        println!("Already inside a tokio runtime, use run_async() directly");
+    }
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(run_async());
+}
+
+pub async fn run_async() {
     // Dummy data for testing
     let route_provider = backup_routes::PlaceholderRouteProvider {};
 
@@ -78,11 +89,12 @@ pub async fn run() {
         routes_clone.run_loader_worker(cmd_rx).await;
     });
 
-
     let app = Router::new().route("/", get(handler)).with_state(routes);
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
+
 }
+
 
 async fn handler(
     State(org_to_cell): State<OrgToCell>,

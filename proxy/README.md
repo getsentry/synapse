@@ -1,6 +1,7 @@
 # Synapse Proxy Service
 
-A high-performance HTTP proxy service that routes requests to the correct getsentry cell based on organization context. Part of the greater overall Synapse service.
+A high-performance HTTP proxy service that routes requests to the correct getsentry cell based on organization
+context. Part of the greater overall Synapse service. This proxy is specifically for API traffic.
 
 ## Overview
 
@@ -15,10 +16,9 @@ The Synapse proxy service is one of two core components in the Synapse system (a
 
 ### Core Components
 
-- **RulesEngine** (`src/proxy.rs:8`): Main routing logic that matches incoming requests against configured routes
-- **Config** (`src/config.rs:7`): Configuration structure and YAML parsing
-- **IncomingRequest** (`src/proxy.rs:3`): Request representation with host and path information
-- **Resolver Functions**: Integration points with the locator service for dynamic routing
+- **RulesEngine** (`src/rules_engine.rs`): Main routing logic that matches incoming requests against configured routes
+- **Config** (`src/config.rs`): Configuration structure and YAML parsing
+- **proxy** (`src/proxy.rs`): resolves to a route
 
 ### Routing Logic
 
@@ -30,7 +30,6 @@ The proxy evaluates routes in order and returns the first matching destination:
    - Static routing to predetermined cells
    - Dynamic resolution via resolver functions that call the locator service
    - Fallback to default destinations when resolution fails
-
 
 ## Configuration
 
@@ -54,3 +53,23 @@ routes:
     route:
       to: de
 ```
+
+## Connection Pooling and Queue Management
+
+Future improvements can include some form of connection pooler? 
+```rust
+pub struct ConnectionPool {
+    // Current connections by destination
+    active_connections: Arc<Mutex<HashMap<String, Vec<Connection>>>>,
+    // Connection limits per destination
+    per_destination_limits: HashMap<String, usize>,
+    // Global connection limit
+    global_limit: usize,
+    // Connection health checker
+    health_checker: HealthChecker,
+    // Connection recycling configuration
+    max_idle_time: Duration,
+    keep_alive_timeout: Duration,
+}
+```
+

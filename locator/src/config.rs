@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -8,11 +10,11 @@ enum Adapter {
 }
 
 #[derive(Deserialize)]
-struct BackupRoutes {
+struct BackupRouteStore {
     r#type: Adapter,
 }
 
 #[derive(Deserialize)]
 pub struct LocatorConfig {
-    backup_routes: Option<BackupRoutes>
+    backup_route_store: Option<BackupRouteStore>,
 }

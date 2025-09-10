@@ -1,3 +1,6 @@
+pub mod config;
+mod org_to_cell_mapping;
+
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -5,11 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
+use org_to_cell_mapping::{Cell, OrgToCell};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
-
-mod org_to_cell_mapping;
-use org_to_cell_mapping::{Cell, OrgToCell};
 
 #[derive(Serialize)]
 struct ApiResponse {

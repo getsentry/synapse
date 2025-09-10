@@ -54,12 +54,12 @@ cursor = {
 b'eyJ1cGRhdGVkX2F0IjogMTc1NzAzMDQwOSwgImlkIjogIjk5OSJ9'
 ```
 
-When there are no more pages to return, the cursor contains a sentinel value in the ID field, so incremental polling can pick up from this point.
+When there are no more pages to return, the cursor contains a `null` value in the ID field, so incremental polling can pick up from this point.
 
 ```python
 cursor = {
   "updated_at": 1757030409,
-  "id": SENTINEL_VALUE
+  "id": None
 }
 ```
 

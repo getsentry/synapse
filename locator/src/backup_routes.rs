@@ -7,7 +7,6 @@ use std::collections::HashMap;
 
 type RouteMap = HashMap<String, Cell>;
 
-
 pub struct RouteData {
     pub routes: HashMap<String, Cell>,
     pub last_cursor: String,

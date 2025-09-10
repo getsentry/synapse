@@ -1,38 +1,29 @@
 #![allow(unused_variables)]
 
-use crate::backup_routes::{BackupRouteProvider, RouteData};
+use crate::backup_routes::{BackupError, BackupRouteProvider, RouteData};
 use crate::types::Cell;
 use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::sync::{mpsc, oneshot};
 
-#[derive(Debug)]
-pub struct LookupError {
-    message: String,
-}
-
-impl LookupError {
-    fn new(msg: &str) -> Self {
-        LookupError {
-            message: msg.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for LookupError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-#[derive(Debug)]
-pub struct LoadError {
+#[derive(thiserror::Error, Debug)]
+pub enum LookupError {
+    #[error("requested locality does not match the cell's locality")]
+    LocalityMismatch { requested: String, actual: String },
     #[allow(dead_code)]
-    message: String,
+    #[error("the locator is not ready yet")]
+    NotReady(String),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum LoadError {
+    #[error("Error loading backup")]
+    BackupError(#[from] BackupError),
+    #[error("Another load operation is in progress")]
+    ConcurrentLoad,
 }
 
 #[allow(dead_code)]
@@ -94,22 +85,23 @@ impl OrgToCell {
                 if let Some(loc) = locality
                     && cell.locality.as_str() != loc
                 {
-                    return Err(LookupError::new("locality mismatch"));
+                    return Err(LookupError::LocalityMismatch {
+                        requested: loc.to_string(),
+                        actual: cell.locality.to_string(),
+                    });
                 }
                 Ok(Some(cell.clone()))
             }
             None => {
-                if let Some(locality) = locality {
-                    if let Some(default_cell) = read_guard.locality_to_default_cell.get(locality) {
-                        Ok(Some(default_cell.clone()))
-                    } else {
-                        Err(LookupError::new(&format!(
-                            "No cell found for org_id '{org_id}' and locality '{locality}'"
-                        )))
-                    }
-                } else {
-                    Ok(None)
+                // Use default cell if one is defined for the locality
+                if let Some(loc) = locality
+                    && let Some(default_cell) = read_guard.locality_to_default_cell.get(loc)
+                {
+                    return Ok(Some(default_cell.clone()));
                 }
+
+                // No default cell found
+                Ok(None)
             }
         }
     }
@@ -142,7 +134,7 @@ impl OrgToCell {
         let _permit = self.get_permit()?;
 
         // Testing - load from the backup route provider
-        let route_data: RouteData = self.backup_routes.load().unwrap();
+        let route_data: RouteData = self.backup_routes.load()?;
 
         let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<
             '_,
@@ -172,9 +164,7 @@ impl OrgToCell {
         if let Ok(permit) = self.update_lock.clone().try_acquire_owned() {
             Ok(permit)
         } else {
-            Err(LoadError {
-                message: "Another load operation is in progress".into(),
-            })
+            Err(LoadError::ConcurrentLoad)
         }
     }
 }

@@ -43,7 +43,8 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
-    IoError(std::io::Error),
+    #[error("could not load config from file: {0}")]
+    LoadError(std::io::Error),
 }

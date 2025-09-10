@@ -4,6 +4,7 @@
 /// a previously stored copy, even when the control plane is unavailable.
 use crate::types::Cell;
 use std::collections::HashMap;
+use std::io;
 
 type RouteMap = HashMap<String, Cell>;
 
@@ -12,9 +13,18 @@ pub struct RouteData {
     pub last_cursor: String,
 }
 
-#[derive(Debug)]
-pub struct BackupError {
-    message: String,
+#[derive(thiserror::Error, Debug)]
+pub enum BackupError {
+    #[error("Error loading routes: {source}")]
+    LoadRoutes {
+        #[source]
+        source: io::Error,
+    },
+    #[error("Error storing routes: {source}")]
+    StoreRoutes {
+        #[source]
+        source: io::Error,
+    },
 }
 
 pub trait BackupRouteProvider: Send + Sync {

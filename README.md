@@ -11,5 +11,5 @@ Synapse consists of 3 main components:
 
 - **Proxy**: A high-performance L7 proxy that routes incoming requests to the destination service inside a cell. It uses the locator internally to dynamically resolve the cell based on the organization. The proxy supports both traditional HTTP request/response traffic and long-lived streaming connections via server sent events. See the [proxy docs](proxy/README.md).
 
-**Ingest Router**: A stateless, fan-out router for the `/projectconfigs` endpoint which embeds cellular information inside the project config object, enabling Relay to route ingestion traffic to the correct upstream for each project. See the [ingest-router docs](ingest-router/README.md).
+- **Ingest Router**: A stateless, fan-out router for the `/projectconfigs` endpoint which embeds cellular information inside the project config object, enabling Relay to route ingestion traffic to the correct upstream for each project. See the [ingest-router docs](ingest-router/README.md).
 

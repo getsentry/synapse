@@ -77,20 +77,20 @@ The routing engine is responsible for matching requests to routes. It uses a rou
 ```yaml
 - name: "single_cell_api"
   match:
-    path_prefix: "/api/v1/"
+    path_prefix: "/api/v1/<id>"
     method: "POST"
   handler: "forward_to_cell"
   config:
-    target: "http://us1.sentry.io/api/v1/"
+    target: ["http://psc-us1.sentry.io/api/v1/", "http://psc-us2.sentry.io/api/v1/"]
 - name: "multi_cell_api"
   match:
-    path_prefix: "/api/v1/projectconfigs"
+    path: "/api/v1/projectconfigs/"
     method: "POST"
   handler: "fan_out_with_merge"
   config:
     targets:
-      - "http://us1.sentry.io/api/v1/"
-      - "http://us2.sentry.io/api/v1/"
+      - "http://psc-us1.sentry.io/api/v1/"
+      - "http://psc-us2.sentry.io/api/v1/"
 ```
 
 The handler factory is responsible for creating handlers from route configurations. It uses the routing engine to match requests to routes and then creates the appropriate handler.

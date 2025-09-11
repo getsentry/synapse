@@ -1,8 +1,14 @@
+#![allow(unused_variables)]
+
+use crate::backup_routes::{BackupRouteProvider, RouteData};
+use crate::types::Cell;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
 pub struct LookupError {
@@ -23,45 +29,50 @@ impl fmt::Display for LookupError {
     }
 }
 
-#[derive(Clone)]
-pub struct Cell {
-    pub id: Arc<String>,
-    pub locality: Arc<String>,
+#[derive(Debug)]
+pub struct LoadError {
+    #[allow(dead_code)]
+    message: String,
 }
 
-impl Cell {
-    pub fn new<I, L>(id: I, locality: L) -> Self
-    where
-        I: Into<String>,
-        L: Into<String>,
-    {
-        Cell {
-            id: Arc::new(id.into()),
-            locality: Arc::new(locality.into()),
-        }
-    }
+#[allow(dead_code)]
+pub enum Command {
+    // Trigger incremental mapping refresh outside of the normal interval.
+    // The worker sends Ok(()) when the refresh attempt finishes.
+    Refresh(oneshot::Sender<Result<(), LoadError>>),
+    // Trigger the loader to shudown gracefully
+    Shutdown,
 }
 
 #[derive(Clone)]
 struct OrgToCellInner {
     mapping: HashMap<String, Cell>,
     locality_to_default_cell: HashMap<String, Cell>,
-    last_updated: Option<SystemTime>,
+    last_cursor: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct OrgToCell {
     inner: Arc<RwLock<OrgToCellInner>>,
+    update_lock: Arc<Semaphore>,
+    // Used by the healthcheck. Initially false and set to true once any snapshot
+    // has been loaded and mappings are available.
+    ready: Arc<AtomicBool>,
+    // last_update: Arc<RwLock<Option<SystemTime>>>,
+    backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
 }
 
 impl OrgToCell {
-    pub fn new() -> Self {
+    pub fn new(backup_routes: impl BackupRouteProvider + 'static) -> Self {
         OrgToCell {
             inner: Arc::new(RwLock::new(OrgToCellInner {
                 mapping: HashMap::new(),
                 locality_to_default_cell: HashMap::new(),
-                last_updated: None,
+                last_cursor: None,
             })),
+            update_lock: Arc::new(Semaphore::new(1)),
+            ready: Arc::new(AtomicBool::new(false)),
+            backup_routes: Arc::new(backup_routes),
         }
     }
 
@@ -101,28 +112,69 @@ impl OrgToCell {
                 }
             }
         }
-
-        // Ok(guard.mapping.get(org_id).cloned().or_else(|| {
-        //     guard.locality_to_default_cell.get(locality).cloned()
-        // })
     }
 
-    pub fn load_placeholder_data(&self) {
-        std::thread::sleep(std::time::Duration::from_secs(10)); // fake sleep
+    /// Performs an initial full load, then periodically reloads
+    /// mappings at the configured interval or on demand when the Refresh
+    /// command is received. The loop runs indefinitely until the Shutdown
+    /// command is received.
+    pub async fn run_loader_worker(&self, rx: mpsc::Receiver<Command>) {
+        if let Ok(()) = self.load_snapshot().await {
+            self.ready.store(true, Ordering::Relaxed);
 
-        let cells = [
-            Cell::new("us1", "us"),
-            Cell::new("us2", "us"),
-            Cell::new("de", "de"),
-        ];
+            // Once a snapshot is loaded, the worker periodically requests incremental results
+            // until the Shutdown command is received.
+            // If the Refresh command is received, the incremental load can be triggered ahead
+            // of schedule.
+            // loop {
 
-        let mut dummy_data = HashMap::new();
-        for i in 0..10 {
-            dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].clone());
+            // }
         }
+    }
 
-        let mut write_guard = self.inner.write();
-        write_guard.mapping = dummy_data;
-        write_guard.last_updated = Some(SystemTime::now());
+    /// Loads the entire mapping in pages from the control plane.
+    /// If the control plane is unreachable, fall back to stored local copy.
+    /// This function should attempt to fetch data from the control plane.
+    /// Once the configured retries have been exhausted, it will attempt to
+    /// load from the backup route provider.
+    async fn load_snapshot(&self) -> Result<(), LoadError> {
+        // Hold permit for the duration of this function
+        let _permit = self.get_permit()?;
+
+        // Testing - load from the backup route provider
+        let route_data: RouteData = self.backup_routes.load().unwrap();
+
+        let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<
+            '_,
+            parking_lot::RawRwLock,
+            OrgToCellInner,
+        > = self.inner.write();
+
+        write_guard.mapping = route_data.routes;
+        write_guard.last_cursor = Some(route_data.last_cursor);
+
+        Ok(())
+    }
+
+    /// Load incremental updates from the control plane.
+    #[allow(dead_code)]
+    async fn load_incremental(&self) -> Result<(), LoadError> {
+        // Hold permit for the duration of this function
+        let _permit = self.get_permit()?;
+
+        // Do loading
+
+        Ok(())
+    }
+
+    /// Guard that ensures only one load operation is in progress at a time.
+    fn get_permit(&self) -> Result<OwnedSemaphorePermit, LoadError> {
+        if let Ok(permit) = self.update_lock.clone().try_acquire_owned() {
+            Ok(permit)
+        } else {
+            Err(LoadError {
+                message: "Another load operation is in progress".into(),
+            })
+        }
     }
 }

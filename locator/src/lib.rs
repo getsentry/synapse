@@ -1,5 +1,8 @@
+mod backup_routes;
 pub mod config;
+mod cursor;
 mod org_to_cell_mapping;
+mod types;
 
 use axum::{
     Json, Router,
@@ -8,9 +11,12 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use org_to_cell_mapping::{Cell, OrgToCell};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
+
+use org_to_cell_mapping::{Command, OrgToCell};
+use types::Cell;
 
 #[derive(Serialize)]
 struct ApiResponse {
@@ -59,6 +65,7 @@ struct Params {
 pub fn run() {
     if tokio::runtime::Handle::try_current().is_ok() {
         println!("Already inside a tokio runtime, use run_async() directly");
+        return;
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -69,10 +76,19 @@ pub fn run() {
 }
 
 pub async fn run_async() {
-    let routes = OrgToCell::new();
-    println!("Loading placeholder data...");
-    routes.load_placeholder_data();
-    println!("Placeholder data loaded.");
+    // Dummy data for testing. The real provider implementation should be selected based on config.
+    let route_provider = backup_routes::PlaceholderRouteProvider {};
+
+    let routes = OrgToCell::new(route_provider);
+
+    // Channel to send commands to the worker thread.
+    let (_cmd_tx, cmd_rx) = mpsc::channel::<Command>(64);
+
+    // Spawn the loader thread. All loading should happen from this thread.
+    let routes_clone = routes.clone();
+    tokio::spawn(async move {
+        routes_clone.run_loader_worker(cmd_rx).await;
+    });
 
     let app = Router::new().route("/", get(handler)).with_state(routes);
     let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();

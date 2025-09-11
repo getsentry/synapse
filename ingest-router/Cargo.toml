@@ -1,0 +1,10 @@
+[package]
+name = "ingest-router"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+hyper = { version = "1.7.0" }
+async-trait = "0.1"

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use hyper::{body::Incoming, Request, Response};
+use hyper::{Request, Response, body::Incoming};
 use std::collections::HashMap;
 use std::error::Error;
 

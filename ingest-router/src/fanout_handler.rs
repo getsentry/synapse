@@ -1,6 +1,6 @@
 use crate::handler::{HandlerResult, RequestContext, RouteHandler};
 use async_trait::async_trait;
-use hyper::{body::Incoming, Request};
+use hyper::{Request, body::Incoming};
 use std::time::Duration;
 
 /// Handler that fans out requests to multiple downstream services and aggregates responses

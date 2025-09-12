@@ -1,20 +1,20 @@
 use crate::handler::{HandlerResult, RequestContext, RouteHandler};
 use async_trait::async_trait;
-use hyper::{body::Incoming, Request};
+use hyper::{Request, body::Incoming};
 use std::time::Duration;
 
 /// Handler that forwards requests to a single downstream service
 pub struct ForwardHandler {
     _client_placeholder: (),
-    _target_url: String,
+    _target_urls: Vec<String>,
     timeout_duration: Duration,
 }
 
 impl ForwardHandler {
-    pub fn new(target_url: String) -> Self {
+    pub fn new(target_urls: Vec<String>) -> Self {
         Self {
             _client_placeholder: (),
-            _target_url: target_url,
+            _target_urls: target_urls,
             timeout_duration: Duration::from_secs(30),
         }
     }

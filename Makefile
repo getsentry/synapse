@@ -16,8 +16,8 @@ help:
 	@echo "  clean        - Clean build artifacts"
 	@echo "  run-locator  - Run the locator service"
 	@echo "  run-proxy    - Run the proxy service"
-	@echo "  dev-locator  - Run locator with auto-reload"
-	@echo "  dev-proxy    - Run proxy with auto-reload"
+	@echo "  run-ingest-router - Run the ingest-router service"
+
 
 # Setup development environment
 setup:
@@ -64,17 +64,13 @@ clean:
 
 # Run services
 run-locator:
-	cargo run --bin locator
+	cargo run locator --config-file-path example_config_locator.yaml
 
 run-proxy:
-	cargo run --bin proxy
+	cargo run proxy
 
-# Development with auto-reload (requires cargo-watch)
-dev-locator:
-	cargo watch -x "run --bin locator"
-
-dev-proxy:
-	cargo watch -x "run --bin proxy"
+run-ingest-router:
+	cargo run ingest-router
 
 # CI-like checks (what runs in GitHub Actions)
 ci: fmt-check lint test build

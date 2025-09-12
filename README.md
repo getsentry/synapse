@@ -1,6 +1,6 @@
 # Synapse
 
-Synapse is a set of services that supports routing for the cell-based architecture at Sentry. Its primary responsibility is to ensure incoming traffic from the public internet is correctly routed to the right cell internally based on the organization routing key. Synapse ensures that the system appears as a single unified service to clients and end users — they are unaware of the underlying cellular model or that multiple cells exist.
+Synapse is a set of services that supports routing for the cell-based architecture at Sentry. Its primary responsibility is to ensure incoming traffic from the public internet is correctly routed to the designated cell internally based on the organization routing key. Synapse ensures that the system appears as a single unified service to end users and other components at Sentry — they are unaware of the underlying cellular model or that multiple cells exist.
 
 
 ### Components

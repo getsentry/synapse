@@ -795,9 +795,11 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "locator",
+ "proxy",
  "serde",
  "serde_yaml",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 serde = { workspace = true }
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true }
 hyper = { version = "0.14", features = ["full"] }

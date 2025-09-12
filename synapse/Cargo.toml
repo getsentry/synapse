@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
+locator = { path = "../locator" }
 serde = { workspace = true }
 serde_yaml = "0.9.34"
-locator = { path = "../locator" }
+thiserror = { workspace = true }

@@ -2,19 +2,19 @@
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 enum Adapter {
     None,
     File { path: String },
     Gcs { bucket: String },
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct BackupRouteStore {
     r#type: Adapter,
 }
 
-#[derive(Deserialize)]
-pub struct LocatorConfig {
+#[derive(Debug, Deserialize)]
+pub struct Config {
     backup_route_store: Option<BackupRouteStore>,
 }

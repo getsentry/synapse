@@ -10,15 +10,15 @@ use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub fn run(proxy_config: config::Config) {
-    println!("Starting proxy server on 127.0.0.1:3000");
+pub fn run(config: config::Config) {
+    println!("Starting proxy server on {}:{}", &config.listener.host, config.listener.port);
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
 
-    match rt.block_on(run_async(proxy_config)) {
+    match rt.block_on(run_async(config)) {
         Ok(_) => println!("Proxy server exited"),
         Err(e) => {
             println!("Proxy server exited with error {:?}", e);
@@ -33,10 +33,10 @@ pub enum ProxyError {
     Io(#[from] io::Error),
 }
 
-async fn run_async(proxy_config: config::Config) -> Result<(), ProxyError> {
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
+async fn run_async(config: config::Config) -> Result<(), ProxyError> {
+    let listener = TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port)).await?;
 
-    let proxy_service = Arc::new(service::ProxyService::new(proxy_config));
+    let proxy_service = Arc::new(service::ProxyService::new(config));
 
     loop {
         let (stream, _peer_addr) = listener.accept().await?;

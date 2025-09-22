@@ -11,7 +11,10 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 pub fn run(config: config::Config) {
-    println!("Starting proxy server on {}:{}", &config.listener.host, config.listener.port);
+    println!(
+        "Starting proxy server on {}:{}",
+        &config.listener.host, config.listener.port
+    );
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -34,7 +37,8 @@ pub enum ProxyError {
 }
 
 async fn run_async(config: config::Config) -> Result<(), ProxyError> {
-    let listener = TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port)).await?;
+    let listener =
+        TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port)).await?;
 
     let proxy_service = Arc::new(service::ProxyService::new(config));
 

@@ -1,6 +1,7 @@
 use crate::config::Route;
 
 pub struct RouteActions {
+    #[allow(dead_code)]
     routes: Vec<Route>,
 }
 

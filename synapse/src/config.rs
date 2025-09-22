@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use locator::config::Config as LocatorConfig;
 use proxy::config::Config as ProxyConfig;
 use serde::Deserialize;

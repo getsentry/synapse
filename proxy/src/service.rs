@@ -11,6 +11,7 @@ use hyper_util::rt::TokioExecutor;
 use std::convert::Infallible;
 use std::pin::Pin;
 
+#[allow(dead_code)]
 pub struct ProxyService {
     config: config::Config,
     client: Client<HttpConnector, Incoming>,
@@ -40,7 +41,7 @@ impl HyperService<Request<Incoming>> for ProxyService {
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
-    fn call(&self, req: Request<Incoming>) -> Self::Future {
+    fn call(&self, _req: Request<Incoming>) -> Self::Future {
         unimplemented!();
     }
 }

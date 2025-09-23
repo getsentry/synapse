@@ -47,14 +47,33 @@ Routes are matched top down in the order they are defined. For each incoming req
     ```
 
 ### Route actions
-Each route is associated with an action -- either `handler` or `proxy`.
 
-**Handler actions:**
+Each route is associated with an action, which can be a static or dynamic routing rule.
 
-A handler action returns a built-in response directly from the proxy, without forwarding the request upstream. This can be used to define infrastructure endpoints such as healthchecks and readiness probes.
 
-**Proxy actions:**
+**Route actions examples:**
 
-A proxy action will proxy the request to one of the upstreams. Upstream selection can be driven by a `resolver` function.
+1. Static proxy to an upstream
+    ```yaml
+    action:
+        to: getsentry-de1-upstream
+    ```
 
-For example, setting `resolver: resolve_cell_from_organization` together with the dynamic path `/organizations/{organization_id_or_slug}/*`, will allow the proxy to extract the organization segment, resolve the cell and route the request to the correct upstream. An optional `default` cell can be configured, which will be used if the request cannot be resolved.
+2. Call a function to dynamically select an upstream
+    ```yaml
+    action:
+        resolver: resolve_cell_from_organization  # resolver function defines how a request is mapped to a cell
+        default: us1                              # an optional default cell can be provider
+        cell_to_upstream:                         # maps the organization's cell to a specific upstream service (e.g. getsentry, conduit, etc)
+            us1: getsentry-us1-upstream
+            us2: getsentry-us2-upstream
+    ```
+
+
+### Infrastructure endpoints
+
+Infrastructure endpoints are exposed on a dedicated host/port. This can be configured via the `admin_listener` block in the config file
+
+These include:
+- `/health`
+- `/ready`

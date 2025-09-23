@@ -5,6 +5,7 @@ pub struct Config {
     pub upstreams: Vec<UpstreamConfig>,
     pub routes: Vec<Route>,
     pub listener: Listener,
+    pub admin_listener: Listener,
     pub locator: Locator,
 }
 
@@ -23,8 +24,7 @@ pub struct UpstreamConfig {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Route {
     pub r#match: Match,
-    #[serde(flatten)]
-    pub action: RouteAction,
+    pub action: Action,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -35,14 +35,7 @@ pub struct Match {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
-pub enum RouteAction {
-    Proxy { proxy: ProxyConfig },
-    Handler { handler: HandlerConfig },
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(untagged)]
-pub enum ProxyConfig {
+pub enum Action {
     Dynamic {
         resolver: String,
         default: Option<String>,

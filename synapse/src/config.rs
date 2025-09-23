@@ -69,10 +69,13 @@ mod tests {
         let proxy_yaml = r#"
             proxy:
                 upstreams: [{name: local, url: http://127.0.0.1:9000}]
-                routes: [{match: {path: health}, handler: {name: health}}]
+                routes: [{match: {path: test}, action: {to: local}}]
                 listener:
                     host: 0.0.0.0
                     port: 8080
+                admin_listener:
+                    host: 0.0.0.0
+                    port: 8081
                 locator:
                     type: in_process
             "#;
@@ -91,13 +94,9 @@ mod tests {
             &vec![proxy::config::Route {
                 r#match: proxy::config::Match {
                     host: None,
-                    path: Some("health".into()),
+                    path: Some("test".into()),
                 },
-                action: proxy::config::RouteAction::Handler {
-                    handler: proxy::config::HandlerConfig {
-                        name: "health".into()
-                    },
-                }
+                action: proxy::config::Action::Static { to: "local".into() }
             }]
         );
     }

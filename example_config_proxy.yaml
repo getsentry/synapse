@@ -1,8 +1,10 @@
 proxy:
   listener:
-    host: "127.0.0.1"
+    host: "0.0.0.0"
     port: 3000
-
+  admin_listener:
+    host: "127.0.0.1"
+    port: 3001
   locator:
     type: in_process
     backup_route_store: null
@@ -24,21 +26,9 @@ proxy:
 
   routes:
     - match:
-        host: "*"
-        path: /health/
-        method: GET
-      handler:
-        name: health
-    - match:
-        host: "*"
-        path: /ready/
-        method: GET
-      handler:
-        name: ready
-    - match:
         host: us.sentry.io
         path: /organizations/{organization_id_or_slug}/*
-      proxy:
+      action:
         resolver: resolve_cell_from_organization
         cell_to_upstream:
           us1: us1-getsentry
@@ -47,19 +37,19 @@ proxy:
     - match:
         host: us.sentry.io
         path: /cell/{cell_id}/*
-      proxy:
+      action:
         resolver: resolve_cell_from_id
         cell_to_upstream:
           us1: us1-getsentry
           us2: us2-getsentry
     - match:
         host: de.sentry.io
-      proxy:
+      action:
         to: de-getsentry
     - match:
         host: conduit.us.sentry.io
         path: /organizations/{organization_id_or_slug}/*
-      proxy:
+      action:
         resolver: resolve_cell_from_organization
         cell_to_upstream:
           us1: us1-conduit
@@ -67,7 +57,7 @@ proxy:
     - match:
         host: conduit.de.sentry.io
         path: /organizations/{organization_id_or_slug}/*
-      proxy:
+      action:
         to: de-conduit
 
 logging:

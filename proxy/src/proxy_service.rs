@@ -41,7 +41,9 @@ impl HyperService<Request<Incoming>> for ProxyService {
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
-    fn call(&self, _req: Request<Incoming>) -> Self::Future {
+    fn call(&self, request: Request<Incoming>) -> Self::Future {
+        let _route = self.route_actions.resolve(&request);
+
         unimplemented!();
     }
 }

@@ -105,7 +105,7 @@ class EchoHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = HTTPServer(("127.0.0.1", 9000), EchoHandler)
-    print("Echo server listening on http://127.0.0.1:8080")
+    print("Echo server listening on http://127.0.0.1:9000")
     server.serve_forever()
 endef
 

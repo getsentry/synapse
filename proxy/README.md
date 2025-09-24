@@ -5,7 +5,7 @@ Synapse proxy is a cell-aware reverse proxy that routes incoming HTTP requests t
 
 ### Features
 
-- supports traditional HTTP request/response traffic and long-lived streaming connections via server sent events
+- Supports traditional HTTP request/response traffic and long-lived streaming connections via server sent events
 - HTTP/1.1 and HTTP/2 for incoming and outgoing connections
 - Uses the [`locator`](locator/README.md) internally to resolve organizations to cells
 

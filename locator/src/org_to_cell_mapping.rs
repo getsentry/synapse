@@ -63,7 +63,7 @@ impl OrgToCell {
             })),
             update_lock: Arc::new(Semaphore::new(1)),
             ready: Arc::new(AtomicBool::new(false)),
-            backup_routes: backup_routes,
+            backup_routes,
         }
     }
 

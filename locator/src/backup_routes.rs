@@ -83,6 +83,12 @@ impl BackupRouteProvider for PlaceholderRouteProvider {
 
 pub struct FilesystemRouteProvider {}
 
+impl FilesystemRouteProvider {
+    pub fn new(path: &str) -> Self {
+        FilesystemRouteProvider {}
+    }
+}
+
 impl BackupRouteProvider for FilesystemRouteProvider {
     fn load(&self) -> Result<RouteData, BackupError> {
         unimplemented!();
@@ -96,7 +102,7 @@ impl BackupRouteProvider for FilesystemRouteProvider {
 pub struct GcsRouteProvider {}
 
 impl GcsRouteProvider {
-    fn new(bucket: &str) -> Self {
+    pub fn new(bucket: &str) -> Self {
         GcsRouteProvider {}
     }
 }

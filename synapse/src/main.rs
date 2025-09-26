@@ -16,11 +16,13 @@ fn main() {
 
     match &cli {
         CliCommand::Locator(locator_args) => {
-            let _config = Config::from_file(&locator_args.base.config_file_path)
-                .expect("Failed to load config file");
+            let locator_config = Config::from_file(&locator_args.base.config_file_path)
+                .expect("Failed to load config file")
+                .locator
+                .unwrap();
 
             println!("Starting locator");
-            run_async(locator::run());
+            run_async(locator::run(locator_config));
         }
         CliCommand::Proxy => {
             println!("Starting proxy");

@@ -54,7 +54,7 @@ pub struct OrgToCell {
 }
 
 impl OrgToCell {
-    pub fn new(backup_routes: impl BackupRouteProvider + 'static) -> Self {
+    pub fn new(backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>) -> Self {
         OrgToCell {
             inner: Arc::new(RwLock::new(OrgToCellInner {
                 mapping: HashMap::new(),
@@ -63,7 +63,7 @@ impl OrgToCell {
             })),
             update_lock: Arc::new(Semaphore::new(1)),
             ready: Arc::new(AtomicBool::new(false)),
-            backup_routes: Arc::new(backup_routes),
+            backup_routes: backup_routes,
         }
     }
 

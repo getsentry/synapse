@@ -15,7 +15,13 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+use backup_routes::{
+    BackupRouteProvider, FilesystemRouteProvider, GcsRouteProvider, NoopRouteProvider,
+    PlaceholderRouteProvider,
+};
+use config::BackupRouteStoreType;
 use org_to_cell_mapping::{Command, OrgToCell};
+use std::sync::Arc;
 use types::Cell;
 
 #[derive(Serialize)]
@@ -62,9 +68,9 @@ struct Params {
     locality: Option<String>,
 }
 
-pub async fn run() {
+pub async fn run(config: config::Config) {
     // Dummy data for testing. The real provider implementation should be selected based on config.
-    let route_provider = backup_routes::PlaceholderRouteProvider {};
+    let route_provider = get_provider(config.backup_route_store.r#type);
 
     let routes = OrgToCell::new(route_provider);
 
@@ -96,5 +102,14 @@ async fn handler(
                 error_message: e.to_string(),
             })
         }
+    }
+}
+
+pub fn get_provider(store_type: BackupRouteStoreType) -> Arc<dyn BackupRouteProvider + 'static> {
+    match store_type {
+        BackupRouteStoreType::None => Arc::new(NoopRouteProvider {}),
+        BackupRouteStoreType::Filesystem { path } => Arc::new(FilesystemRouteProvider::new(&path)),
+        BackupRouteStoreType::Gcs { bucket } => Arc::new(GcsRouteProvider::new(&bucket)),
+        BackupRouteStoreType::Placeholder => Arc::new(PlaceholderRouteProvider {}),
     }
 }

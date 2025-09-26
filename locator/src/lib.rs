@@ -62,20 +62,7 @@ struct Params {
     locality: Option<String>,
 }
 
-pub fn run() {
-    if tokio::runtime::Handle::try_current().is_ok() {
-        println!("Already inside a tokio runtime, use run_async() directly");
-        return;
-    }
-
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(run_async());
-}
-
-pub async fn run_async() {
+pub async fn run() {
     // Dummy data for testing. The real provider implementation should be selected based on config.
     let route_provider = backup_routes::PlaceholderRouteProvider {};
 

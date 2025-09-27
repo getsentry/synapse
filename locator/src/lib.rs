@@ -84,7 +84,7 @@ pub async fn run(config: config::Config) {
     });
 
     let app = Router::new().route("/", get(handler)).with_state(routes);
-    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port)).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

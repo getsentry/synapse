@@ -19,7 +19,6 @@ enum CliError {
     InvalidConfig(String),
 }
 
-
 fn main() {
     if let Err(e) = cli() {
         eprintln!("Error: {}", e);
@@ -50,8 +49,6 @@ fn cli() -> Result<(), CliError> {
         }
     }
 }
-
-
 
 pub fn run_async(fut: impl Future<Output = ()>) {
     let rt = tokio::runtime::Builder::new_current_thread()

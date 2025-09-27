@@ -84,7 +84,9 @@ pub async fn run(config: config::Config) {
     });
 
     let app = Router::new().route("/", get(handler)).with_state(routes);
-    let listener = TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port)).await.unwrap();
+    let listener = TcpListener::bind(format!("{}:{}", config.listener.host, config.listener.port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

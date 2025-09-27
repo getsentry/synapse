@@ -1,3 +1,8 @@
 locator:
+  listener:
+    host: "0.0.0.0"
+    port: 3000
+  control_plane:
+    url: "127.0.0.1:9000"
   backup_route_store:
-    type: none
+    type: placeholder

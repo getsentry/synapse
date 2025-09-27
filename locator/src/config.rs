@@ -2,19 +2,37 @@
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-enum Adapter {
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+#[serde(tag = "type")]
+pub enum BackupRouteStoreType {
     None,
-    File { path: String },
+    Filesystem { path: String },
     Gcs { bucket: String },
+    // Temporary, for testing
+    Placeholder,
 }
 
 #[derive(Deserialize)]
-struct BackupRouteStore {
-    r#type: Adapter,
+pub struct ControlPlane {
+    pub url: String,
 }
 
 #[derive(Deserialize)]
-pub struct LocatorConfig {
-    backup_route_store: Option<BackupRouteStore>,
+pub struct BackupRouteStore {
+    #[serde(flatten)]
+    pub r#type: BackupRouteStoreType,
+}
+
+#[derive(Deserialize)]
+pub struct Listener {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Deserialize)]
+pub struct Config {
+    pub listener: Listener,
+    pub control_plane: ControlPlane,
+    pub backup_route_store: BackupRouteStore,
 }

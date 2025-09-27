@@ -28,9 +28,9 @@ fn main() {
 }
 
 fn cli() -> Result<(), CliError> {
-    let cli = CliCommand::parse();
+    let cmd = CliCommand::parse();
 
-    match &cli {
+    match &cmd {
         CliCommand::Locator(locator_args) => {
             let config = Config::from_file(&locator_args.base.config_file_path)?;
             let locator_config = config.locator.ok_or(CliError::InvalidConfig(

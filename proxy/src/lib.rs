@@ -32,7 +32,7 @@ pub async fn run(config: config::Config) {
     );
 
     if let Err(e) = tokio::try_join!(proxy_task, admin_task) {
-        eprintln!("Admin error: {}", e);
+        eprintln!("Proxy error: {}", e);
         process::exit(1);
     }
 }

@@ -13,33 +13,13 @@ use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub fn run(config: config::Config) {
-    println!(
-        "Starting proxy server on {}:{}",
-        &config.listener.host, config.listener.port
-    );
-
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-
-    match rt.block_on(run_async(config)) {
-        Ok(_) => println!("Proxy server exited"),
-        Err(e) => {
-            println!("Proxy server exited with error {:?}", e);
-            process::exit(1);
-        }
-    }
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 }
 
-async fn run_async(config: config::Config) -> Result<(), ProxyError> {
+pub async fn run(config: config::Config) {
     let proxy_task = run_task(
         &config.listener.host,
         config.listener.port,
@@ -51,8 +31,10 @@ async fn run_async(config: config::Config) -> Result<(), ProxyError> {
         ServiceType::Admin(Box::new(admin_service::AdminService::new())),
     );
 
-    tokio::try_join!(proxy_task, admin_task)?;
-    Ok(())
+    if let Err(e) = tokio::try_join!(proxy_task, admin_task) {
+        eprintln!("Admin error: {}", e);
+        process::exit(1);
+    }
 }
 
 async fn run_task(host: &str, port: u16, service: ServiceType) -> Result<(), ProxyError> {

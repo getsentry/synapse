@@ -10,7 +10,7 @@ proxy = { path = "../proxy" }
 serde = { workspace = true }
 serde_yaml = "0.9.34"
 thiserror = { workspace = true }
-tokio = { version = "1.46.1", features = ["full"] }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

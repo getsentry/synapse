@@ -20,19 +20,27 @@ fn main() {
                 .expect("Failed to load config file");
 
             println!("Starting locator");
-            locator::run();
+            run_async(locator::run());
         }
         CliCommand::Proxy(proxy_args) => {
             let config = Config::from_file(&proxy_args.base.config_file_path)
                 .expect("Failed to load config file")
                 .proxy
                 .expect("Proxy config missing");
-            proxy::run(config);
+            run_async(proxy::run(config));
         }
         CliCommand::IngestRouter => {
             println!("Starting ingest-router");
         }
     }
+}
+
+pub fn run_async(fut: impl Future<Output = ()>) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(fut);
 }
 
 #[derive(Args, Debug, Clone)]

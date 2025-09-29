@@ -36,7 +36,8 @@ $ curl sentry-control.internal/org-cell-mappings?cursor=abcdef&limit=100000
 {
    "data": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....],
    "metadata": {
-    "cursor": "ghijkl"
+    "cursor": "ghijkl",
+    "has_more": true
    }
 }
 ```

@@ -68,7 +68,11 @@ struct Params {
     locality: Option<String>,
 }
 
-pub async fn run(config: config::Config) {
+#[derive(thiserror::Error, Debug)]
+#[error("locator error")]
+pub struct LocatorError;
+
+pub async fn run(config: config::Config) -> Result<(), LocatorError> {
     // Dummy data for testing. The real provider implementation should be selected based on config.
     let route_provider = get_provider(config.backup_route_store.r#type);
 
@@ -88,6 +92,8 @@ pub async fn run(config: config::Config) {
         .await
         .unwrap();
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
 }
 
 async fn handler(

@@ -27,6 +27,9 @@ impl HyperService<Request<Incoming>> for AdminService {
                 "/health" => {
                     Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed())
                 }
+                "/ready" => {
+                    unimplemented!();
+                }
                 _ => Response::builder()
                     .status(StatusCode::NOT_FOUND)
                     .body(

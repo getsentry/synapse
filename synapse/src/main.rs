@@ -7,7 +7,7 @@ use config::Config;
 #[derive(Parser)]
 enum CliCommand {
     Locator(LocatorArgs),
-    Proxy,
+    Proxy(ProxyArgs),
     IngestRouter,
 }
 
@@ -22,9 +22,12 @@ fn main() {
             println!("Starting locator");
             run_async(locator::run());
         }
-        CliCommand::Proxy => {
-            println!("Starting proxy");
-            run_async(proxy::run());
+        CliCommand::Proxy(proxy_args) => {
+            let config = Config::from_file(&proxy_args.base.config_file_path)
+                .expect("Failed to load config file")
+                .proxy
+                .expect("Proxy config missing");
+            run_async(proxy::run(config));
         }
         CliCommand::IngestRouter => {
             println!("Starting ingest-router");
@@ -48,6 +51,12 @@ struct BaseArgs {
 
 #[derive(Args, Debug)]
 struct LocatorArgs {
+    #[command(flatten)]
+    base: BaseArgs,
+}
+
+#[derive(Args, Debug)]
+struct ProxyArgs {
     #[command(flatten)]
     base: BaseArgs,
 }

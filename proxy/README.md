@@ -72,7 +72,8 @@ Each route is associated with an action, which can be a static or dynamic routin
 
 ### Infrastructure endpoints
 
-Infrastructure endpoints are exposed on a dedicated host/port. This can be configured via the `admin_listener` block in the config file
+Infrastructure endpoints are exposed on a dedicated host/port in order to avoid exposure of admin endpoints to end users, and to prevent collisions with endpoints on proxied services. The host/port can be configured via the `admin_listener` block in the config file.
+
 
 These include:
 - `/health`

@@ -1,40 +1,36 @@
 #![allow(dead_code)]
 
 use locator::config::Config as LocatorConfig;
+use proxy::config::Config as ProxyConfig;
 use serde::Deserialize;
 use std::fs::File;
 
-#[derive(Deserialize)]
-
+#[derive(Debug, Deserialize)]
 struct MetricsConfig {
     statsd_host: String,
     statsd_port: u16,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct LoggingConfig {
     sentry_dsn: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct CommonConfig {
     metrics: Option<MetricsConfig>,
     logging: Option<LoggingConfig>,
 }
 
-#[derive(Deserialize)]
-
+#[derive(Debug, Deserialize)]
 struct IngestRouterConfig {}
 
-#[derive(Deserialize)]
-struct ProxyConfig {}
-
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
     common: CommonConfig,
     ingest_router: Option<IngestRouterConfig>,
-    proxy: Option<ProxyConfig>,
+    pub proxy: Option<ProxyConfig>,
     pub locator: Option<LocatorConfig>,
 }
 
@@ -59,6 +55,7 @@ pub enum ConfigError {
 mod tests {
     use super::*;
     use locator::config::BackupRouteStoreType;
+    use proxy::config::Listener;
     use std::io::Write;
 
     fn write_tmp_file(s: &str) -> tempfile::NamedTempFile {
@@ -90,6 +87,42 @@ mod tests {
             BackupRouteStoreType::Filesystem {
                 path: "/var/lib/locator/".into()
             }
+        );
+    }
+
+    fn proxy_config() {
+        let proxy_yaml = r#"
+            proxy:
+                upstreams: [{name: local, url: http://127.0.0.1:9000}]
+                routes: [{match: {path: test}, action: {to: local}}]
+                listener:
+                    host: 0.0.0.0
+                    port: 8080
+                admin_listener:
+                    host: 0.0.0.0
+                    port: 8081
+                locator:
+                    type: in_process
+            "#;
+        let tmp = write_tmp_file(proxy_yaml);
+        let config = Config::from_file(tmp.path()).expect("load config");
+        let proxy_config = config.proxy.expect("proxy config");
+        assert_eq!(
+            &proxy_config.listener,
+            &Listener {
+                host: "0.0.0.0".into(),
+                port: 8080
+            }
+        );
+        assert_eq!(
+            &proxy_config.routes,
+            &vec![proxy::config::Route {
+                r#match: proxy::config::Match {
+                    host: None,
+                    path: Some("test".into()),
+                },
+                action: proxy::config::Action::Static { to: "local".into() }
+            }]
         );
     }
 }

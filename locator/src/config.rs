@@ -13,24 +13,24 @@ pub enum BackupRouteStoreType {
     Placeholder,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct ControlPlane {
     pub url: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct BackupRouteStore {
     #[serde(flatten)]
     pub r#type: BackupRouteStoreType,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Listener {
     pub host: String,
     pub port: u16,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Config {
     pub listener: Listener,
     pub control_plane: ControlPlane,

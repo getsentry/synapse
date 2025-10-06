@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use locator::config::Config as LocatorConfig;
 use proxy::config::Config as ProxyConfig;
 use serde::Deserialize;
@@ -30,7 +31,7 @@ pub struct Config {
     common: CommonConfig,
     ingest_router: Option<IngestRouterConfig>,
     pub proxy: Option<ProxyConfig>,
-    locator: Option<LocatorConfig>,
+    pub locator: Option<LocatorConfig>,
 }
 
 impl Config {
@@ -52,9 +53,9 @@ pub enum ConfigError {
 
 #[cfg(test)]
 mod tests {
-    use proxy::config::Listener;
-
     use super::*;
+    use locator::config::BackupRouteStoreType;
+    use proxy::config::Listener;
     use std::io::Write;
 
     fn write_tmp_file(s: &str) -> tempfile::NamedTempFile {
@@ -65,6 +66,30 @@ mod tests {
     }
 
     #[test]
+    fn locator_config() {
+        let locator_yaml = r#"
+            locator:
+                listener:
+                    host: 0.0.0.0
+                    port: 8080
+                control_plane:
+                    url: control-plane.internal
+                backup_route_store:
+                    type: filesystem
+                    path: /var/lib/locator/
+            "#;
+        let tmp = write_tmp_file(locator_yaml);
+        let config = Config::from_file(tmp.path()).expect("load config");
+        let locator_config = config.locator.expect("locator config");
+        assert_eq!(locator_config.control_plane.url, "control-plane.internal");
+        assert_eq!(
+            locator_config.backup_route_store.r#type,
+            BackupRouteStoreType::Filesystem {
+                path: "/var/lib/locator/".into()
+            }
+        );
+    }
+
     fn proxy_config() {
         let proxy_yaml = r#"
             proxy:

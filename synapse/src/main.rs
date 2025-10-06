@@ -11,16 +11,32 @@ enum CliCommand {
     IngestRouter,
 }
 
+#[derive(thiserror::Error, Debug)]
+enum CliError {
+    #[error("Failed to load config file: {0}")]
+    ConfigLoadError(#[from] config::ConfigError),
+    #[error("Invalid config: {0}")]
+    InvalidConfig(String),
+}
+
 fn main() {
-    let cli = CliCommand::parse();
+    if let Err(e) = cli() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
 
-    match &cli {
+fn cli() -> Result<(), CliError> {
+    let cmd = CliCommand::parse();
+
+    match &cmd {
         CliCommand::Locator(locator_args) => {
-            let _config = Config::from_file(&locator_args.base.config_file_path)
-                .expect("Failed to load config file");
-
-            println!("Starting locator");
-            run_async(locator::run());
+            let config = Config::from_file(&locator_args.base.config_file_path)?;
+            let locator_config = config.locator.ok_or(CliError::InvalidConfig(
+                "Missing locator config".to_string(),
+            ))?;
+            run_async(locator::run(locator_config));
+            Ok(())
         }
         CliCommand::Proxy(proxy_args) => {
             let config = Config::from_file(&proxy_args.base.config_file_path)
@@ -28,9 +44,11 @@ fn main() {
                 .proxy
                 .expect("Proxy config missing");
             run_async(proxy::run(config));
+            Ok(())
         }
         CliCommand::IngestRouter => {
             println!("Starting ingest-router");
+            Ok(())
         }
     }
 }

@@ -163,8 +163,9 @@ impl RouteActions {
         println!("Request query: {:?}", query);
 
         // Return the first matching route, if any
-        self.routes.iter().find_map(|route| route.matches(host, path))
-
+        self.routes
+            .iter()
+            .find_map(|route| route.matches(host, path))
     }
 }
 

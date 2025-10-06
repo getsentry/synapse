@@ -1,6 +1,6 @@
 # Makefile for Synapse Rust workspace
 
-.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy
+.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-mock-control-api
 
 # Default target
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  run-locator  - Run the locator service"
 	@echo "  run-proxy    - Run the proxy service"
 	@echo "  run-ingest-router - Run the ingest-router service"
+	@echo "  run-mock-control-api - Run the mock control API server"
 
 
 # Setup development environment
@@ -71,6 +72,9 @@ run-proxy:
 
 run-ingest-router:
 	cargo run ingest-router
+
+run-mock-control-api:
+	python scripts/mock_control_api.py
 
 # CI-like checks (what runs in GitHub Actions)
 ci: fmt-check lint test build

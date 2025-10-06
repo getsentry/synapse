@@ -72,14 +72,14 @@ impl Route {
                 }
 
                 if path.has_trailing_splat || i_req == request_segments.len() {
-                    return Some(RouteMatch { params });
+                    Some(RouteMatch { params })
                 } else {
-                    return None;
+                    None
                 }
             }
             None => {
                 // If no path is defined in the route, it matches anything
-                return Some(RouteMatch { params });
+                Some(RouteMatch { params })
             }
         }
     }
@@ -139,7 +139,7 @@ impl RouteActions {
     pub fn try_new(route_config: Vec<RouteConfig>) -> Result<Self, ProxyError> {
         let routes: Vec<Route> = route_config
             .into_iter()
-            .map(|c| Route::try_from(c))
+            .map(Route::try_from)
             .collect::<Result<_, _>>()?;
 
         Ok(Self { routes })

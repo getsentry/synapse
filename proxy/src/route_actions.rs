@@ -162,18 +162,9 @@ impl RouteActions {
         println!("Request path: {}", path);
         println!("Request query: {:?}", query);
 
-        for route in &self.routes {
-            println!("Checking route: {:?}", route);
-            let route_match = route.matches(host, path);
-            println!("Route match: {:?}", route_match);
+        // Return the first matching route, if any
+        self.routes.iter().find_map(|route| route.matches(host, path))
 
-            if let Some(m) = route_match {
-                return Some(m);
-            }
-        }
-
-        // No matching route found
-        None
     }
 }
 

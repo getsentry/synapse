@@ -237,9 +237,7 @@ mod tests {
             Ok(RouteData {
                 mapping: dummy_data,
                 last_cursor: Some("test".into()),
-                locality_to_default_cell: HashMap::from([
-                    ("de".into(), cells[2].clone()),
-                ]),
+                locality_to_default_cell: HashMap::from([("de".into(), cells[2].clone())]),
             })
         }
 

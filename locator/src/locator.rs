@@ -252,10 +252,7 @@ mod tests {
     #[tokio::test]
     async fn test_locator() {
         let locator = Locator::new(Arc::new(TestingRouteProvider {}));
-        assert_eq!(
-            locator.lookup("org_0", None),
-            Err(LocatorError::NotReady)
-        );
+        assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
 
         // Sleep because snapshot is loaded asynchronously
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -272,7 +269,10 @@ mod tests {
         );
         assert_eq!(
             locator.lookup("org_1", Some("de")),
-            Err(LocatorError::LocalityMismatch {requested: "de".to_string(), actual: "us".to_string()})
+            Err(LocatorError::LocalityMismatch {
+                requested: "de".to_string(),
+                actual: "us".to_string()
+            })
         );
         assert_eq!(
             locator.lookup("org_2", None),
@@ -281,7 +281,5 @@ mod tests {
                 locality: Arc::new("de".into())
             })
         );
-
-
     }
 }

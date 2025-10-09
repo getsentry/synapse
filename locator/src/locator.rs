@@ -238,7 +238,6 @@ mod tests {
                 mapping: dummy_data,
                 last_cursor: Some("test".into()),
                 locality_to_default_cell: HashMap::from([
-                    ("us".into(), cells[0].clone()),
                     ("de".into(), cells[2].clone()),
                 ]),
             })

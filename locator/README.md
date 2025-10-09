@@ -23,7 +23,8 @@ There are two ways in which the locator can be used:
     The locator can also be bundled together with the proxy module, allowing dynamic proxying decisions to be made in-process in a single container without the need for the HTTP call.
 
     ```rust
-    let cell: Result<Option<Cell>, LookupError> = synapse::locator::get("1").await?;
+    let locator = synapse::Locator::new(filesystem_route_provider);
+    let cell: Result<Cell, LocatorError> = locator.lookup("1", "us1").await?;
     ```
 
 ### Syncing to the control plane

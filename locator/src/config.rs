@@ -9,8 +9,6 @@ pub enum BackupRouteStoreType {
     None,
     Filesystem { path: String },
     Gcs { bucket: String },
-    // Temporary, for testing
-    Placeholder,
 }
 
 #[derive(Deserialize, Debug)]

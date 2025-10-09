@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Cell {
     pub id: Arc<String>,
     pub locality: Arc<String>,

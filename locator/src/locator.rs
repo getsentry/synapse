@@ -193,6 +193,7 @@ impl OrgToCell {
 
         write_guard.mapping = route_data.mapping;
         write_guard.last_cursor = route_data.last_cursor;
+        write_guard.locality_to_default_cell = route_data.locality_to_default_cell;
 
         Ok(())
     }

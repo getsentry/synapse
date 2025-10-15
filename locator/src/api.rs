@@ -1,5 +1,5 @@
 use crate::backup_routes::BackupRouteProvider;
-use crate::config::Listener as ListenerConfig;
+use crate::config::{ControlPlane as ControlPlaneConfig, Listener as ListenerConfig};
 use crate::locator::{Locator, LocatorError};
 use crate::types::Cell;
 use axum::{
@@ -13,8 +13,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub async fn serve(listener: ListenerConfig, provider: Arc<dyn BackupRouteProvider + 'static>) {
-    let locator = Locator::new(provider);
+pub async fn serve(
+    listener: ListenerConfig,
+    control_plane: ControlPlaneConfig,
+    provider: Arc<dyn BackupRouteProvider + 'static>,
+) {
+    let locator = Locator::new(control_plane.url, provider);
     let app = Router::new().route("/", get(handler)).with_state(locator);
 
     let addr = format!("{}:{}", listener.host, listener.port);
@@ -25,8 +29,8 @@ pub async fn serve(listener: ListenerConfig, provider: Arc<dyn BackupRouteProvid
 
 #[derive(Serialize)]
 struct ApiResponse {
-    cell: Option<String>,
-    locality: Option<String>,
+    cell: String,
+    locality: String,
 }
 
 impl IntoResponse for ApiResponse {
@@ -35,11 +39,11 @@ impl IntoResponse for ApiResponse {
     }
 }
 
-impl From<Cell> for ApiResponse {
-    fn from(cell: Cell) -> Self {
+impl From<Arc<Cell>> for ApiResponse {
+    fn from(cell: Arc<Cell>) -> Self {
         ApiResponse {
-            cell: Some((*cell.id).clone()),
-            locality: Some((*cell.locality).clone()),
+            cell: cell.id.clone(),
+            locality: cell.locality.clone(),
         }
     }
 }
@@ -73,6 +77,7 @@ impl IntoResponse for LocatorError {
                 actual: _,
             } => StatusCode::NOT_FOUND,
             LocatorError::NotReady => StatusCode::SERVICE_UNAVAILABLE,
+            LocatorError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         let body = Json(ApiErrorResponse {

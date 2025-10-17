@@ -19,6 +19,7 @@ pub async fn serve(
     provider: Arc<dyn BackupRouteProvider + 'static>,
 ) {
     let locator = Locator::new(control_plane.url, provider);
+
     let app = Router::new().route("/", get(handler)).with_state(locator);
 
     let addr = format!("{}:{}", listener.host, listener.port);

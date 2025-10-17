@@ -77,7 +77,7 @@ pub enum LoadError {
     #[error("Error loading backup")]
     BackupError(#[from] BackupError),
     #[error("Another load operation is in progress")]
-    ConcurrentLoad,
+    ConcurrentLoad(#[from] AcquireError),
 }
 
 #[derive(Debug)]
@@ -180,7 +180,7 @@ impl OrgToCell {
     /// load from the backup route provider.
     async fn load_snapshot(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
-        let _permit: Result<SemaphorePermit<'_>, AcquireError> = self.update_lock.acquire().await;
+        let _permit = self.update_lock.acquire().await?;
 
         // Testing - load from the backup route provider
         let route_data: RouteData = self.backup_routes.load()?;

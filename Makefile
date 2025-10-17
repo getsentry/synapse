@@ -1,6 +1,6 @@
 # Makefile for Synapse Rust workspace
 
-.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-mock-control-api
+.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-echo-server run-mock-control-api
 
 # Default target
 help:
@@ -68,7 +68,7 @@ run-locator:
 	cargo run locator --config-file-path example_config_locator.yaml
 
 run-proxy:
-	cargo run proxy
+	cargo run proxy --config-file-path example_config_proxy.yaml
 
 run-ingest-router:
 	cargo run ingest-router

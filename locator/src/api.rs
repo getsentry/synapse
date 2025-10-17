@@ -13,14 +13,16 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-
 #[derive(thiserror::Error, Debug)]
 pub enum LocatorApiError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
-pub async fn serve(listener: ListenerConfig, provider: Arc<dyn BackupRouteProvider + 'static>) -> Result<(), LocatorApiError>{
+pub async fn serve(
+    listener: ListenerConfig,
+    provider: Arc<dyn BackupRouteProvider + 'static>,
+) -> Result<(), LocatorApiError> {
     let locator = Locator::new(provider);
     let app = Router::new().route("/", get(handler)).with_state(locator);
 

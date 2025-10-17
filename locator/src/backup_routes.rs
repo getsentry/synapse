@@ -9,8 +9,9 @@ use std::io;
 type RouteMap = HashMap<String, Cell>;
 
 pub struct RouteData {
-    pub routes: HashMap<String, Cell>,
-    pub last_cursor: String,
+    pub mapping: HashMap<String, Cell>,
+    pub locality_to_default_cell: HashMap<String, Cell>,
+    pub last_cursor: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -37,13 +38,14 @@ pub struct NoopRouteProvider {}
 
 impl BackupRouteProvider for NoopRouteProvider {
     fn load(&self) -> Result<RouteData, BackupError> {
-        println!(
+        eprintln!(
             "Warning: loading backup routes from the no-op provider. This is unsafe for production use."
         );
 
         Ok(RouteData {
-            routes: HashMap::new(),
-            last_cursor: "test".into(),
+            mapping: HashMap::new(),
+            locality_to_default_cell: HashMap::new(),
+            last_cursor: Some("test".into()),
         })
     }
 
@@ -53,39 +55,13 @@ impl BackupRouteProvider for NoopRouteProvider {
     }
 }
 
-// Temporary. Generates placeholder data for testing.
-pub struct PlaceholderRouteProvider {}
-
-impl BackupRouteProvider for PlaceholderRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
-        let cells = [
-            Cell::new("us1", "us"),
-            Cell::new("us2", "us"),
-            Cell::new("de", "de"),
-        ];
-
-        let mut dummy_data = HashMap::new();
-        for i in 0..10 {
-            dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].clone());
-        }
-
-        Ok(RouteData {
-            routes: dummy_data,
-            last_cursor: "test".into(),
-        })
-    }
-
-    fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
-        // Do nothing
-        Ok(())
-    }
+pub struct FilesystemRouteProvider {
+    pub path: String,
 }
-
-pub struct FilesystemRouteProvider {}
 
 impl FilesystemRouteProvider {
     pub fn new(path: &str) -> Self {
-        FilesystemRouteProvider {}
+        FilesystemRouteProvider { path: path.into() }
     }
 }
 

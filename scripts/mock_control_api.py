@@ -89,6 +89,10 @@ class MockControlApi(BaseHTTPRequestHandler):
                 "metadata": {
                     "cursor": next_cursor,
                     "has_more": has_more,
+                    "cell_to_locality": {
+                        "us1": "us",
+                        "us2": "us",
+                    }
                 }
             }
 

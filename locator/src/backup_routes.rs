@@ -1,18 +1,10 @@
 #![allow(dead_code, unused_variables)]
 
+use crate::types::RouteData;
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
-use crate::types::Cell;
 use std::collections::HashMap;
 use std::io;
-
-type RouteMap = HashMap<String, Cell>;
-
-pub struct RouteData {
-    pub mapping: HashMap<String, Cell>,
-    pub locality_to_default_cell: HashMap<String, Cell>,
-    pub last_cursor: Option<String>,
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
@@ -43,9 +35,10 @@ impl BackupRouteProvider for NoopRouteProvider {
         );
 
         Ok(RouteData {
-            mapping: HashMap::new(),
+            org_to_cell: HashMap::new(),
             locality_to_default_cell: HashMap::new(),
-            last_cursor: Some("test".into()),
+            last_cursor: "test".into(),
+            cells: HashMap::new(),
         })
     }
 

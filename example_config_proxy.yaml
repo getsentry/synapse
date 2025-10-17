@@ -8,7 +8,8 @@ proxy:
   locator:
     type: in_process
     backup_route_store: null
-
+    control_plane:
+      url: "127.0.0.1:9000"
   upstreams:
   - name: us1-getsentry
     url: "127.0.0.1:8080"

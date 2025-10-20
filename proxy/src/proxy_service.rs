@@ -47,6 +47,7 @@ impl HyperService<Request<Incoming>> for ProxyService {
         let route = self.route_actions.resolve(&request);
 
         println!("Resolved route: {:?}", route);
+        // TODO: Actually proxy the request not just return 404
         Box::pin(async move {
             let res = Response::builder()
                 .status(StatusCode::NOT_FOUND)

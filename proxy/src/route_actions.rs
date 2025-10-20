@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dymamic_path() {
+    fn test_dynamic_path() {
         let config = RouteConfig {
             r#match: crate::config::Match {
                 host: None,

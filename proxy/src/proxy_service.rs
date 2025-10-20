@@ -1,6 +1,7 @@
 use crate::config;
 use crate::errors::ProxyError;
 use crate::route_actions::RouteActions;
+use crate::upstreams::Upstreams;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
@@ -18,6 +19,7 @@ pub struct ProxyService {
     config: config::Config,
     client: Client<HttpConnector, Incoming>,
     pub route_actions: RouteActions,
+    upstreams: Upstreams,
 }
 
 impl ProxyService {
@@ -29,10 +31,13 @@ impl ProxyService {
 
         let route_actions = RouteActions::try_new(config.routes.clone())?;
 
+        let upstreams = Upstreams::try_new(config.upstreams.clone())?;
+
         Ok(Self {
             config,
             client,
             route_actions,
+            upstreams,
         })
     }
 }
@@ -47,6 +52,17 @@ impl HyperService<Request<Incoming>> for ProxyService {
         let route = self.route_actions.resolve(&request);
 
         println!("Resolved route: {:?}", route);
+
+        let upstream_name = route.and_then(|r| match r.action {
+            config::Action::Static { to } => Some(to),
+            // TODO: handle dynamic routes
+            config::Action::Dynamic { default, .. } => default.as_ref(),
+        });
+
+        let upstream = upstream_name.and_then(|u| self.upstreams.get(u));
+
+        println!("Resolved upstream: {:?}", upstream);
+
         // TODO: Actually proxy the request not just return 404
         Box::pin(async move {
             let res = Response::builder()

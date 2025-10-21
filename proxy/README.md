@@ -25,15 +25,15 @@ Routes are matched top down in the order they are defined. For each incoming req
 1. Exact path match
     ```yaml
     - match:
-        host: "*"       # host can be anything
-        path: /health/  # only the exact path /health/ will be matched
+        host: null       # host can be anything
+        path: /health/   # only the exact path /health/ will be matched
     ```
 
 2. Match any path
     ```yaml
     - match:
         host: de.sentry.io  # match de.sentry.io only
-        path: "*"           # all paths
+        path: null          # all paths
     ```
 
 3. Path prefix match with dynamic segment

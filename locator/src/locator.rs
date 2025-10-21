@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::types::Cell;
 use std::sync::Arc;
 
@@ -12,7 +10,9 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
+    #[allow(dead_code)]
     handle: tokio::task::JoinHandle<()>,
+    #[allow(dead_code)]
     tx: mpsc::Sender<Command>,
 }
 
@@ -180,7 +180,7 @@ impl OrgToCell {
     /// load from the backup route provider.
     async fn load_snapshot(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
-        let _permit = self.update_lock.acquire().await?;
+        let _permit = self.get_permit().await?;
 
         // Testing - load from the backup route provider
         let route_data: RouteData = self.backup_routes.load()?;
@@ -199,9 +199,10 @@ impl OrgToCell {
     }
 
     /// Load incremental updates from the control plane.
+    #[allow(dead_code)]
     async fn load_incremental(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
-        let _permit = self.get_permit().await;
+        let _permit = self.get_permit().await?;
 
         // TODO: Do loading
 

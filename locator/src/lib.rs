@@ -2,7 +2,7 @@ mod api;
 mod backup_routes;
 pub mod config;
 mod cursor;
-mod locator;
+pub mod locator;
 mod types;
 use std::sync::Arc;
 

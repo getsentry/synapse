@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
@@ -14,7 +14,7 @@ pub struct ControlPlane {
     pub url: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct BackupRouteStore {
     #[serde(flatten)]
     pub r#type: BackupRouteStoreType,

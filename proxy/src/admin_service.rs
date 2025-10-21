@@ -6,12 +6,17 @@ use hyper::service::Service as HyperService;
 use hyper::{Request, Response, StatusCode};
 use std::future::Future;
 use std::pin::Pin;
+use crate::locator::Locator;
 
-pub struct AdminService {}
+pub struct AdminService {
+    locator: Locator,
+}
 
 impl AdminService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(locator: Locator) -> Self {
+        Self {
+            locator,
+        }
     }
 }
 

@@ -18,24 +18,22 @@ The proxy supports two locator modes - `in_process` or `url`.
 
 ### Deterministic route matching
 
-Routes are matched top down in the order they are defined. For each incoming request, the proxy checks the host, path and method against the route’s match block, and executes the first action that matches all three.
+Routes are matched top down in the order they are defined. For each incoming request, the proxy checks the host and path against the route’s match block, and executes the first action that matches.
 
 **Route matching examples:**
 
 1. Exact path match
     ```yaml
     - match:
-        host: "*"       # host can be anything
-        path: /health/  # only the exact path /health/ will be matched
-        methods: [GET]  #  only get requests will be matched
+        host: null       # host can be anything
+        path: /health/   # only the exact path /health/ will be matched
     ```
 
 2. Match any path
     ```yaml
     - match:
         host: de.sentry.io  # match de.sentry.io only
-        path: "*"           # all paths
-        methods: [ALL]      # all methods
+        path: null          # all paths
     ```
 
 3. Path prefix match with dynamic segment
@@ -43,7 +41,6 @@ Routes are matched top down in the order they are defined. For each incoming req
     - match:
         host: us.sentry.io                                 # matches us.sentry.io only
         path: /organizations/{organization_id_or_slug}/*   # with {organization_id_or_slug} dynamic segment and trailing wildcard
-        methods: [ALL]                                     # all methods
     ```
 
 ### Route actions
@@ -73,7 +70,6 @@ Each route is associated with an action, which can be a static or dynamic routin
 ### Infrastructure endpoints
 
 Infrastructure endpoints are exposed on a dedicated host/port in order to avoid exposure of admin endpoints to end users, and to prevent collisions with endpoints on proxied services. The host/port can be configured via the `admin_listener` block in the config file.
-
 
 These include:
 - `/health`

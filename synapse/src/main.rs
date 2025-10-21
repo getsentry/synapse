@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 mod config;
 use config::Config;
+use std::process;
 
 #[derive(Parser)]
 enum CliCommand {
@@ -53,12 +54,15 @@ fn cli() -> Result<(), CliError> {
     }
 }
 
-pub fn run_async(fut: impl Future<Output = ()>) {
+pub fn run_async(fut: impl Future<Output = Result<(), impl std::error::Error>>) {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    rt.block_on(fut);
+    if let Err(e) = rt.block_on(fut) {
+        eprintln!("Error: {}", e);
+        process::exit(1);
+    }
 }
 
 #[derive(Args, Debug, Clone)]

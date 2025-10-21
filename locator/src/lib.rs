@@ -13,11 +13,11 @@ use backup_routes::{
 use config::BackupRouteStoreType;
 
 /// Run the locator API in standalone mode.
-pub async fn run(config: config::Config) {
+pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
     let provider: Arc<dyn BackupRouteProvider + 'static> =
         get_provider(config.backup_route_store.r#type);
 
-    api::serve(config.listener, config.control_plane, provider).await;
+    api::serve(config.listener, config.control_plane, provider).await
 }
 
 pub fn get_provider(store_type: BackupRouteStoreType) -> Arc<dyn BackupRouteProvider + 'static> {

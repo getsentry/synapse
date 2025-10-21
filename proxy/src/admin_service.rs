@@ -11,7 +11,7 @@ pub struct AdminService {}
 
 impl AdminService {
     pub fn new() -> Self {
-        AdminService {}
+        Self {}
     }
 }
 

@@ -1,10 +1,12 @@
 use crate::config;
+use crate::errors::ProxyError;
 use crate::route_actions::RouteActions;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::service::Service as HyperService;
-use hyper::{Request, Response};
+use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
@@ -15,23 +17,23 @@ use std::pin::Pin;
 pub struct ProxyService {
     config: config::Config,
     client: Client<HttpConnector, Incoming>,
-    route_actions: RouteActions,
+    pub route_actions: RouteActions,
 }
 
 impl ProxyService {
-    pub fn new(config: config::Config) -> Self {
+    pub fn try_new(config: config::Config) -> Result<Self, ProxyError> {
         let conn = HttpConnector::new();
         let client: Client<_, Incoming> = Client::builder(TokioExecutor::new())
             .http2_adaptive_window(true)
             .build(conn);
 
-        let route_actions = RouteActions::new(config.routes.clone());
+        let route_actions = RouteActions::try_new(config.routes.clone())?;
 
-        Self {
+        Ok(Self {
             config,
             client,
             route_actions,
-        }
+        })
     }
 }
 
@@ -42,8 +44,20 @@ impl HyperService<Request<Incoming>> for ProxyService {
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, request: Request<Incoming>) -> Self::Future {
-        let _route = self.route_actions.resolve(&request);
+        let route = self.route_actions.resolve(&request);
 
-        unimplemented!();
+        println!("Resolved route: {:?}", route);
+        // TODO: Actually proxy the request not just return 404
+        Box::pin(async move {
+            let res = Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(
+                    Full::new("not found\n".into())
+                        .map_err(|e| match e {})
+                        .boxed(),
+                )
+                .unwrap();
+            Ok(res)
+        })
     }
 }

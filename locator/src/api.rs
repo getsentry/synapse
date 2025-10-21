@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-
 #[derive(thiserror::Error, Debug)]
 pub enum LocatorApiError {
     #[error("IO error: {0}")]

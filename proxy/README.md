@@ -24,6 +24,7 @@ Routes are matched top down in the order they are defined. For each incoming req
 
 1. Exact path match
     ```yaml
+    - match:
         host: null       # host can be anything
         path: /health/   # only the exact path /health/ will be matched
     ```

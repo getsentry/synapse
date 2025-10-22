@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["synapse", "locator", "proxy"]
+members = ["synapse", "locator", "proxy", "ingest-router"]
 default-members = ["synapse"]
 
 [workspace.dependencies]

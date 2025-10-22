@@ -18,7 +18,6 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 pub async fn run(config: config::Config) -> Result<(), ProxyError> {
-    // TODO: create locator here
     let locator = Locator::new(config.locator.clone());
 
     let proxy_task = run_task(

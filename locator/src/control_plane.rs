@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+const BASE_DELAY: u64 = 500;
+
 use crate::types::{Cell, CellId, RouteData};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
@@ -74,7 +76,7 @@ pub async fn load_mappings(
             if RETRIABLE_STATUS_CODES.contains(&response.status()) && retries < 3 {
                 retries += 1;
                 // Backoff between retries
-                let retry_millis = 2_u64.pow(retries);
+                let retry_millis = BASE_DELAY * 2_u64.pow(retries);
                 sleep(Duration::from_millis(retry_millis)).await;
                 continue;
             } else {

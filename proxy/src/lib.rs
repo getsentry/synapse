@@ -4,6 +4,7 @@ mod errors;
 mod proxy_service;
 mod route_actions;
 mod service;
+mod upstreams;
 
 use crate::errors::ProxyError;
 use hyper_util::rt::TokioExecutor;

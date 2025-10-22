@@ -19,6 +19,7 @@ struct Path {
 pub struct RouteMatch<'a> {
     #[allow(dead_code)]
     params: HashMap<&'a str, &'a str>,
+    pub action: &'a Action,
 }
 
 #[derive(Debug)]
@@ -72,14 +73,20 @@ impl Route {
                 }
 
                 if path.has_trailing_splat || i_req == request_segments.len() {
-                    Some(RouteMatch { params })
+                    Some(RouteMatch {
+                        params,
+                        action: &self.action,
+                    })
                 } else {
                     None
                 }
             }
             None => {
                 // If no path is defined in the route, it matches anything
-                Some(RouteMatch { params })
+                Some(RouteMatch {
+                    params,
+                    action: &self.action,
+                })
             }
         }
     }
@@ -258,12 +265,13 @@ mod tests {
             },
         };
 
-        let route = Route::try_from(config).unwrap();
+        let route = Route::try_from(config.clone()).unwrap();
 
         assert_eq!(
             route.matches(None, "/api/users/123"),
             Some(RouteMatch {
-                params: HashMap::from([("user_id", "123")])
+                params: HashMap::from([("user_id", "123")]),
+                action: &config.action,
             })
         );
     }

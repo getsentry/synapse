@@ -11,18 +11,18 @@ proxy:
 
   upstreams:
   - name: us1-getsentry
-    url: "127.0.0.1:8080"
+    url: "http://127.0.0.1:8080"
   - name: us2-getsentry
-    url: "10.0.0.2:8080"
+    url: "http://10.0.0.2:8080"
   - name: de-getsentry
-    url: "10.0.0.3:8080"
+    url: "http://10.0.0.3:8080"
 
   - name: us1-conduit
-    url: "10.0.1.1:8080"
+    url: "http://10.0.1.1:8080"
   - name: us2-conduit
-    url: "10.0.1.2:8080"
+    url: "http://10.0.1.2:8080"
   - name: de-conduit
-    url: "10.0.1.3:8080"
+    url: "http://10.0.1.3:8080"
 
   routes:
     - match:

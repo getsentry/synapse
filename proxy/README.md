@@ -34,7 +34,7 @@ Routes are matched top down in the order they are defined. For each incoming req
     - match:
         host: de.sentry.io  # match de.sentry.io only
         path: null          # all paths
-    ```
+   ```
 
 3. Path prefix match with dynamic segment
     ```yaml

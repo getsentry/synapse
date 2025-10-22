@@ -1,8 +1,8 @@
 use crate::config;
 use crate::errors::ProxyError;
+use crate::locator::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::RouteActions;
-use crate::locator::Locator;
 use crate::upstreams::Upstreams;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
@@ -64,12 +64,11 @@ impl HyperService<Request<Incoming>> for ProxyService {
                 cell_to_upstream,
                 default,
                 ..
-            } => {
-                self.resolvers
-                    .resolve(resolver, &cell_to_upstream, r.params)
-                    .ok()
-                    .or(default.as_deref())
-            }
+            } => self
+                .resolvers
+                .resolve(resolver, cell_to_upstream, r.params)
+                .ok()
+                .or(default.as_deref()),
         });
 
         let upstream = upstream_name.and_then(|u| self.upstreams.get(u));

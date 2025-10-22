@@ -2,7 +2,6 @@ use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
 use locator::get_provider;
 use locator::locator::Locator as LocatorService;
-use serde::de;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -37,6 +36,7 @@ impl Locator {
 #[derive(Clone)]
 enum LocatorInner {
     InProcess(LocatorService),
+    #[allow(dead_code)]
     Url(Url),
 }
 
@@ -44,7 +44,7 @@ enum LocatorInner {
 struct Url {}
 
 impl Url {
-    fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<String>, ProxyError> {
+    fn lookup(&self, _org_id: &str, _locality: Option<&str>) -> Result<Arc<String>, ProxyError> {
         todo!();
     }
 

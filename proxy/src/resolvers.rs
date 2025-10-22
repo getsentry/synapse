@@ -47,8 +47,15 @@ impl Resolvers {
         Ok(upstream)
     }
 
-    fn cell_from_id<'a>(&self, params: HashMap<&'a str, &'a str>) -> Result<Arc<String>, ProxyError> {
-        params.get("id").copied().ok_or(ProxyError::ResolverError).map(|id| Arc::new(id.to_string()))
+    fn cell_from_id<'a>(
+        &self,
+        params: HashMap<&'a str, &'a str>,
+    ) -> Result<Arc<String>, ProxyError> {
+        params
+            .get("id")
+            .copied()
+            .ok_or(ProxyError::ResolverError)
+            .map(|id| Arc::new(id.to_string()))
     }
 }
 
@@ -56,8 +63,8 @@ impl Resolvers {
 mod tests {
     use super::*;
     use crate::config::{Locator as LocatorConfig, LocatorType};
-    use locator::config::{BackupRouteStoreType, BackupRouteStore};
     use crate::locator::Locator;
+    use locator::config::{BackupRouteStore, BackupRouteStoreType};
 
     #[tokio::test]
     async fn test_resolve() {
@@ -65,7 +72,7 @@ mod tests {
             r#type: LocatorType::InProcess {
                 backup_route_store: BackupRouteStore {
                     r#type: BackupRouteStoreType::None,
-                }
+                },
             },
         };
 
@@ -91,15 +98,9 @@ mod tests {
 
         assert!(result.is_err());
 
-
         // resolve by organization
         let mut org_params = HashMap::new();
         org_params.insert("organization", "org1");
         // TODO: how to put this value in the locator
-
-
-
-
     }
-
 }

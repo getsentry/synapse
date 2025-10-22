@@ -74,10 +74,10 @@ pub async fn load_mappings(
 
         if !response.status().is_success() {
             if RETRIABLE_STATUS_CODES.contains(&response.status()) && retries < 3 {
-                retries += 1;
                 // Backoff between retries
                 let retry_millis = BASE_DELAY * 2_u64.pow(retries);
                 sleep(Duration::from_millis(retry_millis)).await;
+                retries += 1;
                 continue;
             } else {
                 return Err(ControlPlaneError::ControlPlaneRetriesExceeded);

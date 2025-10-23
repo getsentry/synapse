@@ -57,32 +57,26 @@ impl Resolvers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Locator as LocatorConfig, LocatorType};
-    use crate::locator::Locator;
-    use locator::config::{BackupRouteStore, BackupRouteStoreType, ControlPlane};
+    use locator::backup_routes::TestingRouteProvider;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_resolve() {
-        let locator_config = LocatorConfig {
-            r#type: LocatorType::InProcess {
-                control_plane: ControlPlane {
-                    url: "http://localhost:8080".to_string(),
-                },
-                backup_route_store: BackupRouteStore {
-                    r#type: BackupRouteStoreType::None,
-                },
-            },
-        };
+        let locator = Locator::new_in_process(
+            "http://control-plane-url".to_string(),
+            Arc::new(TestingRouteProvider {}),
+        );
 
-        let locator = Locator::new(locator_config.clone());
+        // sleep to allow the locator to initialize
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
         let resolvers = Resolvers::try_new(locator).unwrap();
         let mut cell_to_upstream = HashMap::new();
-        cell_to_upstream.insert("cell1".to_string(), "upstream1".to_string());
+        cell_to_upstream.insert("us1".to_string(), "upstream1".to_string());
 
         // Valid cell id
         let mut params = HashMap::new();
-        params.insert("id", "cell1");
+        params.insert("id", "us1");
         let result = resolvers
             .resolve("cell_from_id", &cell_to_upstream, params.clone())
             .unwrap();
@@ -90,15 +84,32 @@ mod tests {
 
         // Invalid cell id
         let mut invalid_params = HashMap::new();
-        invalid_params.insert("id", "cell2");
+        invalid_params.insert("id", "us999");
 
         let result = resolvers.resolve("cell_from_id", &cell_to_upstream, invalid_params);
 
         assert!(result.is_err());
 
-        // resolve by organization
+        // valid org
         let mut org_params = HashMap::new();
-        org_params.insert("organization", "org1");
-        // TODO: how to put this value in the locator
+        org_params.insert("organization", "org_0");
+
+        let result = resolvers
+            .resolve("cell_from_organization", &cell_to_upstream, org_params)
+            .unwrap();
+
+        assert_eq!(result, "upstream1");
+
+        // invalid org
+        let mut invalid_org_params = HashMap::new();
+        invalid_org_params.insert("organization", "org_999");
+
+        let result = resolvers.resolve(
+            "cell_from_organization",
+            &cell_to_upstream,
+            invalid_org_params,
+        );
+
+        assert!(result.is_err());
     }
 }

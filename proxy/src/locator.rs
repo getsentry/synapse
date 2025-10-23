@@ -3,11 +3,17 @@ use crate::errors::ProxyError;
 use locator::get_provider;
 use locator::locator::Locator as LocatorService;
 
+#[cfg(test)]
+use std::sync::Arc;
+
+#[cfg(test)]
+use locator::backup_routes::BackupRouteProvider;
+
 #[derive(Clone)]
 pub struct Locator(LocatorInner);
 
 impl Locator {
-    pub fn new(config: LocatorConfig) -> Self {
+    pub fn new_from_config(config: LocatorConfig) -> Self {
         match config.r#type {
             LocatorType::InProcess {
                 control_plane,
@@ -35,6 +41,19 @@ impl Locator {
             LocatorInner::InProcess(l) => l.is_ready(),
             LocatorInner::Url(url) => url.is_ready(),
         }
+    }
+}
+
+#[cfg(test)]
+impl Locator {
+    pub fn new_in_process(
+        control_plane_url: String,
+        backup_provider: Arc<dyn BackupRouteProvider + 'static>,
+    ) -> Self {
+        Locator(LocatorInner::InProcess(LocatorService::new(
+            control_plane_url,
+            backup_provider,
+        )))
     }
 }
 

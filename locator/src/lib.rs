@@ -1,5 +1,5 @@
 mod api;
-mod backup_routes;
+pub mod backup_routes;
 pub mod config;
 mod control_plane;
 mod cursor;

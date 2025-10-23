@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
     None,
-    Filesystem { path: String },
+    Filesystem { base_dir: String, filename: String },
     Gcs { bucket: String },
 }
 

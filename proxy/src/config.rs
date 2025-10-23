@@ -1,4 +1,6 @@
+use locator::config::{BackupRouteStore, ControlPlane};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
@@ -38,6 +40,7 @@ pub struct Match {
 pub enum Action {
     Dynamic {
         resolver: String,
+        cell_to_upstream: HashMap<String, String>,
         default: Option<String>,
     },
     Static {
@@ -56,11 +59,14 @@ pub enum LocatorType {
     #[serde(rename = "url")]
     Url { url: String },
     #[serde(rename = "in_process")]
-    InProcess { backup_route_store: Option<String> },
+    InProcess {
+        control_plane: ControlPlane,
+        backup_route_store: BackupRouteStore,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Locator {
     #[serde(flatten)]
-    r#type: LocatorType,
+    pub r#type: LocatorType,
 }

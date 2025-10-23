@@ -1,7 +1,6 @@
 use crate::backup_routes::BackupRouteProvider;
 use crate::config::{ControlPlane as ControlPlaneConfig, Listener as ListenerConfig};
 use crate::locator::{Locator, LocatorError};
-use crate::types::Cell;
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -37,7 +36,6 @@ pub async fn serve(
 #[derive(Serialize)]
 struct ApiResponse {
     cell: String,
-    locality: String,
 }
 
 impl IntoResponse for ApiResponse {
@@ -46,12 +44,9 @@ impl IntoResponse for ApiResponse {
     }
 }
 
-impl From<Arc<Cell>> for ApiResponse {
-    fn from(cell: Arc<Cell>) -> Self {
-        ApiResponse {
-            cell: cell.id.clone(),
-            locality: cell.locality.clone(),
-        }
+impl From<String> for ApiResponse {
+    fn from(cell: String) -> Self {
+        ApiResponse { cell }
     }
 }
 

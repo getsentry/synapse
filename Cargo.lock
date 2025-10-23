@@ -960,6 +960,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "locator",
  "serde",
  "thiserror",
  "tokio",

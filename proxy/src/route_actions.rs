@@ -17,8 +17,7 @@ struct Path {
 
 #[derive(Debug, PartialEq)]
 pub struct RouteMatch<'a> {
-    #[allow(dead_code)]
-    params: HashMap<&'a str, &'a str>,
+    pub params: HashMap<&'a str, &'a str>,
     pub action: &'a Action,
 }
 

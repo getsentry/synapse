@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::sync::Arc;
+
+pub type CellId = String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cell {
-    pub id: Arc<String>,
-    pub locality: Arc<String>,
+    pub id: String,
+    pub locality: String,
 }
 
 impl Cell {
@@ -13,8 +16,16 @@ impl Cell {
         L: Into<String>,
     {
         Cell {
-            id: Arc::new(id.into()),
-            locality: Arc::new(locality.into()),
+            id: id.into(),
+            locality: locality.into(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RouteData {
+    pub org_to_cell: HashMap<String, CellId>,
+    pub locality_to_default_cell: HashMap<String, CellId>,
+    pub last_cursor: String,
+    pub cells: HashMap<CellId, Arc<Cell>>,
 }

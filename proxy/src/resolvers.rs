@@ -1,7 +1,6 @@
 use crate::errors::ProxyError;
 use crate::locator::Locator;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub struct Resolvers {
     locator: Locator,
@@ -29,7 +28,7 @@ impl Resolvers {
             _ => Err(ProxyError::InvalidResolver)?,
         }?;
         cell_to_upstream
-            .get(cell.as_ref())
+            .get(&cell)
             .map(|s| s.as_str())
             .ok_or(ProxyError::ResolverError)
     }
@@ -37,25 +36,21 @@ impl Resolvers {
     fn cell_from_organization<'a>(
         &self,
         params: HashMap<&'a str, &'a str>,
-    ) -> Result<Arc<String>, ProxyError> {
+    ) -> Result<String, ProxyError> {
         let org = params
             .get("organization")
             .copied()
             .ok_or(ProxyError::ResolverError)?;
 
-        let upstream = self.locator.lookup(org, None)?;
-        Ok(upstream)
+        self.locator.lookup(org, None)
     }
 
-    fn cell_from_id<'a>(
-        &self,
-        params: HashMap<&'a str, &'a str>,
-    ) -> Result<Arc<String>, ProxyError> {
+    fn cell_from_id<'a>(&self, params: HashMap<&'a str, &'a str>) -> Result<String, ProxyError> {
         params
             .get("id")
             .copied()
             .ok_or(ProxyError::ResolverError)
-            .map(|id| Arc::new(id.to_string()))
+            .map(|id| id.to_string())
     }
 }
 
@@ -64,12 +59,15 @@ mod tests {
     use super::*;
     use crate::config::{Locator as LocatorConfig, LocatorType};
     use crate::locator::Locator;
-    use locator::config::{BackupRouteStore, BackupRouteStoreType};
+    use locator::config::{BackupRouteStore, BackupRouteStoreType, ControlPlane};
 
     #[tokio::test]
     async fn test_resolve() {
         let locator_config = LocatorConfig {
             r#type: LocatorType::InProcess {
+                control_plane: ControlPlane {
+                    url: "http://localhost:8080".to_string(),
+                },
                 backup_route_store: BackupRouteStore {
                     r#type: BackupRouteStoreType::None,
                 },

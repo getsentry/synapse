@@ -1,4 +1,4 @@
-use crate::types::{Cell, RouteData};
+use crate::types::RouteData;
 use std::sync::Arc;
 
 use crate::backup_routes::{BackupError, BackupRouteProvider};
@@ -46,7 +46,7 @@ impl Locator {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<Cell>, LocatorError> {
+    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
         self.inner.org_to_cell_map.lookup(org_id, locality)
     }
 
@@ -98,6 +98,7 @@ pub enum Command {
 /// Synchronizes the org to cell mappings from the control plane and backup route provider.
 /// This struct is used internally by the Locator.
 struct OrgToCell {
+    #[allow(dead_code)]
     control_plane_url: String,
     data: RwLock<RouteData>,
     update_lock: Semaphore,
@@ -127,7 +128,7 @@ impl OrgToCell {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<Cell>, LocatorError> {
+    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
         // Looks up the cell for a given organization ID and locality.
         // Returns an `Option<Cell>` if found, or `None` if not found.
         // Returns an error if locality is passed and the org_id/locality pair is not valid.
@@ -164,7 +165,7 @@ impl OrgToCell {
             });
         }
 
-        Ok(cell)
+        Ok(cell.id.clone())
     }
 
     /// Performs an initial full load, then periodically reloads
@@ -235,6 +236,7 @@ impl OrgToCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::Cell;
     use std::time::Duration;
 
     struct TestingRouteProvider {}
@@ -277,13 +279,7 @@ mod tests {
 
         // Sleep because snapshot is loaded asynchronously
         tokio::time::sleep(Duration::from_millis(10)).await;
-        assert_eq!(
-            locator.lookup("org_0", Some("us")),
-            Ok(Arc::new(Cell {
-                id: "us1".into(),
-                locality: "us".into()
-            }))
-        );
+        assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()),);
         assert_eq!(
             locator.lookup("invalid_org", Some("us")),
             Err(LocatorError::NoCell)
@@ -295,12 +291,6 @@ mod tests {
                 actual: "us".to_string()
             })
         );
-        assert_eq!(
-            locator.lookup("org_2", None),
-            Ok(Arc::new(Cell {
-                id: "de".into(),
-                locality: "de".into()
-            }))
-        );
+        assert_eq!(locator.lookup("org_2", None), Ok("de".into()));
     }
 }

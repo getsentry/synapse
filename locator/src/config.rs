@@ -9,7 +9,7 @@ pub enum BackupRouteStoreType {
     Gcs { bucket: String },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct ControlPlane {
     pub url: String,
 }

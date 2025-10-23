@@ -1,4 +1,4 @@
-use locator::config::BackupRouteStore;
+use locator::config::{BackupRouteStore, ControlPlane};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -60,6 +60,7 @@ pub enum LocatorType {
     Url { url: String },
     #[serde(rename = "in_process")]
     InProcess {
+        control_plane: ControlPlane,
         backup_route_store: BackupRouteStore,
     },
 }

@@ -2,7 +2,6 @@ use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
 use locator::get_provider;
 use locator::locator::Locator as LocatorService;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Locator(LocatorInner);
@@ -10,17 +9,23 @@ pub struct Locator(LocatorInner);
 impl Locator {
     pub fn new(config: LocatorConfig) -> Self {
         match config.r#type {
-            LocatorType::InProcess { backup_route_store } => {
+            LocatorType::InProcess {
+                control_plane,
+                backup_route_store,
+            } => {
                 let provider = get_provider(backup_route_store.r#type);
-                Locator(LocatorInner::InProcess(LocatorService::new(provider)))
+                Locator(LocatorInner::InProcess(LocatorService::new(
+                    control_plane.url,
+                    provider,
+                )))
             }
             LocatorType::Url { .. } => todo!(),
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<String>, ProxyError> {
+    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
         match &self.0 {
-            LocatorInner::InProcess(l) => Ok(l.lookup(org_id, locality)?.id),
+            LocatorInner::InProcess(l) => Ok(l.lookup(org_id, locality)?),
             LocatorInner::Url(url) => url.lookup(org_id, locality),
         }
     }
@@ -44,7 +49,7 @@ enum LocatorInner {
 struct Url {}
 
 impl Url {
-    fn lookup(&self, _org_id: &str, _locality: Option<&str>) -> Result<Arc<String>, ProxyError> {
+    fn lookup(&self, _org_id: &str, _locality: Option<&str>) -> Result<String, ProxyError> {
         todo!();
     }
 

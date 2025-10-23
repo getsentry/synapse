@@ -48,7 +48,6 @@ impl Resolvers {
     fn cell_from_id<'a>(&self, params: HashMap<&'a str, &'a str>) -> Result<String, ProxyError> {
         params
             .get("id")
-            .copied()
             .ok_or(ProxyError::ResolverError)
             .map(|id| id.to_string())
     }

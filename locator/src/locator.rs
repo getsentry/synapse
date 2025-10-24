@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::types::{Cell, RouteData};
 use std::sync::Arc;
 
@@ -10,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{AcquireError, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
+#[allow(dead_code)]
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
     handle: tokio::task::JoinHandle<()>,
@@ -98,6 +97,7 @@ pub enum Command {
 /// Synchronizes the org to cell mappings from the control plane and backup route provider.
 /// This struct is used internally by the Locator.
 struct OrgToCell {
+    #[allow(dead_code)]
     control_plane_url: String,
     data: RwLock<RouteData>,
     update_lock: Semaphore,
@@ -215,6 +215,7 @@ impl OrgToCell {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Load incremental updates from the control plane.
     async fn load_incremental(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function

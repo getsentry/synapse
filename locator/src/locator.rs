@@ -1,4 +1,4 @@
-use crate::types::{Cell, RouteData};
+use crate::types::RouteData;
 use std::sync::Arc;
 
 use crate::backup_routes::{BackupError, BackupRouteProvider};
@@ -11,7 +11,9 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 #[allow(dead_code)]
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
+    #[allow(dead_code)]
     handle: tokio::task::JoinHandle<()>,
+    #[allow(dead_code)]
     tx: mpsc::Sender<Command>,
 }
 
@@ -45,7 +47,7 @@ impl Locator {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<Cell>, LocatorError> {
+    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
         self.inner.org_to_cell_map.lookup(org_id, locality)
     }
 
@@ -127,7 +129,7 @@ impl OrgToCell {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<Arc<Cell>, LocatorError> {
+    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
         // Looks up the cell for a given organization ID and locality.
         // Returns an `Option<Cell>` if found, or `None` if not found.
         // Returns an error if locality is passed and the org_id/locality pair is not valid.
@@ -164,7 +166,7 @@ impl OrgToCell {
             });
         }
 
-        Ok(cell)
+        Ok(cell.id.clone())
     }
 
     /// Performs an initial full load, then periodically reloads
@@ -194,7 +196,7 @@ impl OrgToCell {
     /// load from the backup route provider.
     async fn load_snapshot(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
-        let _permit = self.update_lock.acquire().await?;
+        let _permit = self.get_permit().await?;
 
         // TODO: Do snapshot loading
 
@@ -217,9 +219,10 @@ impl OrgToCell {
 
     #[allow(dead_code)]
     /// Load incremental updates from the control plane.
+    #[allow(dead_code)]
     async fn load_incremental(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
-        let _permit = self.get_permit().await;
+        let _permit = self.get_permit().await?;
 
         // TODO: Do incremental loading
 
@@ -235,6 +238,7 @@ impl OrgToCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::Cell;
     use std::time::Duration;
 
     struct TestingRouteProvider {}
@@ -277,13 +281,7 @@ mod tests {
 
         // Sleep because snapshot is loaded asynchronously
         tokio::time::sleep(Duration::from_millis(10)).await;
-        assert_eq!(
-            locator.lookup("org_0", Some("us")),
-            Ok(Arc::new(Cell {
-                id: "us1".into(),
-                locality: "us".into()
-            }))
-        );
+        assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()),);
         assert_eq!(
             locator.lookup("invalid_org", Some("us")),
             Err(LocatorError::NoCell)
@@ -295,12 +293,6 @@ mod tests {
                 actual: "us".to_string()
             })
         );
-        assert_eq!(
-            locator.lookup("org_2", None),
-            Ok(Arc::new(Cell {
-                id: "de".into(),
-                locality: "de".into()
-            }))
-        );
+        assert_eq!(locator.lookup("org_2", None), Ok("de".into()));
     }
 }

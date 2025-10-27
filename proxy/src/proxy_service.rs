@@ -1,5 +1,7 @@
 use crate::config;
 use crate::errors::ProxyError;
+use crate::locator::Locator;
+use crate::resolvers::Resolvers;
 use crate::route_actions::RouteActions;
 use crate::upstreams::Upstreams;
 use bytes::Bytes;
@@ -14,16 +16,16 @@ use hyper_util::rt::TokioExecutor;
 use std::future::Future;
 use std::pin::Pin;
 
-#[allow(dead_code)]
 pub struct ProxyService {
-    config: config::Config,
+    #[allow(dead_code)]
     client: Client<HttpConnector, Incoming>,
     pub route_actions: RouteActions,
     upstreams: Upstreams,
+    resolvers: Resolvers,
 }
 
 impl ProxyService {
-    pub fn try_new(config: config::Config) -> Result<Self, ProxyError> {
+    pub fn try_new(config: config::Config, locator: Locator) -> Result<Self, ProxyError> {
         let conn = HttpConnector::new();
         let client: Client<_, Incoming> = Client::builder(TokioExecutor::new())
             .http2_adaptive_window(true)
@@ -31,13 +33,15 @@ impl ProxyService {
 
         let route_actions = RouteActions::try_new(config.routes.clone())?;
 
-        let upstreams = Upstreams::try_new(config.upstreams.clone())?;
+        let upstreams = Upstreams::try_new(config.upstreams)?;
+
+        let resolvers = Resolvers::try_new(locator)?;
 
         Ok(Self {
-            config,
             client,
             route_actions,
             upstreams,
+            resolvers,
         })
     }
 }
@@ -54,9 +58,17 @@ impl HyperService<Request<Incoming>> for ProxyService {
         println!("Resolved route: {:?}", route);
 
         let upstream_name = route.and_then(|r| match r.action {
-            config::Action::Static { to } => Some(to),
-            // TODO: handle dynamic routes
-            config::Action::Dynamic { default, .. } => default.as_ref(),
+            config::Action::Static { to } => Some(to.as_str()),
+            config::Action::Dynamic {
+                resolver,
+                cell_to_upstream,
+                default,
+                ..
+            } => self
+                .resolvers
+                .resolve(resolver, cell_to_upstream, r.params)
+                .ok()
+                .or(default.as_deref()),
         });
 
         let upstream = upstream_name.and_then(|u| self.upstreams.get(u));

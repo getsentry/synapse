@@ -252,7 +252,10 @@ metrics:
         assert_eq!(config.proxy.listener.port, 3000);
         assert_eq!(config.proxy.upstreams.len(), 2);
         assert_eq!(config.proxy.routes.len(), 2);
-        assert_eq!(config.proxy.routes[0].r#match.method, Some(HttpMethod::Post));
+        assert_eq!(
+            config.proxy.routes[0].r#match.method,
+            Some(HttpMethod::Post)
+        );
         assert_eq!(config.proxy.routes[1].r#match.host, None);
         assert_eq!(config.proxy.routes[1].action.locale.len(), 2);
     }
@@ -345,8 +348,9 @@ metrics:
     #[test]
     fn test_deserialization_errors() {
         // Invalid URL
-        assert!(serde_yaml::from_str::<Config>(
-            r#"
+        assert!(
+            serde_yaml::from_str::<Config>(
+                r#"
 proxy:
   listener: {host: "0.0.0.0", port: 3000}
   admin_listener: {host: "127.0.0.1", port: 3001}
@@ -356,26 +360,31 @@ proxy:
 logging: {sentry_dsn: "https://example.com"}
 metrics: {statsd_host: "127.0.0.1", statsd_port: 8126}
 "#
-        )
-        .is_err());
+            )
+            .is_err()
+        );
 
         // Invalid port type
-        assert!(serde_yaml::from_str::<Config>(
-            r#"
+        assert!(
+            serde_yaml::from_str::<Config>(
+                r#"
 proxy:
   listener: {host: "0.0.0.0", port: "not_a_number"}
 "#
-        )
-        .is_err());
+            )
+            .is_err()
+        );
 
         // Missing required field
-        assert!(serde_yaml::from_str::<Config>(
-            r#"
+        assert!(
+            serde_yaml::from_str::<Config>(
+                r#"
 proxy:
   listener: {host: "0.0.0.0"}
 "#
-        )
-        .is_err());
+            )
+            .is_err()
+        );
 
         // Invalid HTTP method
         assert!(serde_yaml::from_str::<HttpMethod>("INVALID_METHOD").is_err());
@@ -416,8 +425,8 @@ proxy:
         let yaml = std::fs::read_to_string("../example_config_ingest_router.yaml")
             .expect("Failed to read example config file");
 
-        let config: Config = serde_yaml::from_str(&yaml)
-            .expect("Failed to parse example config file");
+        let config: Config =
+            serde_yaml::from_str(&yaml).expect("Failed to parse example config file");
 
         config.validate().expect("Example config validation failed");
 

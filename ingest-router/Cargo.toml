@@ -1,0 +1,15 @@
+[package]
+name = "ingest-router"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+hyper = { version = "1.7.0" }
+async-trait = "0.1"
+url = { workspace = true }
+
+[dev-dependencies]
+serde_yaml = "0.9.33"

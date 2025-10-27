@@ -1,0 +1,46 @@
+proxy:
+  listener:
+    host: "0.0.0.0"
+    port: 3000
+  admin_listener:
+    host: "0.0.0.0"
+    port: 3001
+  locale_to_cells:
+    us:
+      - us1
+      - us2
+    de:
+      - de
+  upstreams:
+    - name: us1
+      url: "http://127.0.0.1:8080"
+    - name: us2
+      url: "http://10.0.0.2:8080"
+    - name: de
+      url: "http://10.0.0.3:8080"
+
+
+  routes:
+    - match:
+        host: us.sentry.io
+        path: /api/0/relays/projectconfigs/
+        method: POST
+      action:
+        resolver: relay_merge_project_configs
+        locale:
+          - us
+    - match:
+        host: de.sentry.io
+        path: /api/0/relays/projectconfigs/
+        method: POST
+      action:
+        resolver: relay_merge_project_configs
+        locale:
+          - de
+
+logging:
+  sentry_dsn: "your_sentry_dsn_here"
+
+metrics:
+  statsd_host: "127.0.0.1"
+  statsd_port: 8126

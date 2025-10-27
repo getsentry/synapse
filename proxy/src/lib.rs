@@ -34,7 +34,7 @@ pub async fn run(config: config::Config) -> Result<(), ProxyError> {
 }
 
 async fn run_task(host: &str, port: u16, service: ServiceType) -> Result<(), ProxyError> {
-    let listener = TcpListener::bind(format!("{}:{}", host, port)).await?;
+    let listener = TcpListener::bind(format!("{host}:{port}")).await?;
 
     let service_arc = Arc::new(service);
 

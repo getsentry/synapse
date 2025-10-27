@@ -181,7 +181,7 @@ impl OrgToCell {
             // of schedule.
             loop {
                 if let Some(cmd) = rx.recv().await {
-                    println!("Received command {:?}", cmd);
+                    println!("Received command {cmd:?}");
                 }
             }
         }

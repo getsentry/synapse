@@ -106,7 +106,7 @@ pub async fn load_mappings(
         }
     }
 
-    println!("Fetched {} pages from control plane", page_fetches);
+    println!("Fetched {page_fetches} pages from control plane");
 
     let data = RouteData {
         org_to_cell,

@@ -6,6 +6,9 @@ pub mod locator;
 mod types;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod testutils;
+
 use backup_routes::{
     BackupRouteProvider, FilesystemRouteProvider, GcsRouteProvider, NoopRouteProvider,
 };

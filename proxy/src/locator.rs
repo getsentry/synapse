@@ -25,7 +25,7 @@ impl Locator {
                     provider,
                 )))
             }
-            LocatorType::Url { .. } => todo!(),
+            LocatorType::Url { .. } => Locator(LocatorInner::Url(Url {})),
         }
     }
 

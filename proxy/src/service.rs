@@ -11,7 +11,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub enum ServiceType {
-    Proxy(Box<ProxyService>),
+    Proxy(Box<ProxyService<Incoming>>),
     Admin(Box<AdminService>),
 }
 

@@ -24,8 +24,9 @@ pub async fn run(config: config::Config) -> Result<(), ProxyError> {
         &config.listener.host,
         config.listener.port,
         ServiceType::Proxy(Box::new(proxy_service::ProxyService::try_new(
-            config.clone(),
             locator.clone(),
+            config.routes,
+            config.upstreams,
         )?)),
     );
     let admin_task = run_task(

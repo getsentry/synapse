@@ -56,19 +56,38 @@ impl Resolvers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use locator::backup_routes::TestingRouteProvider;
+    use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
+    use locator::types::RouteData;
     use std::sync::Arc;
+
+    fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
+        let route_data = RouteData::from(
+            HashMap::from([
+                ("org_0".into(), "us1".into()),
+                ("org_1".into(), "us1".into()),
+                ("org_2".into(), "de".into()),
+            ]),
+            "cursor1".into(),
+            HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        provider.store(&route_data).unwrap();
+        (dir, provider)
+    }
 
     #[tokio::test]
     async fn test_resolve() {
+        let (_dir, provider) = get_mock_provider();
         let locator = Locator::new_in_process(
             "http://control-plane-url".to_string(),
-            Arc::new(TestingRouteProvider {}),
+            Arc::new(provider),
             None,
         );
 
         // sleep to allow the locator to initialize
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         let resolvers = Resolvers::try_new(locator).unwrap();
         let mut cell_to_upstream = HashMap::new();

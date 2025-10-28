@@ -1,10 +1,9 @@
 const BASE_DELAY: u64 = 500;
 
-use crate::types::{Cell, CellId, RouteData};
+use crate::types::{CellId, RouteData};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]
@@ -69,7 +68,7 @@ impl ControlPlane {
             StatusCode::GATEWAY_TIMEOUT,       // 504
         ];
 
-        let mut cells: HashMap<String, Arc<Cell>> = HashMap::new();
+        let mut cell_to_locality: HashMap<String, String> = HashMap::new();
         let mut org_to_cell = HashMap::new();
         let mut next_cursor: Option<String> = cursor.map(String::from);
         let mut page_fetches = 0;
@@ -104,9 +103,7 @@ impl ControlPlane {
 
             let json_response = response.json::<ControlPlaneData>().await?;
 
-            for (c, l) in json_response.metadata.cell_to_locality {
-                cells.insert(c.clone(), Arc::new(Cell::new(c, l)));
-            }
+            cell_to_locality.extend(json_response.metadata.cell_to_locality);
 
             for row in json_response.data {
                 org_to_cell.insert(row.id, row.cell.clone());
@@ -123,11 +120,7 @@ impl ControlPlane {
 
         println!("Fetched {} pages from control plane", page_fetches);
 
-        let data = RouteData {
-            org_to_cell,
-            last_cursor: next_cursor.unwrap(),
-            cells,
-        };
+        let data = RouteData::from(org_to_cell, next_cursor.unwrap(), cell_to_locality);
 
         Ok(data)
     }

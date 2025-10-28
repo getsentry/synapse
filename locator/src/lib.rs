@@ -3,7 +3,7 @@ pub mod backup_routes;
 pub mod config;
 mod control_plane;
 pub mod locator;
-mod types;
+pub mod types;
 use std::sync::Arc;
 
 #[cfg(test)]

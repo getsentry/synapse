@@ -139,8 +139,8 @@ impl ControlPlane {
 mod tests {
     use super::*;
 
-    use std::time::Duration;
     use crate::testutils::TestControlPlaneServer;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn test_control_plane() {

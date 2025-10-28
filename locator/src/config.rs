@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -31,4 +32,5 @@ pub struct Config {
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,
+    pub locality_to_default_cell: Option<HashMap<String, String>>,
 }

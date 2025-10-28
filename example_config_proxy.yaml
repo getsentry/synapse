@@ -8,6 +8,8 @@ proxy:
   locator:
     type: in_process
     backup_route_store: null
+    locality_to_default_cell:
+      us: us1
     control_plane:
       url: "127.0.0.1:9000"
   upstreams:

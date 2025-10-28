@@ -110,8 +110,6 @@ pub async fn load_mappings(
 
     let data = RouteData {
         org_to_cell,
-        // TODO: implement default cells, empty for now
-        locality_to_default_cell: HashMap::new(),
         last_cursor: next_cursor.unwrap(),
         cells,
     };

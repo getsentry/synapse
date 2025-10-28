@@ -22,7 +22,9 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
 pub fn get_provider(store_type: BackupRouteStoreType) -> Arc<dyn BackupRouteProvider + 'static> {
     match store_type {
         BackupRouteStoreType::None => Arc::new(NoopRouteProvider {}),
-        BackupRouteStoreType::Filesystem { path } => Arc::new(FilesystemRouteProvider::new(&path)),
+        BackupRouteStoreType::Filesystem { base_dir, filename } => {
+            Arc::new(FilesystemRouteProvider::new(&base_dir, &filename))
+        }
         BackupRouteStoreType::Gcs { bucket } => Arc::new(GcsRouteProvider::new(&bucket)),
     }
 }

@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{AcquireError, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
+#[allow(dead_code)]
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
     #[allow(dead_code)]
@@ -216,6 +217,7 @@ impl OrgToCell {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Load incremental updates from the control plane.
     #[allow(dead_code)]
     async fn load_incremental(&self) -> Result<(), LoadError> {

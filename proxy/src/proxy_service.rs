@@ -55,7 +55,7 @@ impl HyperService<Request<Incoming>> for ProxyService {
     fn call(&self, request: Request<Incoming>) -> Self::Future {
         let route = self.route_actions.resolve(&request);
 
-        println!("Resolved route: {:?}", route);
+        println!("Resolved route: {route:?}");
 
         let upstream_name = route.and_then(|r| match r.action {
             config::Action::Static { to } => Some(to.as_str()),
@@ -73,7 +73,7 @@ impl HyperService<Request<Incoming>> for ProxyService {
 
         let upstream = upstream_name.and_then(|u| self.upstreams.get(u));
 
-        println!("Resolved upstream: {:?}", upstream);
+        println!("Resolved upstream: {upstream:?}");
 
         // TODO: Actually proxy the request not just return 404
         Box::pin(async move {

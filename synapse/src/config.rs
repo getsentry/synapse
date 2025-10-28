@@ -60,7 +60,7 @@ mod tests {
 
     fn write_tmp_file(s: &str) -> tempfile::NamedTempFile {
         let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
-        write!(tmp, "{}", s).expect("write yaml");
+        write!(tmp, "{s}").expect("write yaml");
 
         tmp
     }

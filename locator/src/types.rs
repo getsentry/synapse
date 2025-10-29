@@ -26,7 +26,6 @@ impl Cell {
 #[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct RouteData {
     pub org_to_cell: HashMap<String, CellId>,
-    // pub locality_to_default_cell: HashMap<String, CellId>,
     pub last_cursor: String,
     pub cells: HashMap<CellId, Arc<Cell>>,
 }

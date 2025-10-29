@@ -218,8 +218,6 @@ impl OrgToCell {
 
         write_guard.org_to_cell = route_data.org_to_cell;
         write_guard.last_cursor = route_data.last_cursor;
-        // // TODO: get from config
-        // write_guard.locality_to_default_cell = route_data.locality_to_default_cell;
         write_guard.cells = route_data.cells;
 
         Ok(())

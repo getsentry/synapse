@@ -4,6 +4,7 @@ import time
 import base64
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
+import argparse
 
 
 # This API mocks the control plane snapshot request, split across pages
@@ -80,7 +81,7 @@ class MockControlApi(BaseHTTPRequestHandler):
         base_path = parsed.path
         query_params = parse_qs(parsed.query)
 
-        if base_path == "/org-cell-mappings":
+        if base_path == "/org-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
             (data, next_cursor, has_more) = get_results(cursor)
 
@@ -115,6 +116,14 @@ def make_cursor(updated_at: int, org_id: Optional[str]) -> str:
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("127.0.0.1", 9000), MockControlApi)
-    print("Echo server listening on http://127.0.0.1:9000")
+    parser = argparse.ArgumentParser(description="mock control plane")
+    parser.add_argument("--host")
+    parser.add_argument("--port", type=int)
+    args = parser.parse_args()
+
+    host = args.host or "127.0.0.1"
+    port = args.port or 9000
+
+    server = HTTPServer((host, port), MockControlApi)
+    print(f"Mock control plane listening on http://{host}:{port}")
     server.serve_forever()

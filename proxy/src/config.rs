@@ -62,6 +62,7 @@ pub enum LocatorType {
     InProcess {
         control_plane: ControlPlane,
         backup_route_store: BackupRouteStore,
+        locality_to_default_cell: Option<HashMap<String, String>>,
     },
 }
 

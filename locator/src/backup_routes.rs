@@ -88,7 +88,6 @@ impl BackupRouteProvider for NoopRouteProvider {
 
         Ok(RouteData {
             org_to_cell: HashMap::new(),
-            locality_to_default_cell: HashMap::new(),
             last_cursor: "test".into(),
             cells: HashMap::new(),
         })
@@ -176,7 +175,6 @@ impl BackupRouteProvider for TestingRouteProvider {
         Ok(RouteData {
             org_to_cell: dummy_data,
             last_cursor: "test".into(),
-            locality_to_default_cell: HashMap::from([("de".into(), "de".into())]),
             cells: HashMap::from_iter(cells.into_iter().map(|c| (c.id.clone(), Arc::new(c)))),
         })
     }
@@ -195,7 +193,6 @@ mod tests {
     fn get_route_data() -> RouteData {
         RouteData {
             org_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
-            locality_to_default_cell: HashMap::from([("us".into(), "cell1".into())]),
             last_cursor: "cursor1".into(),
             cells: HashMap::from([(
                 "cell1".into(),
@@ -218,7 +215,7 @@ mod tests {
             let data = get_route_data();
             let mut buffer: Vec<u8> = Vec::new();
             let size = codec.write(&mut buffer, &data).unwrap();
-            assert_eq!(size, 46);
+            assert_eq!(size, 36);
             let mut reader: &[u8] = &buffer;
             let decoded = codec.read(&mut reader).unwrap();
             assert_eq!(data, decoded);

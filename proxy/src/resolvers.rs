@@ -64,6 +64,7 @@ mod tests {
         let locator = Locator::new_in_process(
             "http://control-plane-url".to_string(),
             Arc::new(TestingRouteProvider {}),
+            None,
         );
 
         // sleep to allow the locator to initialize

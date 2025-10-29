@@ -27,11 +27,16 @@ impl Locator {
     pub fn new(
         control_plane_url: String,
         backup_provider: Arc<dyn BackupRouteProvider + 'static>,
+        locality_to_default_cell: Option<HashMap<String, String>>,
     ) -> Self {
         // Channel to send commands to the worker thread.
         let (tx, rx) = mpsc::channel::<Command>(64);
 
-        let org_to_cell_map = Arc::new(OrgToCell::new(control_plane_url, backup_provider));
+        let org_to_cell_map = Arc::new(OrgToCell::new(
+            control_plane_url,
+            backup_provider,
+            locality_to_default_cell,
+        ));
 
         // Spawn the loader thread. All loading should happen from this thread.
         let org_to_cell_map_clone = org_to_cell_map.clone();
@@ -103,6 +108,7 @@ pub enum Command {
 /// This struct is used internally by the Locator.
 struct OrgToCell {
     control_plane: ControlPlane,
+    locality_to_default_cell: HashMap<String, String>,
     data: RwLock<RouteData>,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot
@@ -116,12 +122,13 @@ impl OrgToCell {
     pub fn new(
         control_plane_url: String,
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
+        locality_to_default_cell: Option<HashMap<String, String>>,
     ) -> Self {
         OrgToCell {
             control_plane: ControlPlane::new(control_plane_url),
+            locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
             data: RwLock::new(RouteData {
                 org_to_cell: HashMap::new(),
-                locality_to_default_cell: HashMap::new(),
                 last_cursor: "".into(),
                 cells: HashMap::new(),
             }),
@@ -146,7 +153,7 @@ impl OrgToCell {
             .get(org_id)
             .or_else(|| {
                 if let Some(loc) = locality {
-                    read_guard.locality_to_default_cell.get(loc)
+                    self.locality_to_default_cell.get(loc)
                 } else {
                     None
                 }
@@ -222,7 +229,6 @@ impl OrgToCell {
 
         write_guard.org_to_cell = route_data.org_to_cell;
         write_guard.last_cursor = route_data.last_cursor;
-        write_guard.locality_to_default_cell = route_data.locality_to_default_cell;
         write_guard.cells = route_data.cells;
 
         Ok(())
@@ -270,7 +276,6 @@ mod tests {
             Ok(RouteData {
                 org_to_cell: dummy_data,
                 last_cursor: "test".into(),
-                locality_to_default_cell: HashMap::from([("de".into(), "de".into())]),
                 cells: HashMap::from_iter(cells.into_iter().map(|c| (c.id.clone(), Arc::new(c)))),
             })
         }
@@ -295,6 +300,7 @@ mod tests {
         let locator = Locator::new(
             format!("http://{host}:{port}").to_string(),
             Arc::new(TestingRouteProvider {}),
+            Some(HashMap::from([("de".into(), "de".into())])),
         );
 
         assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
@@ -318,6 +324,7 @@ mod tests {
         let locator = Locator::new(
             "http://invalid-control-plane:9000".to_string(),
             Arc::new(TestingRouteProvider {}),
+            Some(HashMap::from([("de".into(), "de".into())])),
         );
 
         assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
@@ -338,5 +345,14 @@ mod tests {
             })
         );
         assert_eq!(locator.lookup("org_2", None), Ok("de".into()));
+
+        // Default cell is used when org_id is not found
+        assert_eq!(locator.lookup("invalid_org", Some("de")), Ok("de".into()));
+
+        // No default cell for locality
+        assert_eq!(
+            locator.lookup("invalid_org", Some("us")),
+            Err(LocatorError::NoCell)
+        );
     }
 }

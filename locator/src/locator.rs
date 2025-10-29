@@ -1,3 +1,4 @@
+use crate::control_plane::ControlPlane;
 use crate::types::RouteData;
 use std::sync::Arc;
 
@@ -85,6 +86,8 @@ pub enum LoadError {
     BackupError(#[from] BackupError),
     #[error("Another load operation is in progress")]
     ConcurrentLoad(#[from] AcquireError),
+    #[error("Control plane error: {0}")]
+    ControlPlaneError(#[from] crate::control_plane::ControlPlaneError),
 }
 
 #[derive(Debug)]
@@ -99,8 +102,7 @@ pub enum Command {
 /// Synchronizes the org to cell mappings from the control plane and backup route provider.
 /// This struct is used internally by the Locator.
 struct OrgToCell {
-    #[allow(dead_code)]
-    control_plane_url: String,
+    control_plane: ControlPlane,
     data: RwLock<RouteData>,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot
@@ -116,7 +118,7 @@ impl OrgToCell {
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
     ) -> Self {
         OrgToCell {
-            control_plane_url,
+            control_plane: ControlPlane::new(control_plane_url),
             data: RwLock::new(RouteData {
                 org_to_cell: HashMap::new(),
                 locality_to_default_cell: HashMap::new(),
@@ -198,10 +200,19 @@ impl OrgToCell {
         // Hold permit for the duration of this function
         let _permit = self.get_permit().await?;
 
-        // TODO: Do snapshot loading
-
-        // Testing - load from the backup route provider
-        let route_data: RouteData = self.backup_routes.load()?;
+        // Fetch data from the control plane. If unavailable fallback to the backup route provider.
+        let route_data = self
+            .control_plane
+            .load_mappings(None)
+            .await
+            .or_else(|err| {
+                eprintln!(
+                    "Error loading from control plane: {:?}, falling back to backup route provider",
+                    err
+                );
+                // Load from the backup route provider
+                self.backup_routes.load()
+            })?;
 
         let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<
             '_,
@@ -217,7 +228,6 @@ impl OrgToCell {
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Load incremental updates from the control plane.
     #[allow(dead_code)]
     async fn load_incremental(&self) -> Result<(), LoadError> {
@@ -238,6 +248,7 @@ impl OrgToCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testutils::TestControlPlaneServer;
     use crate::types::Cell;
     use std::time::Duration;
 
@@ -272,15 +283,48 @@ mod tests {
 
     #[tokio::test]
     async fn test_locator() {
+        let host = "127.0.0.1";
+        let port = 9001;
+
+        // Run the control plane server
+        let _server = TestControlPlaneServer::spawn(host, port).unwrap();
+
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Control plane available, use results from control plane
         let locator = Locator::new(
-            "localhost:9000".to_string(),
+            format!("http://{host}:{port}").to_string(),
             Arc::new(TestingRouteProvider {}),
         );
 
         assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
 
-        // Sleep because snapshot is loaded asynchronously
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        // Wait for control plane
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // org "0" is in the control plane
+        assert_eq!(locator.lookup("0", Some("us")), Ok("us1".into()),);
+
+        // org_0 errors because it's not in the control plane data, only in the backup provider
+        assert_eq!(
+            locator.lookup("org_0", Some("us")),
+            Err(LocatorError::NoCell)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_locator_backup_route_provider() {
+        // Control plane unavailable, load from backup provider
+        let locator = Locator::new(
+            "http://invalid-control-plane:9000".to_string(),
+            Arc::new(TestingRouteProvider {}),
+        );
+
+        assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
+
+        // Sleep because of retries
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
         assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()),);
         assert_eq!(
             locator.lookup("invalid_org", Some("us")),

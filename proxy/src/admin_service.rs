@@ -1,3 +1,4 @@
+use crate::locator::Locator;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
@@ -7,11 +8,13 @@ use hyper::{Request, Response, StatusCode};
 use std::future::Future;
 use std::pin::Pin;
 
-pub struct AdminService {}
+pub struct AdminService {
+    locator: Locator,
+}
 
 impl AdminService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(locator: Locator) -> Self {
+        Self { locator }
     }
 }
 
@@ -22,14 +25,24 @@ impl HyperService<Request<Incoming>> for AdminService {
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
+        let is_ready = self.locator.is_ready();
+
         Box::pin(async move {
             let res = match req.uri().path() {
                 "/health" => {
                     Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed())
                 }
-                "/ready" => {
-                    unimplemented!();
-                }
+                "/ready" => match is_ready {
+                    true => Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed()),
+                    false => Response::builder()
+                        .status(StatusCode::SERVICE_UNAVAILABLE)
+                        .body(
+                            Full::new("not ready\n".into())
+                                .map_err(|e| match e {})
+                                .boxed(),
+                        )
+                        .unwrap(),
+                },
                 _ => Response::builder()
                     .status(StatusCode::NOT_FOUND)
                     .body(

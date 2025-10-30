@@ -6,3 +6,5 @@ locator:
     url: "127.0.0.1:9000"
   backup_route_store:
     type: placeholder
+  locality_to_default_cell:
+    us: us1

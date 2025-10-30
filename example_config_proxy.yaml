@@ -8,6 +8,8 @@ proxy:
   locator:
     type: in_process
     backup_route_store: null
+    locality_to_default_cell:
+      us: us1
     control_plane:
       url: "127.0.0.1:9000"
   upstreams:
@@ -28,9 +30,9 @@ proxy:
   routes:
     - match:
         host: us.sentry.io
-        path: /organizations/{organization_id_or_slug}/*
+        path: /organizations/{organization}/*
       action:
-        resolver: resolve_cell_from_organization
+        resolver: cell_from_organization
         cell_to_upstream:
           us1: us1-getsentry
           us2: us2-getsentry
@@ -39,7 +41,7 @@ proxy:
         host: us.sentry.io
         path: /cell/{cell_id}/*
       action:
-        resolver: resolve_cell_from_id
+        resolver: cell_from_id
         cell_to_upstream:
           us1: us1-getsentry
           us2: us2-getsentry
@@ -49,7 +51,7 @@ proxy:
         to: de-getsentry
     - match:
         host: conduit.us.sentry.io
-        path: /organizations/{organization_id_or_slug}/*
+        path: /organizations/{organization}/*
       action:
         resolver: resolve_cell_from_organization
         cell_to_upstream:
@@ -57,7 +59,7 @@ proxy:
           us2: us2-conduit
     - match:
         host: conduit.de.sentry.io
-        path: /organizations/{organization_id_or_slug}/*
+        path: /organizations/{organization}/*
       action:
         to: de-conduit
 

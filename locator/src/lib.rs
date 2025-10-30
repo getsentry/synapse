@@ -1,11 +1,13 @@
 mod api;
-mod backup_routes;
+pub mod backup_routes;
 pub mod config;
 mod control_plane;
-mod cursor;
-mod locator;
+pub mod locator;
 mod types;
 use std::sync::Arc;
+
+#[cfg(test)]
+mod testutils;
 
 use backup_routes::{
     BackupRouteProvider, FilesystemRouteProvider, GcsRouteProvider, NoopRouteProvider,
@@ -17,13 +19,21 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
     let provider: Arc<dyn BackupRouteProvider + 'static> =
         get_provider(config.backup_route_store.r#type);
 
-    api::serve(config.listener, config.control_plane, provider).await
+    api::serve(
+        config.listener,
+        config.control_plane,
+        provider,
+        config.locality_to_default_cell,
+    )
+    .await
 }
 
 pub fn get_provider(store_type: BackupRouteStoreType) -> Arc<dyn BackupRouteProvider + 'static> {
     match store_type {
         BackupRouteStoreType::None => Arc::new(NoopRouteProvider {}),
-        BackupRouteStoreType::Filesystem { path } => Arc::new(FilesystemRouteProvider::new(&path)),
+        BackupRouteStoreType::Filesystem { base_dir, filename } => {
+            Arc::new(FilesystemRouteProvider::new(&base_dir, &filename))
+        }
         BackupRouteStoreType::Gcs { bucket } => Arc::new(GcsRouteProvider::new(&bucket)),
     }
 }

@@ -1,20 +1,21 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
     None,
-    Filesystem { path: String },
+    Filesystem { base_dir: String, filename: String },
     Gcs { bucket: String },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct ControlPlane {
     pub url: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, PartialEq)]
 pub struct BackupRouteStore {
     #[serde(flatten)]
     pub r#type: BackupRouteStoreType,
@@ -31,4 +32,5 @@ pub struct Config {
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,
+    pub locality_to_default_cell: Option<HashMap<String, String>>,
 }

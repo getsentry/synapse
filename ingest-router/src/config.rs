@@ -40,7 +40,7 @@ pub enum ResolverType {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
-    pub proxy: ProxyConfig,
+    pub ingest_router: IngestRouterConfig,
     pub logging: LoggingConfig,
     pub metrics: MetricsConfig,
 }
@@ -48,13 +48,13 @@ pub struct Config {
 impl Config {
     /// Validates the entire configuration
     pub fn validate(&self) -> Result<(), ValidationError> {
-        self.proxy.validate()
+        self.ingest_router.validate()
     }
 }
 
 /// Proxy configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct ProxyConfig {
+pub struct IngestRouterConfig {
     /// Main listener for incoming requests
     pub listener: Listener,
     /// Admin listener for administrative endpoints
@@ -71,7 +71,7 @@ pub struct ProxyConfig {
     pub routes: Vec<Route>,
 }
 
-impl ProxyConfig {
+impl IngestRouterConfig {
     /// Validates the proxy configuration
     pub fn validate(&self) -> Result<(), ValidationError> {
         // Validate listeners
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn test_parse_valid_config() {
         let yaml = r#"
-proxy:
+ingest_router:
   listener:
     host: "0.0.0.0"
     port: 3000
@@ -249,21 +249,21 @@ metrics:
         assert!(config.validate().is_ok());
 
         // Verify key config values
-        assert_eq!(config.proxy.listener.port, 3000);
-        assert_eq!(config.proxy.upstreams.len(), 2);
-        assert_eq!(config.proxy.routes.len(), 2);
+        assert_eq!(config.ingest_router.listener.port, 3000);
+        assert_eq!(config.ingest_router.upstreams.len(), 2);
+        assert_eq!(config.ingest_router.routes.len(), 2);
         assert_eq!(
-            config.proxy.routes[0].r#match.method,
+            config.ingest_router.routes[0].r#match.method,
             Some(HttpMethod::Post)
         );
-        assert_eq!(config.proxy.routes[1].r#match.host, None);
-        assert_eq!(config.proxy.routes[1].action.locale.len(), 2);
+        assert_eq!(config.ingest_router.routes[1].r#match.host, None);
+        assert_eq!(config.ingest_router.routes[1].action.locale.len(), 2);
     }
 
     #[test]
     fn test_validation_errors() {
         let base_config = Config {
-            proxy: ProxyConfig {
+            ingest_router: IngestRouterConfig {
                 listener: Listener {
                     host: "0.0.0.0".to_string(),
                     port: 3000,
@@ -300,7 +300,7 @@ metrics:
 
         // Test invalid port
         let mut config = base_config.clone();
-        config.proxy.listener.port = 0;
+        config.ingest_router.listener.port = 0;
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::InvalidPort
@@ -308,7 +308,7 @@ metrics:
 
         // Test duplicate upstream names
         let mut config = base_config.clone();
-        config.proxy.upstreams.push(UpstreamConfig {
+        config.ingest_router.upstreams.push(UpstreamConfig {
             name: "us1".to_string(),
             url: Url::parse("http://10.0.0.2:8080").unwrap(),
         });
@@ -319,7 +319,7 @@ metrics:
 
         // Test empty upstream name
         let mut config = base_config.clone();
-        config.proxy.upstreams.push(UpstreamConfig {
+        config.ingest_router.upstreams.push(UpstreamConfig {
             name: "".to_string(),
             url: Url::parse("http://10.0.0.2:8080").unwrap(),
         });
@@ -330,7 +330,7 @@ metrics:
 
         // Test unknown locale in action
         let mut config = base_config.clone();
-        config.proxy.routes[0].action.locale = vec!["unknown".to_string()];
+        config.ingest_router.routes[0].action.locale = vec!["unknown".to_string()];
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::UnknownLocale(_)
@@ -338,7 +338,7 @@ metrics:
 
         // Test empty locale in action
         let mut config = base_config;
-        config.proxy.routes[0].action.locale = vec![];
+        config.ingest_router.routes[0].action.locale = vec![];
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::EmptyLocale
@@ -351,7 +351,7 @@ metrics:
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-proxy:
+ingest_router:
   listener: {host: "0.0.0.0", port: 3000}
   admin_listener: {host: "127.0.0.1", port: 3001}
   locale_to_cells: {us: [us1]}
@@ -368,7 +368,7 @@ metrics: {statsd_host: "127.0.0.1", statsd_port: 8126}
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-proxy:
+ingest_router:
   listener: {host: "0.0.0.0", port: "not_a_number"}
 "#
             )
@@ -379,7 +379,7 @@ proxy:
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-proxy:
+ingest_router:
   listener: {host: "0.0.0.0"}
 "#
             )
@@ -430,9 +430,9 @@ proxy:
 
         config.validate().expect("Example config validation failed");
 
-        assert_eq!(config.proxy.listener.port, 3000);
-        assert_eq!(config.proxy.admin_listener.port, 3001);
-        assert!(!config.proxy.upstreams.is_empty());
-        assert!(!config.proxy.routes.is_empty());
+        assert_eq!(config.ingest_router.listener.port, 3000);
+        assert_eq!(config.ingest_router.admin_listener.port, 3001);
+        assert!(!config.ingest_router.upstreams.is_empty());
+        assert!(!config.ingest_router.routes.is_empty());
     }
 }

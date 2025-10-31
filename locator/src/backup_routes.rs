@@ -1,11 +1,10 @@
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
-use crate::types::{Cell, RouteData};
+use crate::types::RouteData;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
@@ -152,35 +151,6 @@ impl BackupRouteProvider for GcsRouteProvider {
 
     fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
         unimplemented!();
-    }
-}
-
-// Temporary - only used for testing. Replace test cases with the filesystem provider
-// once that is implemented to avoid keeping this dummy code around.
-pub struct TestingRouteProvider;
-
-impl BackupRouteProvider for TestingRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
-        let cells = Vec::from([
-            Cell::new("us1", "us"),
-            Cell::new("us2", "us"),
-            Cell::new("de", "de"),
-        ]);
-
-        let mut dummy_data = HashMap::new();
-        for i in 0..10 {
-            dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].id.clone());
-        }
-
-        Ok(RouteData {
-            org_to_cell: dummy_data,
-            last_cursor: "test".into(),
-            cells: HashMap::from_iter(cells.into_iter().map(|c| (c.id.clone(), Arc::new(c)))),
-        })
-    }
-
-    fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
-        Ok(())
     }
 }
 

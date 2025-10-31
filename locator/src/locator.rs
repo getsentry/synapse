@@ -195,6 +195,8 @@ impl OrgToCell {
                     println!("Received command {:?}", cmd);
                 }
             }
+        } else {
+            // TODO: Properly handle failure to load initial snapshot
         }
     }
 
@@ -254,52 +256,42 @@ impl OrgToCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backup_routes::FilesystemRouteProvider;
     use crate::testutils::TestControlPlaneServer;
-    use crate::types::Cell;
     use std::time::Duration;
 
-    struct TestingRouteProvider {}
+    fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
+        let route_data = RouteData::from(
+            HashMap::from([
+                ("org_0".into(), "us1".into()),
+                ("org_1".into(), "us1".into()),
+                ("org_2".into(), "de".into()),
+            ]),
+            "cursor1".into(),
+            HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),
+        );
 
-    impl BackupRouteProvider for TestingRouteProvider {
-        fn load(&self) -> Result<RouteData, BackupError> {
-            let cells = Vec::from([
-                Cell::new("us1", "us"),
-                Cell::new("us2", "us"),
-                Cell::new("de", "de"),
-            ]);
-
-            let mut dummy_data = HashMap::new();
-            for i in 0..10 {
-                dummy_data.insert(format!("org_{i}"), cells[i % cells.len()].id.clone());
-            }
-
-            Ok(RouteData {
-                org_to_cell: dummy_data,
-                last_cursor: "test".into(),
-                cells: HashMap::from_iter(cells.into_iter().map(|c| (c.id.clone(), Arc::new(c)))),
-            })
-        }
-
-        fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
-            // Do nothing
-            Ok(())
-        }
+        let dir = tempfile::tempdir().unwrap();
+        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        provider.store(&route_data).unwrap();
+        (dir, provider)
     }
 
     #[tokio::test]
-    async fn test_locator() {
+    async fn test_locator_control_plane_available() {
+        // Control plane available, use results from control plane
         let host = "127.0.0.1";
         let port = 9001;
 
         // Run the control plane server
         let _server = TestControlPlaneServer::spawn(host, port).unwrap();
-
         std::thread::sleep(Duration::from_millis(100));
 
-        // Control plane available, use results from control plane
+        let (_dir, provider) = get_mock_provider();
+
         let locator = Locator::new(
             format!("http://{host}:{port}").to_string(),
-            Arc::new(TestingRouteProvider {}),
+            Arc::new(provider),
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
@@ -319,11 +311,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_locator_backup_route_provider() {
+    async fn test_locator_control_plane_unavailable() {
         // Control plane unavailable, load from backup provider
+
+        let (_dir, provider) = get_mock_provider();
+
         let locator = Locator::new(
             "http://invalid-control-plane:9000".to_string(),
-            Arc::new(TestingRouteProvider {}),
+            Arc::new(provider),
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
@@ -332,11 +327,18 @@ mod tests {
         // Sleep because of retries
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()),);
+        assert_eq!(locator.lookup("0", Some("us")), Err(LocatorError::NoCell));
+
+        // Valid org and locality
+        assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()));
+
+        // Invalid org, no default
         assert_eq!(
             locator.lookup("invalid_org", Some("us")),
             Err(LocatorError::NoCell)
         );
+
+        // Wrong locality requested
         assert_eq!(
             locator.lookup("org_1", Some("de")),
             Err(LocatorError::LocalityMismatch {
@@ -344,12 +346,14 @@ mod tests {
                 actual: "us".to_string()
             })
         );
+
+        // Valid org, no locality
         assert_eq!(locator.lookup("org_2", None), Ok("de".into()));
 
         // Default cell is used when org_id is not found
         assert_eq!(locator.lookup("invalid_org", Some("de")), Ok("de".into()));
 
-        // No default cell for locality
+        // No default cell for locality returns error
         assert_eq!(
             locator.lookup("invalid_org", Some("us")),
             Err(LocatorError::NoCell)

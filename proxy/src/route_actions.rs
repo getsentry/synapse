@@ -15,34 +15,30 @@ struct Path {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct RouteMatch<'a> {
-    pub params: HashMap<&'a str, &'a str>,
-    pub action: &'a Action,
+pub struct RouteMatch {
+    pub params: HashMap<String, String>,
+    pub action: Action,
 }
 
 #[derive(Debug)]
 struct Route {
     host: Option<String>,
     path: Option<Path>,
-    #[allow(dead_code)]
+    // #[allow(dead_code)]
     action: Action,
 }
 
 impl Route {
     // Returns Some(RouteMatch) if the request matches this route, None otherwise.
     // Trailing slash normalization is applied to incoming requests.
-    fn matches<'a>(
-        &'a self,
-        request_host: Option<&str>,
-        request_path: &'a str,
-    ) -> Option<RouteMatch<'a>> {
+    fn matches(&self, request_host: Option<&str>, request_path: &str) -> Option<RouteMatch> {
         if self.host.is_some() && self.host.as_deref() != request_host {
             return None;
         }
 
         let normalized_path = request_path.trim().trim_matches('/');
 
-        let request_segments: Vec<&str> = if normalized_path.is_empty() {
+        let request_segments = if normalized_path.is_empty() {
             vec![]
         } else {
             normalized_path.split('/').collect()
@@ -56,15 +52,15 @@ impl Route {
                 for seg in path.segments.iter() {
                     match seg {
                         PathSegment::Static(s) => {
-                            let req_segment = *request_segments.get(i_req)?;
+                            let req_segment = request_segments.get(i_req)?;
                             if req_segment != s {
                                 return None;
                             }
                             i_req += 1;
                         }
                         PathSegment::Param(name) => {
-                            let req_segment = *request_segments.get(i_req)?;
-                            params.insert(name.as_str(), req_segment);
+                            let req_segment = request_segments.get(i_req)?;
+                            params.insert(name.to_string(), req_segment.to_string());
                             i_req += 1;
                         }
                     }
@@ -73,7 +69,7 @@ impl Route {
                 if path.has_trailing_splat || i_req == request_segments.len() {
                     Some(RouteMatch {
                         params,
-                        action: &self.action,
+                        action: self.action.clone(),
                     })
                 } else {
                     None
@@ -83,7 +79,7 @@ impl Route {
                 // If no path is defined in the route, it matches anything
                 Some(RouteMatch {
                     params,
-                    action: &self.action,
+                    action: self.action.clone(),
                 })
             }
         }
@@ -151,7 +147,7 @@ impl RouteActions {
     }
     /// Matches the incoming request to a route, and returns the first matched route if any.
     /// If no matches are found, return none.
-    pub fn resolve<'a, B>(&'a self, request: &'a http::Request<B>) -> Option<RouteMatch<'a>> {
+    pub fn resolve<B>(&self, request: &http::Request<B>) -> Option<RouteMatch> {
         println!("Resolving route for request URI: {:?}", request.uri());
 
         // Host may come from authority part of URI (if absolute-form request)
@@ -268,8 +264,8 @@ mod tests {
         assert_eq!(
             route.matches(None, "/api/users/123"),
             Some(RouteMatch {
-                params: HashMap::from([("user_id", "123")]),
-                action: &config.action,
+                params: HashMap::from([("user_id".to_string(), "123".to_string())]),
+                action: config.action.clone(),
             })
         );
     }

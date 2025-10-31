@@ -69,6 +69,7 @@ async fn handler(
 ) -> Result<ApiResponse, LocatorError> {
     locator
         .lookup(&params.org_id, params.locality.as_deref())
+        .await
         .map(|cell| cell.into())
 }
 

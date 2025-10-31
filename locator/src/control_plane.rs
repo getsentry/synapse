@@ -136,7 +136,7 @@ mod tests {
     #[tokio::test]
     async fn test_control_plane() {
         let _server = TestControlPlaneServer::spawn("127.0.0.1", 9000).unwrap();
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(300));
         let control_plane = ControlPlane::new("http://127.0.0.1:9000/".to_string());
         let response = control_plane.load_mappings(None).await;
 

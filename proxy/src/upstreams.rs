@@ -4,7 +4,7 @@ use http::uri::{Scheme, Uri};
 use std::collections::HashMap;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Upstream {
     pub scheme: Scheme,
     pub authority: String,
@@ -24,6 +24,7 @@ impl TryFrom<UpstreamConfig> for Upstream {
     }
 }
 
+#[derive(Clone)]
 pub struct Upstreams {
     map: HashMap<String, Upstream>,
 }

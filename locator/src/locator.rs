@@ -1,21 +1,20 @@
 use crate::control_plane::ControlPlane;
 use crate::types::RouteData;
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::backup_routes::{BackupError, BackupRouteProvider};
+use crate::negative_cache::NegativeCache;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{AcquireError, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
-#[allow(dead_code)]
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
     #[allow(dead_code)]
     handle: tokio::task::JoinHandle<()>,
-    #[allow(dead_code)]
-    tx: mpsc::Sender<Command>,
 }
 
 #[derive(Clone)]
@@ -36,6 +35,7 @@ impl Locator {
             control_plane_url,
             backup_provider,
             locality_to_default_cell,
+            tx.clone(),
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
@@ -48,20 +48,19 @@ impl Locator {
             inner: Arc::new(LocatorInner {
                 org_to_cell_map,
                 handle,
-                tx,
             }),
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
-        self.inner.org_to_cell_map.lookup(org_id, locality)
+    pub async fn lookup(
+        &self,
+        org_id: &str,
+        locality: Option<&str>,
+    ) -> Result<String, LocatorError> {
+        self.inner.org_to_cell_map.lookup(org_id, locality).await
     }
 
     pub fn shutdown(&self) {
-        unimplemented!();
-    }
-
-    pub fn refresh(&self) {
         unimplemented!();
     }
 
@@ -98,10 +97,16 @@ pub enum LoadError {
 #[derive(Debug)]
 pub enum Command {
     // Trigger incremental mapping refresh outside of the normal interval.
+    // The request timestamp ensures data is not older than the timestamp provided - min_refresh_interval.
     // The worker sends Ok(()) when the refresh attempt finishes.
-    Refresh(oneshot::Sender<Result<(), LoadError>>),
+    Refresh(Instant, oneshot::Sender<Result<(), LoadError>>),
     // Trigger the loader to shudown gracefully
     Shutdown,
+}
+
+struct RouteDataWithTimestamp {
+    data: RouteData,
+    last_updated: Option<Instant>,
 }
 
 /// Synchronizes the org to cell mappings from the control plane and backup route provider.
@@ -109,13 +114,20 @@ pub enum Command {
 struct OrgToCell {
     control_plane: ControlPlane,
     locality_to_default_cell: HashMap<String, String>,
-    data: RwLock<RouteData>,
+    data: RwLock<RouteDataWithTimestamp>,
+    negative_cache: NegativeCache,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot
     // has been loaded and mappings are available.
     ready: AtomicBool,
     // last_update: Arc<RwLock<Option<SystemTime>>>,
     backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
+    // Standard interval between refresh attempts.
+    refresh_interval: std::time::Duration,
+    // Minimum duration between refresh attempts.
+    min_refresh_interval: std::time::Duration,
+    // Channel to send commands to the loader task.
+    tx: mpsc::Sender<Command>,
 }
 
 impl OrgToCell {
@@ -123,48 +135,108 @@ impl OrgToCell {
         control_plane_url: String,
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
         locality_to_default_cell: Option<HashMap<String, String>>,
+        tx: mpsc::Sender<Command>,
     ) -> Self {
-        OrgToCell {
-            control_plane: ControlPlane::new(control_plane_url),
-            locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
-            data: RwLock::new(RouteData {
+        let data = RouteDataWithTimestamp {
+            data: RouteData {
                 org_to_cell: HashMap::new(),
                 last_cursor: "".into(),
                 cells: HashMap::new(),
-            }),
+            },
+            last_updated: None,
+        };
+
+        OrgToCell {
+            control_plane: ControlPlane::new(control_plane_url),
+            locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
+            data: RwLock::new(data),
+            negative_cache: NegativeCache::new(),
             update_lock: Semaphore::new(1),
             ready: AtomicBool::new(false),
             backup_routes,
+            refresh_interval: std::time::Duration::from_secs(60),
+            min_refresh_interval: std::time::Duration::from_secs(1),
+            tx,
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
+    pub async fn lookup(
+        &self,
+        org_id: &str,
+        locality: Option<&str>,
+    ) -> Result<String, LocatorError> {
         // Looks up the cell for a given organization ID and locality.
-        // Returns an `Option<Cell>` if found, or `None` if not found.
+        // Returns `Ok(Cell)` if found, or a default applies.
         // Returns an error if locality is passed and the org_id/locality pair is not valid.
         // Or if a locality is passed but no defualt cell is found for that locality
         if !self.ready.load(Ordering::Relaxed) {
             return Err(LocatorError::NotReady);
         }
 
-        let read_guard = self.data.read();
-        let cell_id = read_guard
-            .org_to_cell
-            .get(org_id)
-            .or_else(|| {
-                if let Some(loc) = locality {
-                    self.locality_to_default_cell.get(loc)
-                } else {
-                    None
-                }
-            })
-            .ok_or(LocatorError::NoCell)?;
+        let start_lookup = Instant::now();
 
-        let cell = read_guard
-            .cells
-            .get(cell_id)
-            .cloned()
-            .ok_or(LocatorError::InternalError)?;
+        // Try to get cell_id from cache. The read lock is only held briefly.
+        let cell_id = {
+            let read_guard = self.data.read();
+            read_guard.data.org_to_cell.get(org_id).cloned()
+        };
+
+        // If not found in cache, try refreshing
+        let cell_id = if cell_id.is_none() {
+            // if the org_id is known to be invalid, skip refresh attempt
+            if self.negative_cache.contains(org_id) {
+                None
+            } else {
+                // Route data could be stale, refresh then retry
+                let (ack_tx, ack_rx) = oneshot::channel::<Result<(), LoadError>>();
+
+                match self.tx.try_send(Command::Refresh(start_lookup, ack_tx)) {
+                    Ok(()) => {
+                        if let Err(err) = ack_rx.await {
+                            eprintln!("recv error: {:?}", err);
+                        }
+
+                        // Re-acquire the read lock
+                        let read_guard = self.data.read();
+                        let res = read_guard.data.org_to_cell.get(org_id).cloned();
+
+                        // Record still not found after refresh, add to negative cache
+                        if res.is_none() {
+                            self.negative_cache.insert(org_id);
+                        }
+
+                        res
+                    }
+                    Err(e) => {
+                        // channel is closed or full
+                        eprintln!("channel error: {:?}", e);
+                        None
+                    }
+                }
+            }
+        } else {
+            cell_id
+        }
+        // If no cell is found, apply locality default
+        .or_else(|| {
+            if let Some(loc) = locality {
+                self.locality_to_default_cell.get(loc).cloned()
+            } else {
+                None
+            }
+        })
+        .ok_or(LocatorError::NoCell)?;
+
+        // Get the cell details
+        let cell = {
+            let read_guard = self.data.read();
+            read_guard
+                .data
+                .cells
+                .get(&cell_id)
+                .cloned()
+                .ok_or(LocatorError::InternalError)?
+        }; // read_guard is dropped here
 
         if let Some(requested_locality) = locality
             && cell.locality != requested_locality
@@ -191,8 +263,27 @@ impl OrgToCell {
             // If the Refresh command is received, the incremental load can be triggered ahead
             // of schedule.
             loop {
-                if let Some(cmd) = rx.recv().await {
-                    println!("Received command {:?}", cmd);
+                tokio::select! {
+                    _ = tokio::time::sleep(self.refresh_interval) => {
+                        let _ = self.load_incremental().await;
+                    }
+                    Some(cmd) = rx.recv() => {
+                        match cmd {
+                            Command::Refresh(requested_at, tx) => {
+                                // Immediately send response if data is up to date, otherwise load incremental updates
+                                if let Some(updated) = self.data.read().last_updated && updated + self.min_refresh_interval >= requested_at {
+                                    let _ = tx.send(Ok(()));
+                                } else {
+                                    let _ = tx.send(self.load_incremental().await);
+                                }
+                            }
+                            Command::Shutdown => {
+                                // Mark the locator as no longer ready and exit the loop
+                                self.ready.store(false, Ordering::Relaxed);
+                                break;
+                            },
+                        }
+                    }
                 }
             }
         } else {
@@ -206,6 +297,8 @@ impl OrgToCell {
     /// Once the configured retries have been exhausted, it will attempt to
     /// load from the backup route provider.
     async fn load_snapshot(&self) -> Result<(), LoadError> {
+        let mut snapshot_requested_time: Option<Instant> = Some(Instant::now());
+
         // Hold permit for the duration of this function
         let _permit = self.get_permit().await?;
 
@@ -219,6 +312,9 @@ impl OrgToCell {
                     "Error loading from control plane: {:?}, falling back to backup route provider",
                     err
                 );
+
+                snapshot_requested_time = None;
+
                 // Load from the backup route provider
                 self.backup_routes.load()
             })?;
@@ -226,18 +322,18 @@ impl OrgToCell {
         let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<
             '_,
             parking_lot::RawRwLock,
-            RouteData,
+            RouteDataWithTimestamp,
         > = self.data.write();
 
-        write_guard.org_to_cell = route_data.org_to_cell;
-        write_guard.last_cursor = route_data.last_cursor;
-        write_guard.cells = route_data.cells;
+        write_guard.data.org_to_cell = route_data.org_to_cell;
+        write_guard.data.last_cursor = route_data.last_cursor;
+        write_guard.data.cells = route_data.cells;
+        write_guard.last_updated = snapshot_requested_time;
 
         Ok(())
     }
 
     /// Load incremental updates from the control plane.
-    #[allow(dead_code)]
     async fn load_incremental(&self) -> Result<(), LoadError> {
         // Hold permit for the duration of this function
         let _permit = self.get_permit().await?;
@@ -285,7 +381,7 @@ mod tests {
 
         // Run the control plane server
         let _server = TestControlPlaneServer::spawn(host, port).unwrap();
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(300));
 
         let (_dir, provider) = get_mock_provider();
 
@@ -295,17 +391,20 @@ mod tests {
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
-        assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
+        assert_eq!(
+            locator.lookup("org_0", None).await,
+            Err(LocatorError::NotReady)
+        );
 
         // Wait for control plane
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // org "0" is in the control plane
-        assert_eq!(locator.lookup("0", Some("us")), Ok("us1".into()),);
+        assert_eq!(locator.lookup("0", Some("us")).await, Ok("us1".into()));
 
         // org_0 errors because it's not in the control plane data, only in the backup provider
         assert_eq!(
-            locator.lookup("org_0", Some("us")),
+            locator.lookup("org_0", Some("us")).await,
             Err(LocatorError::NoCell)
         );
     }
@@ -322,25 +421,31 @@ mod tests {
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
-        assert_eq!(locator.lookup("org_0", None), Err(LocatorError::NotReady));
+        assert_eq!(
+            locator.lookup("org_0", None).await,
+            Err(LocatorError::NotReady)
+        );
 
         // Sleep because of retries
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        assert_eq!(locator.lookup("0", Some("us")), Err(LocatorError::NoCell));
+        assert_eq!(
+            locator.lookup("0", Some("us")).await,
+            Err(LocatorError::NoCell)
+        );
 
         // Valid org and locality
-        assert_eq!(locator.lookup("org_0", Some("us")), Ok("us1".into()));
+        assert_eq!(locator.lookup("org_0", Some("us")).await, Ok("us1".into()));
 
         // Invalid org, no default
         assert_eq!(
-            locator.lookup("invalid_org", Some("us")),
+            locator.lookup("invalid_org", Some("us")).await,
             Err(LocatorError::NoCell)
         );
 
         // Wrong locality requested
         assert_eq!(
-            locator.lookup("org_1", Some("de")),
+            locator.lookup("org_1", Some("de")).await,
             Err(LocatorError::LocalityMismatch {
                 requested: "de".to_string(),
                 actual: "us".to_string()
@@ -348,14 +453,17 @@ mod tests {
         );
 
         // Valid org, no locality
-        assert_eq!(locator.lookup("org_2", None), Ok("de".into()));
+        assert_eq!(locator.lookup("org_2", None).await, Ok("de".into()));
 
         // Default cell is used when org_id is not found
-        assert_eq!(locator.lookup("invalid_org", Some("de")), Ok("de".into()));
+        assert_eq!(
+            locator.lookup("invalid_org", Some("de")).await,
+            Ok("de".into())
+        );
 
         // No default cell for locality returns error
         assert_eq!(
-            locator.lookup("invalid_org", Some("us")),
+            locator.lookup("invalid_org", Some("us")).await,
             Err(LocatorError::NoCell)
         );
     }

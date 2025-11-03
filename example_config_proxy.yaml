@@ -7,11 +7,14 @@ proxy:
     port: 3001
   locator:
     type: in_process
-    backup_route_store: null
+    backup_route_store:
+      type: filesystem
+      base_dir: target/cache
+      filename: backup.bin
     locality_to_default_cell:
       us: us1
     control_plane:
-      url: "127.0.0.1:9000"
+      url: http://127.0.0.1:9000
   upstreams:
   - name: us1-getsentry
     url: "http://127.0.0.1:8080"

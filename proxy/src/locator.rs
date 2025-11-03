@@ -21,7 +21,7 @@ impl Locator {
                     locality_to_default_cell,
                 )))
             }
-            LocatorType::Url { .. } => todo!(),
+            LocatorType::Url { .. } => Locator(LocatorInner::Url(Url {})),
         }
     }
 

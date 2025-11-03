@@ -29,3 +29,31 @@ pub struct RouteData {
     pub last_cursor: String,
     pub cells: HashMap<CellId, Arc<Cell>>,
 }
+
+impl RouteData {
+    pub fn from(
+        org_to_cell: HashMap<String, CellId>,
+        last_cursor: String,
+        cell_to_locality: HashMap<CellId, String>,
+    ) -> Self {
+        // Construct RouteData from control plane response data
+        let cells = cell_to_locality
+            .iter()
+            .map(|(cell_id, locality)| {
+                (
+                    cell_id.clone(),
+                    Arc::new(Cell {
+                        id: cell_id.clone(),
+                        locality: locality.clone(),
+                    }),
+                )
+            })
+            .collect::<HashMap<CellId, Arc<Cell>>>();
+
+        RouteData {
+            org_to_cell,
+            last_cursor,
+            cells,
+        }
+    }
+}

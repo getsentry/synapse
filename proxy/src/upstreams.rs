@@ -1,23 +1,20 @@
 use crate::config::UpstreamConfig;
 use crate::errors::ProxyError;
-use http::Uri;
+use http::uri::{Scheme, Uri};
 use std::collections::HashMap;
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Upstream {
-    scheme: String,
-    authority: String,
+    pub scheme: Scheme,
+    pub authority: String,
 }
 
 impl TryFrom<UpstreamConfig> for Upstream {
     type Error = ProxyError;
     fn try_from(config: UpstreamConfig) -> Result<Self, Self::Error> {
         let uri: Uri = config.url.parse()?;
-        let scheme = uri
-            .scheme()
-            .map(|s| s.to_string())
-            .ok_or(ProxyError::InvalidUpstream)?;
+        let scheme = uri.scheme().ok_or(ProxyError::InvalidUpstream)?.clone();
         let authority = uri
             .authority()
             .map(|a| a.to_string())
@@ -66,7 +63,7 @@ mod tests {
         };
 
         let upstream = Upstream::try_from(valid_config).expect("Valid upstream should parse");
-        assert_eq!(upstream.scheme, "http");
+        assert_eq!(upstream.scheme, Scheme::HTTP);
         assert_eq!(upstream.authority, "1.1.1.1:80");
         assert!(Upstream::try_from(invalid_config).is_err());
     }

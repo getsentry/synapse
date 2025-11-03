@@ -84,7 +84,7 @@ where
     fn call(&self, request: Request<B>) -> Self::Future {
         let route = self.route_actions.resolve(&request);
 
-        println!("Resolved route: {:?}", route);
+        println!("Resolved route: {route:?}");
 
         let upstream_name = route.and_then(|r| match r.action {
             config::Action::Static { to } => Some(to.as_str()),
@@ -102,7 +102,7 @@ where
 
         let upstream = upstream_name.and_then(|u| self.upstreams.get(u));
 
-        println!("Resolved upstream: {:?}", upstream);
+        println!("Resolved upstream: {upstream:?}");
 
         match upstream {
             Some(u) => {
@@ -143,7 +143,7 @@ where
                             Ok(Response::from_parts(parts, boxed_body))
                         }
                         Err(e) => {
-                            eprintln!("Upstream request failed: {}", e);
+                            eprintln!("Upstream request failed: {e}");
                             Ok(Self::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }

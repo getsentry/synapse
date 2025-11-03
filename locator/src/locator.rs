@@ -192,7 +192,7 @@ impl OrgToCell {
             // of schedule.
             loop {
                 if let Some(cmd) = rx.recv().await {
-                    println!("Received command {:?}", cmd);
+                    println!("Received command {cmd:?}");
                 }
             }
         } else {
@@ -216,8 +216,7 @@ impl OrgToCell {
             .await
             .or_else(|err| {
                 eprintln!(
-                    "Error loading from control plane: {:?}, falling back to backup route provider",
-                    err
+                    "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
                 // Load from the backup route provider
                 self.backup_routes.load()

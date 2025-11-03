@@ -76,7 +76,8 @@ mod tests {
                     url: control-plane.internal
                 backup_route_store:
                     type: filesystem
-                    path: /var/lib/locator/
+                    base_dir: /var/lib/locator/
+                    filename: backup.bin
             "#;
         let tmp = write_tmp_file(locator_yaml);
         let config = Config::from_file(tmp.path()).expect("load config");
@@ -85,7 +86,8 @@ mod tests {
         assert_eq!(
             locator_config.backup_route_store.r#type,
             BackupRouteStoreType::Filesystem {
-                path: "/var/lib/locator/".into()
+                base_dir: "/var/lib/locator/".into(),
+                filename: "backup.bin".into()
             }
         );
     }

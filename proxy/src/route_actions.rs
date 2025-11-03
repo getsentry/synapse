@@ -1,6 +1,5 @@
 use crate::config::{Action, Route as RouteConfig};
 use crate::errors::ProxyError;
-use hyper::body::Incoming;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -17,8 +16,7 @@ struct Path {
 
 #[derive(Debug, PartialEq)]
 pub struct RouteMatch<'a> {
-    #[allow(dead_code)]
-    params: HashMap<&'a str, &'a str>,
+    pub params: HashMap<&'a str, &'a str>,
     pub action: &'a Action,
 }
 
@@ -153,8 +151,8 @@ impl RouteActions {
     }
     /// Matches the incoming request to a route, and returns the first matched route if any.
     /// If no matches are found, return none.
-    pub fn resolve<'a>(&'a self, request: &'a http::Request<Incoming>) -> Option<RouteMatch<'a>> {
-        println!("Resolving route for request: {request:?}");
+    pub fn resolve<'a, B>(&'a self, request: &'a http::Request<B>) -> Option<RouteMatch<'a>> {
+        println!("Resolving route for request URI: {:?}", request.uri());
 
         // Host may come from authority part of URI (if absolute-form request)
         // or from the Host header (most common in HTTP/1.1).

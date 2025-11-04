@@ -160,8 +160,8 @@ impl RouteActions {
         let path = request.uri().path();
         let query = request.uri().query();
 
-        println!("Request path: {}", path);
-        println!("Request query: {:?}", query);
+        println!("Request path: {path}");
+        println!("Request query: {query:?}");
 
         // Return the first matching route, if any
         self.routes

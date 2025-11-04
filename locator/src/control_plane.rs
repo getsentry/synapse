@@ -118,7 +118,7 @@ impl ControlPlane {
             }
         }
 
-        println!("Fetched {} pages from control plane", page_fetches);
+        println!("Fetched {page_fetches} pages from control plane");
 
         let data = RouteData::from(org_to_cell, next_cursor.unwrap(), cell_to_locality);
 

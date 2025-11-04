@@ -22,7 +22,7 @@ enum CliError {
 
 fn main() {
     if let Err(e) = cli() {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 }
@@ -60,7 +60,7 @@ pub fn run_async(fut: impl Future<Output = Result<(), impl std::error::Error>>) 
         .build()
         .unwrap();
     if let Err(e) = rt.block_on(fut) {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         process::exit(1);
     }
 }

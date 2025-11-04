@@ -84,7 +84,7 @@ where
     fn call(&self, request: Request<B>) -> Self::Future {
         let route = self.route_actions.resolve(&request);
 
-        println!("Resolved route: {:?}", route);
+        println!("Resolved route: {route:?}");
 
         let upstreams = self.upstreams.clone();
         let resolvers = self.resolvers.clone();
@@ -149,7 +149,7 @@ where
                             Ok(Response::from_parts(parts, boxed_body))
                         }
                         Err(e) => {
-                            eprintln!("Upstream request failed: {}", e);
+                            eprintln!("Upstream request failed: {e}");
                             Ok(Self::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }

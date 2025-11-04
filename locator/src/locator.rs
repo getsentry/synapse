@@ -309,8 +309,7 @@ impl OrgToCell {
             .await
             .or_else(|err| {
                 eprintln!(
-                    "Error loading from control plane: {:?}, falling back to backup route provider",
-                    err
+                    "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
 
                 snapshot_requested_time = None;

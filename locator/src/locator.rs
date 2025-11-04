@@ -175,14 +175,15 @@ impl OrgToCell {
 
         let start_lookup = Instant::now();
 
-        // Fetch cell ID and immediately release read lock
-        let cell_id = {
+        // Fetch cell directly and immediately release read lock
+        let cell = {
             let read_guard = self.data.read();
-            read_guard.data.org_to_cell.get(org_id).cloned()
+            read_guard.data.org_to_cell.get(org_id)
+                .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned())
         };
 
         // Check the negative cache and possibly refresh data from control plane
-        let cell_id = if cell_id.is_none() {
+        let cell = if cell.is_none() {
             if self.negative_cache.contains(org_id) {
                 None
             } else {
@@ -196,7 +197,8 @@ impl OrgToCell {
 
                         // Re-acquire the read lock
                         let read_guard = self.data.read();
-                        let res = read_guard.data.org_to_cell.get(org_id).cloned();
+                        let res = read_guard.data.org_to_cell.get(org_id)
+                            .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned());
 
                         // Record still not found after refresh, add to negative cache
                         if res.is_none() {
@@ -213,28 +215,20 @@ impl OrgToCell {
                 }
             }
         } else {
-            cell_id
+            cell
         }
         // If no cell is found, apply locality default
         .or_else(|| {
             if let Some(loc) = locality {
-                self.locality_to_default_cell.get(loc).cloned()
+                self.locality_to_default_cell.get(loc).and_then(|default_cell_id| {
+                    let read_guard = self.data.read();
+                    read_guard.data.cells.get(default_cell_id).cloned()
+                })
             } else {
                 None
             }
         })
         .ok_or(LocatorError::NoCell)?;
-
-        // Get the cell details
-        let cell = {
-            let read_guard = self.data.read();
-            read_guard
-                .data
-                .cells
-                .get(&cell_id)
-                .cloned()
-                .ok_or(LocatorError::InternalError)?
-        }; // read_guard is dropped here
 
         if let Some(requested_locality) = locality
             && cell.locality != requested_locality

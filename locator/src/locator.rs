@@ -175,19 +175,17 @@ impl OrgToCell {
 
         let start_lookup = Instant::now();
 
-        // Try to get cell_id from cache. The read lock is only held briefly.
+        // Fetch cell ID and immediately release read lock
         let cell_id = {
             let read_guard = self.data.read();
             read_guard.data.org_to_cell.get(org_id).cloned()
         };
 
-        // If not found in cache, try refreshing
+        // Check the negative cache and possibly refresh data from control plane
         let cell_id = if cell_id.is_none() {
-            // if the org_id is known to be invalid, skip refresh attempt
             if self.negative_cache.contains(org_id) {
                 None
             } else {
-                // Route data could be stale, refresh then retry
                 let (ack_tx, ack_rx) = oneshot::channel::<Result<(), LoadError>>();
 
                 match self.tx.try_send(Command::Refresh(start_lookup, ack_tx)) {

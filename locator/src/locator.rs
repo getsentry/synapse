@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{AcquireError, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
+use std::time::Duration;
 
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
@@ -36,6 +37,8 @@ impl Locator {
             backup_provider,
             locality_to_default_cell,
             tx.clone(),
+            Duration::from_secs(60),
+            Duration::from_secs(1),
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
@@ -140,6 +143,8 @@ impl OrgToCell {
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
         locality_to_default_cell: Option<HashMap<String, String>>,
         tx: mpsc::Sender<Command>,
+        refresh_interval: std::time::Duration,
+        min_refresh_interval: std::time::Duration,
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
@@ -158,8 +163,8 @@ impl OrgToCell {
             update_lock: Semaphore::new(1),
             ready: AtomicBool::new(false),
             backup_routes,
-            refresh_interval: std::time::Duration::from_secs(60),
-            min_refresh_interval: std::time::Duration::from_secs(1),
+            refresh_interval,
+            min_refresh_interval,
             tx,
         }
     }

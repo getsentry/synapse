@@ -125,6 +125,7 @@ where
                         .map(|pq| pq.as_str())
                         .unwrap_or("/");
 
+                    // TODO: actually handle error, don't unwrap
                     let new_uri = http::Uri::builder()
                         .scheme(u.scheme.clone())
                         .authority(u.authority.clone())

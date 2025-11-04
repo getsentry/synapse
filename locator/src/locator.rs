@@ -175,7 +175,7 @@ impl OrgToCell {
 
         let start_lookup = Instant::now();
 
-        // Fetch cell directly and immediately release read lock
+        // Fetch cell and immediately release read lock
         let cell = {
             let read_guard = self.data.read();
             read_guard.data.org_to_cell.get(org_id)

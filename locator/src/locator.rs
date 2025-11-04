@@ -118,12 +118,13 @@ struct OrgToCell {
     control_plane: ControlPlane,
     locality_to_default_cell: HashMap<String, String>,
     data: RwLock<RouteDataWithTimestamp>,
+    // Keeps track of recently failed lookups to avoid repeated queries against
+    // non-existent or recently deleted organizations from adding load to the system.
     negative_cache: NegativeCache,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot
     // has been loaded and mappings are available.
     ready: AtomicBool,
-    // last_update: Arc<RwLock<Option<SystemTime>>>,
     backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
     // Standard interval between refresh attempts.
     refresh_interval: std::time::Duration,

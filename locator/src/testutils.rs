@@ -7,7 +7,7 @@ pub struct TestControlPlaneServer {
 }
 
 impl TestControlPlaneServer {
-    pub fn spawn(host: &str, port: u16) -> std::io::Result<Self> {
+    pub fn spawn(host: &str, port: u16) -> Result<Self, Box<dyn std::error::Error>> {
         let addr = format!("{}:{}", host, port);
 
         let child = Command::new("python")
@@ -22,9 +22,12 @@ impl TestControlPlaneServer {
         for _ in 0..10 {
             if TcpStream::connect(&addr).is_err() {
                 std::thread::sleep(Duration::from_millis(100));
+            } else {
+                return Ok(Self { child });
             }
         }
-        Ok(Self { child })
+
+        Err("Failed to connect".into())
     }
 }
 

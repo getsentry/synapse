@@ -86,8 +86,14 @@ mod tests {
             None,
         );
 
-        // sleep to allow the locator to initialize
-        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        // wait for locator to become ready
+        for _ in 0..5 {
+            if locator.is_ready() {
+                break;
+            } else {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
 
         let resolvers = Resolvers::try_new(locator).unwrap();
         let mut cell_to_upstream = HashMap::new();

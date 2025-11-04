@@ -1,11 +1,15 @@
+use std::net::TcpStream;
 use std::process::{Child, Command};
+use std::time::Duration;
 
 pub struct TestControlPlaneServer {
     child: Child,
 }
 
 impl TestControlPlaneServer {
-    pub fn spawn(host: &str, port: u16) -> std::io::Result<Self> {
+    pub fn spawn(host: &str, port: u16) -> Result<Self, Box<dyn std::error::Error>> {
+        let addr = format!("{}:{}", host, port);
+
         let child = Command::new("python")
             .arg("../scripts/mock_control_api.py")
             .arg("--host")
@@ -14,7 +18,16 @@ impl TestControlPlaneServer {
             .arg(port.to_string())
             .spawn()?;
 
-        Ok(Self { child })
+        // Wait for tcp
+        for _ in 0..10 {
+            if TcpStream::connect(&addr).is_err() {
+                std::thread::sleep(Duration::from_millis(100));
+            } else {
+                return Ok(Self { child });
+            }
+        }
+
+        Err("Failed to connect".into())
     }
 }
 

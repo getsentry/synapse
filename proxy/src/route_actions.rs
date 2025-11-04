@@ -24,7 +24,6 @@ pub struct RouteMatch {
 struct Route {
     host: Option<String>,
     path: Option<Path>,
-    // #[allow(dead_code)]
     action: Action,
 }
 

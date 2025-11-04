@@ -178,7 +178,10 @@ impl OrgToCell {
         // Fetch cell and immediately release read lock
         let cell = {
             let read_guard = self.data.read();
-            read_guard.data.org_to_cell.get(org_id)
+            read_guard
+                .data
+                .org_to_cell
+                .get(org_id)
                 .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned())
         };
 
@@ -197,7 +200,10 @@ impl OrgToCell {
 
                         // Re-acquire the read lock
                         let read_guard = self.data.read();
-                        let res = read_guard.data.org_to_cell.get(org_id)
+                        let res = read_guard
+                            .data
+                            .org_to_cell
+                            .get(org_id)
                             .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned());
 
                         // Record still not found after refresh, add to negative cache
@@ -220,10 +226,12 @@ impl OrgToCell {
         // If no cell is found, apply locality default
         .or_else(|| {
             if let Some(loc) = locality {
-                self.locality_to_default_cell.get(loc).and_then(|default_cell_id| {
-                    let read_guard = self.data.read();
-                    read_guard.data.cells.get(default_cell_id).cloned()
-                })
+                self.locality_to_default_cell
+                    .get(loc)
+                    .and_then(|default_cell_id| {
+                        let read_guard = self.data.read();
+                        read_guard.data.cells.get(default_cell_id).cloned()
+                    })
             } else {
                 None
             }

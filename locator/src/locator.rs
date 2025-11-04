@@ -41,7 +41,10 @@ impl Locator {
         // Spawn the loader thread. All loading should happen from this thread.
         let org_to_cell_map_clone = org_to_cell_map.clone();
         let handle = tokio::spawn(async move {
-            org_to_cell_map_clone.start(rx).await;
+            if let Err(err) = org_to_cell_map_clone.start(rx).await {
+                eprintln!("Failed to start locator: {err:?}. Exiting process.");
+                std::process::exit(1);
+            }
         });
 
         Locator {
@@ -182,21 +185,18 @@ impl OrgToCell {
     /// mappings at the configured interval or on demand when the Refresh
     /// command is received. The loop runs indefinitely until the Shutdown
     /// command is received.
-    pub async fn start(&self, mut rx: mpsc::Receiver<Command>) {
-        if let Ok(()) = self.load_snapshot().await {
-            self.ready.store(true, Ordering::Relaxed);
+    pub async fn start(&self, mut rx: mpsc::Receiver<Command>) -> Result<(), LoadError> {
+        self.load_snapshot().await?;
+        self.ready.store(true, Ordering::Relaxed);
 
-            // Once a snapshot is loaded, the worker periodically requests incremental results
-            // until the Shutdown command is received.
-            // If the Refresh command is received, the incremental load can be triggered ahead
-            // of schedule.
-            loop {
-                if let Some(cmd) = rx.recv().await {
-                    println!("Received command {cmd:?}");
-                }
+        // Once a snapshot is loaded, the worker periodically requests incremental results
+        // until the Shutdown command is received.
+        // If the Refresh command is received, the incremental load can be triggered before
+        // the next refresh interval
+        loop {
+            if let Some(cmd) = rx.recv().await {
+                println!("Received command {cmd:?}");
             }
-        } else {
-            // TODO: Properly handle failure to load initial snapshot
         }
     }
 

@@ -92,6 +92,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn proxy_config() {
         let proxy_yaml = r#"
             proxy:
@@ -105,6 +106,13 @@ mod tests {
                     port: 8081
                 locator:
                     type: in_process
+                    control_plane:
+                        url: control-plane.internal
+                    backup_route_store:
+                        type: filesystem
+                        base_dir: /var/lib/locator/
+                        filename: backup.bin
+
             "#;
         let tmp = write_tmp_file(proxy_yaml);
         let config = Config::from_file(tmp.path()).expect("load config");

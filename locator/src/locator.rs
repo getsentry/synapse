@@ -284,7 +284,6 @@ mod tests {
 
         // Run the control plane server
         let _server = TestControlPlaneServer::spawn(host, port).unwrap();
-        std::thread::sleep(Duration::from_millis(100));
 
         let (_dir, provider) = get_mock_provider();
 

@@ -1,5 +1,6 @@
 use crate::config;
 use crate::errors::ProxyError;
+use crate::headers::{add_via_header, filter_hop_by_hop};
 use crate::locator::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
@@ -135,15 +136,20 @@ where
 
                     parts.uri = new_uri;
 
+                    // Filter hop-by-hop headers and and add via header to request
+                    let request_version = parts.version;
+                    filter_hop_by_hop(&mut parts.headers, request_version);
+                    add_via_header(&mut parts.headers, request_version);
+
                     let outbound_request = Request::from_parts(parts, body);
 
-                    // TODO: handle headers properly
-                    // - rewrite host header
-                    // - strip hop-by-hop headers
-
                     match client.request(outbound_request).await {
-                        Ok(response) => {
-                            println!("response headers: {:?}", response.headers());
+                        Ok(mut response) => {
+                            // Filter hop-by-hop and add via to response from upstream
+                            let version = response.version();
+                            filter_hop_by_hop(response.headers_mut(), version);
+                            add_via_header(response.headers_mut(), version);
+
                             // Convert the response body to BoxBody
                             let (parts, body) = response.into_parts();
                             let boxed_body = body.map_err(|e| e).boxed();

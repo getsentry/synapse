@@ -8,9 +8,9 @@ use crate::negative_cache::NegativeCache;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::sync::{AcquireError, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
-use std::time::Duration;
 
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,

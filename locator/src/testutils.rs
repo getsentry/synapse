@@ -1,6 +1,6 @@
-use std::time::Duration;
-use std::process::{Child, Command};
 use std::net::TcpStream;
+use std::process::{Child, Command};
+use std::time::Duration;
 
 pub struct TestControlPlaneServer {
     child: Child,

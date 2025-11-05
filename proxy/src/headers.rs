@@ -52,10 +52,8 @@ pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
                 headers.insert(VIA, new_value);
             }
         }
-    } else {
-        if let Ok(new_value) = HeaderValue::from_str(&via_value) {
+    } else if let Ok(new_value) = HeaderValue::from_str(&via_value) {
             headers.insert(VIA, new_value);
-        }
     }
 }
 

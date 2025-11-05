@@ -2,6 +2,7 @@ use crate::errors::ProxyError;
 use crate::locator::Locator;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Resolvers {
     locator: Locator,
 }
@@ -14,17 +15,17 @@ impl Resolvers {
         Ok(Resolvers { locator })
     }
 
-    pub fn resolve<'a>(
+    pub async fn resolve<'a>(
         &self,
         resolver: &str,
         cell_to_upstream: &'a HashMap<String, String>,
-        params: HashMap<&'a str, &'a str>,
+        params: HashMap<String, String>,
     ) -> Result<&'a str, ProxyError> {
         // Resolve the upstream based on the resolver name and parameters
         // Return the upstream name or an error if resolution fails
         let cell = match resolver {
-            "cell_from_organization" => self.cell_from_organization(params),
-            "cell_from_id" => self.cell_from_id(params),
+            "cell_from_organization" => self.cell_from_organization(params).await,
+            "cell_from_id" => self.cell_from_id(params).await,
             _ => Err(ProxyError::InvalidResolver)?,
         }?;
         cell_to_upstream
@@ -33,19 +34,18 @@ impl Resolvers {
             .ok_or(ProxyError::ResolverError)
     }
 
-    fn cell_from_organization<'a>(
+    async fn cell_from_organization(
         &self,
-        params: HashMap<&'a str, &'a str>,
+        params: HashMap<String, String>,
     ) -> Result<String, ProxyError> {
         let org = params
             .get("organization")
-            .copied()
             .ok_or(ProxyError::ResolverError)?;
 
-        self.locator.lookup(org, None)
+        self.locator.lookup(org, None).await
     }
 
-    fn cell_from_id<'a>(&self, params: HashMap<&'a str, &'a str>) -> Result<String, ProxyError> {
+    async fn cell_from_id(&self, params: HashMap<String, String>) -> Result<String, ProxyError> {
         params
             .get("id")
             .ok_or(ProxyError::ResolverError)
@@ -101,33 +101,35 @@ mod tests {
 
         // Valid cell id
         let mut params = HashMap::new();
-        params.insert("id", "us1");
+        params.insert("id".to_string(), "us1".to_string());
         let result = resolvers
             .resolve("cell_from_id", &cell_to_upstream, params.clone())
+            .await
             .unwrap();
         assert_eq!(result, "upstream1");
 
         // Invalid cell id
         let mut invalid_params = HashMap::new();
-        invalid_params.insert("id", "us999");
+        invalid_params.insert("id".to_string(), "us999".to_string());
 
         let result = resolvers.resolve("cell_from_id", &cell_to_upstream, invalid_params);
 
-        assert!(result.is_err());
+        assert!(result.await.is_err());
 
         // valid org
         let mut org_params = HashMap::new();
-        org_params.insert("organization", "org_0");
+        org_params.insert("organization".to_string(), "org_0".to_string());
 
         let result = resolvers
             .resolve("cell_from_organization", &cell_to_upstream, org_params)
+            .await
             .unwrap();
 
         assert_eq!(result, "upstream1");
 
         // invalid org
         let mut invalid_org_params = HashMap::new();
-        invalid_org_params.insert("organization", "org_999");
+        invalid_org_params.insert("organization".to_string(), "org_999".to_string());
 
         let result = resolvers.resolve(
             "cell_from_organization",
@@ -135,6 +137,6 @@ mod tests {
             invalid_org_params,
         );
 
-        assert!(result.is_err());
+        assert!(result.await.is_err());
     }
 }

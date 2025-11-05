@@ -2,7 +2,7 @@ use crate::config;
 use crate::errors::ProxyError;
 use crate::locator::Locator;
 use crate::resolvers::Resolvers;
-use crate::route_actions::RouteActions;
+use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
@@ -14,6 +14,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 pub struct ProxyService<B>
 where
@@ -21,10 +22,9 @@ where
     B::Error: std::error::Error + Send + Sync + 'static,
     B: Unpin,
 {
-    #[allow(dead_code)]
     client: Client<HttpConnector, B>,
     pub route_actions: RouteActions,
-    upstreams: Upstreams,
+    upstreams: Arc<Upstreams>,
     resolvers: Resolvers,
 }
 
@@ -46,7 +46,7 @@ where
 
         let route_actions = RouteActions::try_new(route_config)?;
 
-        let upstreams = Upstreams::try_new(upstream_config)?;
+        let upstreams = Arc::new(Upstreams::try_new(upstream_config)?);
 
         let resolvers = Resolvers::try_new(locator)?;
 
@@ -86,54 +86,61 @@ where
 
         println!("Resolved route: {route:?}");
 
-        let upstream_name = route.and_then(|r| match r.action {
-            config::Action::Static { to } => Some(to.as_str()),
-            config::Action::Dynamic {
-                resolver,
-                cell_to_upstream,
-                default,
-                ..
-            } => self
-                .resolvers
-                .resolve(resolver, cell_to_upstream, r.params)
-                .ok()
-                .or(default.as_deref()),
-        });
+        let upstreams = self.upstreams.clone();
+        let resolvers = self.resolvers.clone();
+        let client = self.client.clone();
 
-        let upstream = upstream_name.and_then(|u| self.upstreams.get(u));
+        Box::pin(async move {
+            let upstream_name: Option<String> = match route {
+                Some(RouteMatch { action, params }) => match action {
+                    config::Action::Static { to } => Some(to),
+                    config::Action::Dynamic {
+                        resolver,
+                        cell_to_upstream,
+                        default,
+                        ..
+                    } => resolvers
+                        .resolve(&resolver, &cell_to_upstream, params)
+                        .await
+                        .ok()
+                        .map(|s| s.to_string())
+                        .or(default),
+                },
+                None => None,
+            };
 
-        println!("Resolved upstream: {upstream:?}");
+            let upstream = upstream_name.as_deref().and_then(|u| upstreams.get(u));
 
-        match upstream {
-            Some(u) => {
-                // Build target URI: keep path+query, swap scheme+authority to upstream_base
-                let (mut parts, body) = request.into_parts();
+            println!("Resolved upstream: {:?}", upstream);
 
-                // Compose new URI: {scheme}://{authority}{path_and_query}
-                let path_and_query = parts
-                    .uri
-                    .path_and_query()
-                    .map(|pq| pq.as_str())
-                    .unwrap_or("/");
+            match upstream {
+                Some(u) => {
+                    // Build target URI: keep path+query, swap scheme+authority to upstream_base
+                    let (mut parts, body) = request.into_parts();
 
-                let new_uri = http::Uri::builder()
-                    .scheme(u.scheme.clone())
-                    .authority(u.authority.clone())
-                    .path_and_query(path_and_query)
-                    .build()
-                    .unwrap();
+                    // Compose new URI: {scheme}://{authority}{path_and_query}
+                    let path_and_query = parts
+                        .uri
+                        .path_and_query()
+                        .map(|pq| pq.as_str())
+                        .unwrap_or("/");
 
-                parts.uri = new_uri;
+                    // TODO: actually handle error, don't unwrap
+                    let new_uri = http::Uri::builder()
+                        .scheme(u.scheme.clone())
+                        .authority(u.authority.clone())
+                        .path_and_query(path_and_query)
+                        .build()
+                        .unwrap();
 
-                let outbound_request = Request::from_parts(parts, body);
+                    parts.uri = new_uri;
 
-                let client = self.client.clone();
+                    let outbound_request = Request::from_parts(parts, body);
 
-                // TODO: handle headers properly
-                // - rewrite host header
-                // - strip hop-by-hop headers
+                    // TODO: handle headers properly
+                    // - rewrite host header
+                    // - strip hop-by-hop headers
 
-                Box::pin(async move {
                     match client.request(outbound_request).await {
                         Ok(response) => {
                             println!("response headers: {:?}", response.headers());
@@ -147,13 +154,13 @@ where
                             Ok(Self::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
-                })
+                }
+                None => {
+                    // No upstream found, return 404
+                    Ok(Self::make_error_response(StatusCode::NOT_FOUND))
+                }
             }
-            None => {
-                // No upstream found, return 404
-                Box::pin(async move { Ok(Self::make_error_response(StatusCode::NOT_FOUND)) })
-            }
-        }
+        })
     }
 }
 

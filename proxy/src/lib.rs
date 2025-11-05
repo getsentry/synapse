@@ -14,11 +14,12 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto::Builder;
 use service::ServiceType;
+use shared::metrics::Metrics;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub async fn run(config: config::Config) -> Result<(), ProxyError> {
-    let locator = Locator::new_from_config(config.locator.clone());
+pub async fn run(config: config::Config, metrics: Metrics) -> Result<(), ProxyError> {
+    let locator = Locator::new_from_config(config.locator.clone(), metrics);
 
     let proxy_task = run_task(
         &config.listener.host,

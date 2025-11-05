@@ -2,12 +2,13 @@ use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
 use locator::get_provider;
 use locator::locator::Locator as LocatorService;
+use shared::metrics::Metrics;
 
 #[derive(Clone)]
 pub struct Locator(LocatorInner);
 
 impl Locator {
-    pub fn new_from_config(config: LocatorConfig) -> Self {
+    pub fn new_from_config(config: LocatorConfig, metrics: Metrics) -> Self {
         match config.r#type {
             LocatorType::InProcess {
                 control_plane,
@@ -19,6 +20,7 @@ impl Locator {
                     control_plane.url,
                     provider,
                     locality_to_default_cell,
+                    metrics,
                 )))
             }
             LocatorType::Url { .. } => Locator(LocatorInner::Url(Url {})),
@@ -58,6 +60,7 @@ impl Locator {
             control_plane_url,
             backup_provider,
             locality_to_default_cell,
+            Metrics::new_noop(),
         )))
     }
 }

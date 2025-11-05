@@ -9,6 +9,7 @@ locator = { path = "../locator" }
 proxy = { path = "../proxy" }
 serde = { workspace = true }
 serde_yaml = "0.9.34"
+shared = { path = "../shared" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 

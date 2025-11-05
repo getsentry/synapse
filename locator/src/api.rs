@@ -9,6 +9,7 @@ use axum::{
     routing::get,
 };
 use serde::{Deserialize, Serialize};
+use shared::metrics::Metrics;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -24,8 +25,14 @@ pub async fn serve(
     control_plane: ControlPlaneConfig,
     provider: Arc<dyn BackupRouteProvider + 'static>,
     locality_to_default_cell: Option<HashMap<String, String>>,
+    metrics: Metrics,
 ) -> Result<(), LocatorApiError> {
-    let locator = Locator::new(control_plane.url, provider, locality_to_default_cell);
+    let locator = Locator::new(
+        control_plane.url,
+        provider,
+        locality_to_default_cell,
+        metrics,
+    );
     let app = Router::new().route("/", get(handler)).with_state(locator);
 
     let addr = format!("{}:{}", listener.host, listener.port);

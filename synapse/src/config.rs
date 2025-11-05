@@ -1,35 +1,35 @@
-#![allow(dead_code)]
-
 use locator::config::Config as LocatorConfig;
 use proxy::config::Config as ProxyConfig;
 use serde::Deserialize;
 use std::fs::File;
 
 #[derive(Debug, Deserialize)]
-struct MetricsConfig {
-    statsd_host: String,
-    statsd_port: u16,
+pub struct MetricsConfig {
+    pub statsd_host: String,
+    pub statsd_port: u16,
 }
 
 #[derive(Debug, Deserialize)]
 struct LoggingConfig {
+    #[allow(dead_code)]
     sentry_dsn: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct CommonConfig {
-    metrics: Option<MetricsConfig>,
+pub struct CommonConfig {
+    pub metrics: Option<MetricsConfig>,
+    #[allow(dead_code)]
     logging: Option<LoggingConfig>,
 }
 
 #[derive(Debug, Deserialize)]
-struct IngestRouterConfig {}
+pub struct IngestRouterConfig {}
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
-    common: CommonConfig,
-    ingest_router: Option<IngestRouterConfig>,
+    pub common: CommonConfig,
+    pub ingest_router: Option<IngestRouterConfig>,
     pub proxy: Option<ProxyConfig>,
     pub locator: Option<LocatorConfig>,
 }

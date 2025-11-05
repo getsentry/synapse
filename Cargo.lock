@@ -204,6 +204,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
+name = "cadence"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3075f133bee430b7644c54fb629b9b4420346ffa275a45c81a6babe8b09b4f51"
+dependencies = [
+ "crossbeam-channel",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -828,6 +837,7 @@ dependencies = [
  "parking_lot",
  "reqwest",
  "serde",
+ "shared",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1070,6 +1080,7 @@ dependencies = [
  "hyper-util",
  "locator",
  "serde",
+ "shared",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1339,6 +1350,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "cadence",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1413,6 +1431,7 @@ dependencies = [
  "proxy",
  "serde",
  "serde_yaml",
+ "shared",
  "tempfile",
  "thiserror",
  "tokio",

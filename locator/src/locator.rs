@@ -334,7 +334,9 @@ impl OrgToCell {
         write_guard.last_updated = snapshot_requested_time;
 
         // Store the backup if we successfully loaded from the control plane
-        if snapshot_requested_time.is_some() && let Err(e) = self.backup_routes.store(&write_guard.data) {
+        if snapshot_requested_time.is_some()
+            && let Err(e) = self.backup_routes.store(&write_guard.data)
+        {
             eprintln!("Warning: failed to store backup routes: {e:?}");
         }
 

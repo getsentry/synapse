@@ -326,26 +326,48 @@ impl OrgToCell {
                 self.backup_routes.load()
             })?;
 
-        let mut write_guard: parking_lot::lock_api::RwLockWriteGuard<
-            '_,
-            parking_lot::RawRwLock,
-            RouteDataWithTimestamp,
-        > = self.data.write();
+        let mut write_guard = self.data.write();
 
         write_guard.data.org_to_cell = route_data.org_to_cell;
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells = route_data.cells;
         write_guard.last_updated = snapshot_requested_time;
 
+        // Store the backup if we successfully loaded from the control plane
+        if snapshot_requested_time.is_some() {
+            if let Err(e) = self.backup_routes.store(&write_guard.data) {
+                eprintln!("Warning: failed to store backup routes: {e:?}");
+            }
+        }
+
         Ok(())
     }
 
     /// Load incremental updates from the control plane.
     async fn load_incremental(&self) -> Result<(), LoadError> {
+        let incremental_requested_time = Instant::now();
+
         // Hold permit for the duration of this function
         let _permit = self.get_permit().await?;
 
-        // TODO: Do incremental loading
+        // Get the current cursor from the stored data
+        let current_cursor = {
+            let read_guard = self.data.read();
+            read_guard.data.last_cursor.clone()
+        };
+
+        // Fetch incremental updates from the control plane using the current cursor
+        let route_data = self
+            .control_plane
+            .load_mappings(Some(&current_cursor))
+            .await?;
+
+        // Merge the incremental data with the existing data
+        let mut write_guard = self.data.write();
+        write_guard.data.org_to_cell.extend(route_data.org_to_cell);
+        write_guard.data.last_cursor = route_data.last_cursor;
+        write_guard.data.cells.extend(route_data.cells);
+        write_guard.last_updated = Some(incremental_requested_time);
 
         Ok(())
     }
@@ -363,7 +385,7 @@ mod tests {
     use crate::testutils::TestControlPlaneServer;
     use std::time::Duration;
 
-    fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
+    fn get_mock_provider() -> (tempfile::TempDir, Arc<FilesystemRouteProvider>) {
         let route_data = RouteData::from(
             HashMap::from([
                 ("org_0".into(), "us1".into()),
@@ -377,7 +399,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
         provider.store(&route_data).unwrap();
-        (dir, provider)
+        (dir, Arc::new(provider))
     }
 
     #[tokio::test]
@@ -393,7 +415,7 @@ mod tests {
 
         let locator = Locator::new(
             format!("http://{host}:{port}").to_string(),
-            Arc::new(provider),
+            provider.clone(),
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
@@ -413,6 +435,10 @@ mod tests {
             locator.lookup("org_0", Some("us")).await,
             Err(LocatorError::NoCell)
         );
+
+        // Org "0" should be written to the backup provider
+        let provider_data = provider.load().unwrap();
+        assert_eq!(provider_data.org_to_cell.get("0").unwrap(), "us1");
     }
 
     #[tokio::test]
@@ -423,7 +449,7 @@ mod tests {
 
         let locator = Locator::new(
             "http://invalid-control-plane:9000".to_string(),
-            Arc::new(provider),
+            provider,
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 

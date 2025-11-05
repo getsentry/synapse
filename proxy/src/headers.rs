@@ -2,7 +2,6 @@
 // They should be applied by the proxy in both directions: requests from clients to upstreams,
 // and responses coming back from upstreams to client.
 
-
 use http::Version;
 use http::header::{
     CONNECTION, HeaderMap, HeaderName, HeaderValue, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE,
@@ -53,7 +52,7 @@ pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
             }
         }
     } else if let Ok(new_value) = HeaderValue::from_str(&via_value) {
-            headers.insert(VIA, new_value);
+        headers.insert(VIA, new_value);
     }
 }
 
@@ -70,7 +69,9 @@ pub fn filter_hop_by_hop(headers: &mut HeaderMap, version: Version) -> &mut Head
 
     // Parse the Connection header to find additional headers to drop
     let mut extra_drops = Vec::new();
-    if let Some(connection) = headers.get(CONNECTION) && let Ok(s) = connection.to_str() {
+    if let Some(connection) = headers.get(CONNECTION)
+        && let Ok(s) = connection.to_str()
+    {
         for token in s.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
             if let Ok(name) = HeaderName::from_bytes(token.as_bytes()) {
                 extra_drops.push(name);

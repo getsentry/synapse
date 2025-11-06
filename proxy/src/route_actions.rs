@@ -1,6 +1,6 @@
 use crate::config::{Action, Route as RouteConfig};
 use crate::errors::ProxyError;
-use routing::RouteMatch;
+pub use routing::RouteMatch;
 
 impl TryFrom<RouteConfig> for routing::Route<Action> {
     type Error = ProxyError;

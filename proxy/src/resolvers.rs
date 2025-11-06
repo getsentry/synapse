@@ -2,6 +2,7 @@ use crate::errors::ProxyError;
 use crate::locator::Locator;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct Resolvers {
     locator: Locator,
 }
@@ -14,7 +15,7 @@ impl Resolvers {
         Ok(Resolvers { locator })
     }
 
-    pub fn resolve<'a>(
+    pub async fn resolve<'a>(
         &self,
         resolver: &str,
         cell_to_upstream: &'a HashMap<String, String>,
@@ -23,8 +24,8 @@ impl Resolvers {
         // Resolve the upstream based on the resolver name and parameters
         // Return the upstream name or an error if resolution fails
         let cell = match resolver {
-            "cell_from_organization" => self.cell_from_organization(params),
-            "cell_from_id" => self.cell_from_id(params),
+            "cell_from_organization" => self.cell_from_organization(params).await,
+            "cell_from_id" => self.cell_from_id(params).await,
             _ => Err(ProxyError::InvalidResolver)?,
         }?;
         cell_to_upstream
@@ -33,16 +34,18 @@ impl Resolvers {
             .ok_or(ProxyError::ResolverError)
     }
 
-    fn cell_from_organization(&self, params: HashMap<String, &str>) -> Result<String, ProxyError> {
+    async fn cell_from_organization(
+        &self,
+        params: HashMap<String, &str>,
+    ) -> Result<String, ProxyError> {
         let org = params
             .get("organization")
-            .copied()
             .ok_or(ProxyError::ResolverError)?;
 
-        self.locator.lookup(org, None)
+        self.locator.lookup(org, None).await
     }
 
-    fn cell_from_id(&self, params: HashMap<String, &str>) -> Result<String, ProxyError> {
+    async fn cell_from_id(&self, params: HashMap<String, &str>) -> Result<String, ProxyError> {
         params
             .get("id")
             .ok_or(ProxyError::ResolverError)
@@ -101,6 +104,7 @@ mod tests {
         params.insert("id".to_string(), "us1");
         let result = resolvers
             .resolve("cell_from_id", &cell_to_upstream, params.clone())
+            .await
             .unwrap();
         assert_eq!(result, "upstream1");
 
@@ -110,7 +114,7 @@ mod tests {
 
         let result = resolvers.resolve("cell_from_id", &cell_to_upstream, invalid_params);
 
-        assert!(result.is_err());
+        assert!(result.await.is_err());
 
         // valid org
         let mut org_params = HashMap::new();
@@ -118,6 +122,7 @@ mod tests {
 
         let result = resolvers
             .resolve("cell_from_organization", &cell_to_upstream, org_params)
+            .await
             .unwrap();
 
         assert_eq!(result, "upstream1");
@@ -132,6 +137,6 @@ mod tests {
             invalid_org_params,
         );
 
-        assert!(result.is_err());
+        assert!(result.await.is_err());
     }
 }

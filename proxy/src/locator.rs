@@ -25,9 +25,9 @@ impl Locator {
         }
     }
 
-    pub fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
+    pub async fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
         match &self.0 {
-            LocatorInner::InProcess(l) => Ok(l.lookup(org_id, locality)?),
+            LocatorInner::InProcess(l) => Ok(l.lookup(org_id, locality).await?),
             LocatorInner::Url(url) => url.lookup(org_id, locality),
         }
     }

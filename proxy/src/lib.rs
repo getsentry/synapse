@@ -32,10 +32,19 @@ pub async fn run(config: config::Config) -> Result<(), ProxyError> {
     let admin_task = run_task(
         &config.admin_listener.host,
         config.admin_listener.port,
-        ServiceType::Admin(Box::new(admin_service::AdminService::new(locator))),
+        ServiceType::Admin(Box::new(admin_service::AdminService::new(locator.clone()))),
     );
 
-    tokio::try_join!(proxy_task, admin_task)?;
+    tokio::select! {
+        result = async { tokio::try_join!(proxy_task, admin_task) } => {
+            result?;
+        }
+        _ = tokio::signal::ctrl_c() => {
+            println!("Shutting down proxy...");
+        }
+    }
+
+    locator.shutdown().await;
 
     Ok(())
 }

@@ -38,6 +38,13 @@ impl Locator {
             LocatorInner::Url(url) => url.is_ready(),
         }
     }
+
+    pub async fn shutdown(&self) {
+        match &self.0 {
+            LocatorInner::InProcess(l) => l.shutdown().await,
+            LocatorInner::Url(url) => url.shutdown(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -78,6 +85,10 @@ impl Url {
     }
 
     fn is_ready(&self) -> bool {
+        todo!();
+    }
+
+    fn shutdown(&self) {
         todo!();
     }
 }

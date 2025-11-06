@@ -9,13 +9,12 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::{AcquireError, mpsc, oneshot};
+use tokio::sync::{AcquireError, Mutex, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
-    #[allow(dead_code)]
-    handle: tokio::task::JoinHandle<()>,
+    handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 #[derive(Clone)]
@@ -53,7 +52,7 @@ impl Locator {
         Locator {
             inner: Arc::new(LocatorInner {
                 org_to_cell_map,
-                handle,
+                handle: Mutex::new(Some(handle)),
             }),
         }
     }
@@ -66,8 +65,21 @@ impl Locator {
         self.inner.org_to_cell_map.lookup(org_id, locality).await
     }
 
-    pub fn shutdown(&self) {
-        unimplemented!();
+    pub async fn shutdown(&self) {
+        // Send shutdown command to the worker thread to end the incremental loading loop
+        println!("shutting down locator");
+
+        if let Err(e) = self.inner.org_to_cell_map.tx.send(Command::Shutdown).await {
+            eprintln!("Failed to send shutdown command: {:?}", e);
+            return;
+        }
+
+        let Some(handle) = self.inner.handle.lock().await.take() else {
+            return;
+        };
+        if let Err(e) = handle.await {
+            eprintln!("Worker task panicked during shutdown: {:?}", e);
+        }
     }
 
     pub fn is_ready(&self) -> bool {

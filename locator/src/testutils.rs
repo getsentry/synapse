@@ -8,7 +8,7 @@ pub struct TestControlPlaneServer {
 
 impl TestControlPlaneServer {
     pub fn spawn(host: &str, port: u16) -> Result<Self, Box<dyn std::error::Error>> {
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{host}:{port}");
 
         let child = Command::new("python")
             .arg("../scripts/mock_control_api.py")

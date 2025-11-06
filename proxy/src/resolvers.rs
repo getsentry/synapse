@@ -18,7 +18,7 @@ impl Resolvers {
         &self,
         resolver: &str,
         cell_to_upstream: &'a HashMap<String, String>,
-        params: HashMap<&'a str, &'a str>,
+        params: HashMap<String, &'a str>,
     ) -> Result<&'a str, ProxyError> {
         // Resolve the upstream based on the resolver name and parameters
         // Return the upstream name or an error if resolution fails
@@ -33,10 +33,7 @@ impl Resolvers {
             .ok_or(ProxyError::ResolverError)
     }
 
-    fn cell_from_organization<'a>(
-        &self,
-        params: HashMap<&'a str, &'a str>,
-    ) -> Result<String, ProxyError> {
+    fn cell_from_organization(&self, params: HashMap<String, &str>) -> Result<String, ProxyError> {
         let org = params
             .get("organization")
             .copied()
@@ -45,7 +42,7 @@ impl Resolvers {
         self.locator.lookup(org, None)
     }
 
-    fn cell_from_id<'a>(&self, params: HashMap<&'a str, &'a str>) -> Result<String, ProxyError> {
+    fn cell_from_id(&self, params: HashMap<String, &str>) -> Result<String, ProxyError> {
         params
             .get("id")
             .ok_or(ProxyError::ResolverError)
@@ -101,7 +98,7 @@ mod tests {
 
         // Valid cell id
         let mut params = HashMap::new();
-        params.insert("id", "us1");
+        params.insert("id".to_string(), "us1");
         let result = resolvers
             .resolve("cell_from_id", &cell_to_upstream, params.clone())
             .unwrap();
@@ -109,7 +106,7 @@ mod tests {
 
         // Invalid cell id
         let mut invalid_params = HashMap::new();
-        invalid_params.insert("id", "us999");
+        invalid_params.insert("id".to_string(), "us999");
 
         let result = resolvers.resolve("cell_from_id", &cell_to_upstream, invalid_params);
 
@@ -117,7 +114,7 @@ mod tests {
 
         // valid org
         let mut org_params = HashMap::new();
-        org_params.insert("organization", "org_0");
+        org_params.insert("organization".to_string(), "org_0");
 
         let result = resolvers
             .resolve("cell_from_organization", &cell_to_upstream, org_params)
@@ -127,7 +124,7 @@ mod tests {
 
         // invalid org
         let mut invalid_org_params = HashMap::new();
-        invalid_org_params.insert("organization", "org_999");
+        invalid_org_params.insert("organization".to_string(), "org_999");
 
         let result = resolvers.resolve(
             "cell_from_organization",

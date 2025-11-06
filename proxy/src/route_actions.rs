@@ -1,182 +1,53 @@
 use crate::config::{Action, Route as RouteConfig};
 use crate::errors::ProxyError;
-use std::collections::HashMap;
+use routing::RouteMatch;
 
-#[derive(Debug)]
-enum PathSegment {
-    Static(String),
-    Param(String),
-}
-
-#[derive(Debug)]
-struct Path {
-    segments: Vec<PathSegment>,
-    has_trailing_splat: bool,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct RouteMatch<'a> {
-    pub params: HashMap<&'a str, &'a str>,
-    pub action: &'a Action,
-}
-
-#[derive(Debug)]
-struct Route {
-    host: Option<String>,
-    path: Option<Path>,
-    #[allow(dead_code)]
-    action: Action,
-}
-
-impl Route {
-    // Returns Some(RouteMatch) if the request matches this route, None otherwise.
-    // Trailing slash normalization is applied to incoming requests.
-    fn matches<'a>(
-        &'a self,
-        request_host: Option<&str>,
-        request_path: &'a str,
-    ) -> Option<RouteMatch<'a>> {
-        if self.host.is_some() && self.host.as_deref() != request_host {
-            return None;
-        }
-
-        let normalized_path = request_path.trim().trim_matches('/');
-
-        let request_segments: Vec<&str> = if normalized_path.is_empty() {
-            vec![]
-        } else {
-            normalized_path.split('/').collect()
-        };
-
-        let mut params = HashMap::new();
-        let mut i_req = 0;
-
-        match &self.path {
-            Some(path) => {
-                for seg in path.segments.iter() {
-                    match seg {
-                        PathSegment::Static(s) => {
-                            let req_segment = *request_segments.get(i_req)?;
-                            if req_segment != s {
-                                return None;
-                            }
-                            i_req += 1;
-                        }
-                        PathSegment::Param(name) => {
-                            let req_segment = *request_segments.get(i_req)?;
-                            params.insert(name.as_str(), req_segment);
-                            i_req += 1;
-                        }
-                    }
-                }
-
-                if path.has_trailing_splat || i_req == request_segments.len() {
-                    Some(RouteMatch {
-                        params,
-                        action: &self.action,
-                    })
-                } else {
-                    None
-                }
-            }
-            None => {
-                // If no path is defined in the route, it matches anything
-                Some(RouteMatch {
-                    params,
-                    action: &self.action,
-                })
-            }
-        }
-    }
-}
-
-impl TryFrom<RouteConfig> for Route {
+impl TryFrom<RouteConfig> for routing::Route<Action> {
     type Error = ProxyError;
     fn try_from(config: RouteConfig) -> Result<Self, Self::Error> {
         // TODO: Add route validation
-
-        let path = config.r#match.path.map(|path_str| {
-            // Trim slashes
-            let mut normalized_path = path_str.trim().trim_matches('/');
-
-            // Handle trailing splat
-            let mut has_trailing_splat = false;
-            if let Some(stripped) = normalized_path.strip_suffix("/*") {
-                has_trailing_splat = true;
-                normalized_path = stripped;
-            }
-
-            let segments: Vec<PathSegment> = if normalized_path.is_empty() {
-                vec![]
-            } else {
-                normalized_path
-                    .split('/')
-                    .map(|s| {
-                        if let Some(stripped) =
-                            s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
-                        {
-                            PathSegment::Param(stripped.to_string())
-                        } else {
-                            PathSegment::Static(s.to_string())
-                        }
-                    })
-                    .collect()
-            };
-            Path {
-                segments,
-                has_trailing_splat,
-            }
-        });
-
-        Ok(Self {
-            host: config.r#match.host,
-            path,
-            action: config.action,
-        })
+        Ok(routing::Route::new(
+            config.r#match.host,
+            config.r#match.path,
+            config.action,
+        ))
     }
 }
 
 pub struct RouteActions {
-    routes: Vec<Route>,
+    inner: routing::RouteActions<Action>,
 }
 
 impl RouteActions {
     pub fn try_new(route_config: Vec<RouteConfig>) -> Result<Self, ProxyError> {
-        let routes: Vec<Route> = route_config
+        let routes: Vec<routing::Route<Action>> = route_config
             .into_iter()
-            .map(Route::try_from)
+            .map(routing::Route::try_from)
             .collect::<Result<_, _>>()?;
 
-        Ok(Self { routes })
+        Ok(Self {
+            inner: routing::RouteActions::new(routes),
+        })
     }
+
     /// Matches the incoming request to a route, and returns the first matched route if any.
     /// If no matches are found, return none.
-    pub fn resolve<'a, B>(&'a self, request: &'a http::Request<B>) -> Option<RouteMatch<'a>> {
+    pub fn resolve<'a, B>(
+        &'a self,
+        request: &'a http::Request<B>,
+    ) -> Option<RouteMatch<'a, Action>> {
         println!("Resolving route for request URI: {:?}", request.uri());
+        println!("Request path: {}", request.uri().path());
+        println!("Request query: {:?}", request.uri().query());
 
-        // Host may come from authority part of URI (if absolute-form request)
-        // or from the Host header (most common in HTTP/1.1).
-        let host = request
-            .uri()
-            .host()
-            .or_else(|| request.headers().get("host").and_then(|h| h.to_str().ok()));
-
-        let path = request.uri().path();
-        let query = request.uri().query();
-
-        println!("Request path: {path}");
-        println!("Request query: {query:?}");
-
-        // Return the first matching route, if any
-        self.routes
-            .iter()
-            .find_map(|route| route.matches(host, path))
+        self.inner.resolve(request)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_host_only() {
@@ -190,7 +61,7 @@ mod tests {
             },
         };
 
-        let route = Route::try_from(config).unwrap();
+        let route = routing::Route::try_from(config).unwrap();
         assert!(route.matches(Some("sentry.io"), "/").is_some());
         assert!(route.matches(Some("other.com"), "/").is_none());
         assert!(route.matches(None, "/").is_none());
@@ -208,7 +79,7 @@ mod tests {
             },
         };
 
-        let route = Route::try_from(config).unwrap();
+        let route = routing::Route::try_from(config).unwrap();
         assert!(route.matches(None, "/api/test").is_some(), "exact path");
         assert!(
             route.matches(None, "/api/test/").is_some(),
@@ -236,7 +107,7 @@ mod tests {
             },
         };
 
-        let route = Route::try_from(config).unwrap();
+        let route = routing::Route::try_from(config).unwrap();
         assert!(route.matches(None, "/api/test").is_some(), "exact path");
         assert!(
             route.matches(None, "/api/test/extra").is_some(),
@@ -263,12 +134,12 @@ mod tests {
             },
         };
 
-        let route = Route::try_from(config.clone()).unwrap();
+        let route = routing::Route::try_from(config.clone()).unwrap();
 
         assert_eq!(
             route.matches(None, "/api/users/123"),
             Some(RouteMatch {
-                params: HashMap::from([("user_id", "123")]),
+                params: HashMap::from([("user_id".to_string(), "123")]),
                 action: &config.action,
             })
         );

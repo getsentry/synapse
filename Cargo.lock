@@ -1020,6 +1020,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "locator",
+ "routing",
  "serde",
  "tempfile",
  "thiserror",
@@ -1103,6 +1104,13 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "routing"
+version = "0.1.0"
+dependencies = [
+ "http",
 ]
 
 [[package]]

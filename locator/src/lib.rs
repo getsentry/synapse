@@ -5,7 +5,6 @@ mod control_plane;
 pub mod locator;
 mod negative_cache;
 pub mod types;
-use shared::metrics::Metrics;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -17,7 +16,7 @@ use backup_routes::{
 use config::BackupRouteStoreType;
 
 /// Run the locator API in standalone mode.
-pub async fn run(config: config::Config, metrics: Metrics) -> Result<(), api::LocatorApiError> {
+pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
     let provider: Arc<dyn BackupRouteProvider + 'static> =
         get_provider(config.backup_route_store.r#type);
 
@@ -26,7 +25,6 @@ pub async fn run(config: config::Config, metrics: Metrics) -> Result<(), api::Lo
         config.control_plane,
         provider,
         config.locality_to_default_cell,
-        metrics,
     )
     .await
 }

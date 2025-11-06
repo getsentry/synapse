@@ -6,7 +6,6 @@ use std::time::Instant;
 use crate::backup_routes::{BackupError, BackupRouteProvider};
 use crate::negative_cache::NegativeCache;
 use parking_lot::RwLock;
-use shared::metrics::Metrics;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -29,7 +28,6 @@ impl Locator {
         control_plane_url: String,
         backup_provider: Arc<dyn BackupRouteProvider + 'static>,
         locality_to_default_cell: Option<HashMap<String, String>>,
-        metrics: Metrics,
     ) -> Self {
         // Channel to send commands to the worker thread.
         let (tx, rx) = mpsc::channel::<Command>(64);
@@ -41,7 +39,6 @@ impl Locator {
             tx.clone(),
             Duration::from_secs(60),
             Duration::from_secs(1),
-            metrics,
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
@@ -148,7 +145,6 @@ impl OrgToCell {
         tx: mpsc::Sender<Command>,
         refresh_interval: std::time::Duration,
         min_refresh_interval: std::time::Duration,
-        metrics: Metrics,
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
@@ -163,7 +159,7 @@ impl OrgToCell {
             control_plane: ControlPlane::new(control_plane_url),
             locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
             data: RwLock::new(data),
-            negative_cache: NegativeCache::new(metrics),
+            negative_cache: NegativeCache::new(),
             update_lock: Semaphore::new(1),
             ready: AtomicBool::new(false),
             backup_routes,
@@ -399,7 +395,6 @@ mod tests {
             format!("http://{host}:{port}").to_string(),
             Arc::new(provider),
             Some(HashMap::from([("de".into(), "de".into())])),
-            Metrics::new_noop(),
         );
 
         assert_eq!(
@@ -430,7 +425,6 @@ mod tests {
             "http://invalid-control-plane:9000".to_string(),
             Arc::new(provider),
             Some(HashMap::from([("de".into(), "de".into())])),
-            Metrics::new_noop(),
         );
 
         assert_eq!(

@@ -193,7 +193,6 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_service() {
         use hyper::service::Service as HyperService;
-        use shared::metrics::Metrics;
         use std::time::Duration;
 
         // Start the test echo server
@@ -248,7 +247,7 @@ mod tests {
             },
         };
 
-        let locator = Locator::new_from_config(config.locator.clone(), Metrics::new_noop());
+        let locator = Locator::new_from_config(config.locator.clone());
 
         let service = ProxyService::try_new(locator, config.routes, config.upstreams)
             .expect("Failed to create proxy service");

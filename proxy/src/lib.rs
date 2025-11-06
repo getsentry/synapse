@@ -1,6 +1,7 @@
 mod admin_service;
 pub mod config;
 mod errors;
+mod headers;
 mod locator;
 mod proxy_service;
 mod resolvers;

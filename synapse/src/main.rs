@@ -18,7 +18,7 @@ enum CliError {
     #[error("Failed to load config file: {0}")]
     ConfigLoadError(#[from] config::ConfigError),
     #[error("Invalid config: {0}")]
-    InvalidConfig(String),
+    InvalidConfig(&'static str),
 }
 
 fn main() {
@@ -34,9 +34,9 @@ fn cli() -> Result<(), CliError> {
     match &cmd {
         CliCommand::Locator(locator_args) => {
             let config = Config::from_file(&locator_args.base.config_file_path)?;
-            let locator_config = config.locator.ok_or(CliError::InvalidConfig(
-                "Missing locator config".to_string(),
-            ))?;
+            let locator_config = config
+                .locator
+                .ok_or(CliError::InvalidConfig("Missing locator config"))?;
 
             let metrics = metrics_from_config(config.common.metrics, "synapse.locator");
 
@@ -47,7 +47,7 @@ fn cli() -> Result<(), CliError> {
             let config = Config::from_file(&proxy_args.base.config_file_path)?;
             let proxy_config = config
                 .proxy
-                .ok_or(CliError::InvalidConfig("Missing proxy config".to_string()))?;
+                .ok_or(CliError::InvalidConfig("Missing proxy config"))?;
 
             let metrics = metrics_from_config(config.common.metrics, "synapse.proxy");
             run_async(proxy::run(proxy_config, metrics));
@@ -56,9 +56,9 @@ fn cli() -> Result<(), CliError> {
         CliCommand::IngestRouter(ingest_router_args) => {
             let config = Config::from_file(&ingest_router_args.base.config_file_path)?;
 
-            let ingest_router_config = config.ingest_router.ok_or(CliError::InvalidConfig(
-                "Missing ingest-router config".to_string(),
-            ))?;
+            let ingest_router_config = config
+                .ingest_router
+                .ok_or(CliError::InvalidConfig("Missing ingest-router config"))?;
             let _metrics = metrics_from_config(config.common.metrics, "synapse.ingest-router");
 
             println!("Starting ingest-router with config {ingest_router_config:#?}");

@@ -5,9 +5,10 @@ use crate::locator::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
+use crate::utils;
 use bytes::Bytes;
+use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Full};
 use hyper::service::Service as HyperService;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
@@ -57,17 +58,6 @@ where
             upstreams,
             resolvers,
         })
-    }
-
-    fn make_error_response(status_code: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> {
-        let message = status_code
-            .canonical_reason()
-            .unwrap_or("an error occurred");
-
-        Response::builder()
-            .status(status_code)
-            .body(Full::new(message.into()).map_err(|e| match e {}).boxed())
-            .unwrap()
     }
 }
 
@@ -120,19 +110,28 @@ where
                     let (mut parts, body) = request.into_parts();
 
                     // Compose new URI: {scheme}://{authority}{path_and_query}
-                    let path_and_query = parts
-                        .uri
-                        .path_and_query()
-                        .map(|pq| pq.as_str())
-                        .unwrap_or("/");
+                    let path_and_query = match parts.uri.path_and_query() {
+                        Some(pq) => pq.as_str(),
+                        None => {
+                            eprintln!("Request URI missing path and query");
+                            return Ok(utils::make_error_response(StatusCode::BAD_REQUEST));
+                        }
+                    };
 
-                    // TODO: actually handle error, don't unwrap
-                    let new_uri = http::Uri::builder()
+                    let new_uri = match http::Uri::builder()
                         .scheme(u.scheme.clone())
                         .authority(u.authority.clone())
                         .path_and_query(path_and_query)
                         .build()
-                        .unwrap();
+                    {
+                        Ok(uri) => uri,
+                        Err(e) => {
+                            eprintln!("Failed to build target URI: {e}");
+                            return Ok(utils::make_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            ));
+                        }
+                    };
 
                     parts.uri = new_uri;
 
@@ -157,13 +156,13 @@ where
                         }
                         Err(e) => {
                             eprintln!("Upstream request failed: {e}");
-                            Ok(Self::make_error_response(StatusCode::BAD_GATEWAY))
+                            Ok(utils::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
                 }
                 None => {
                     // No upstream found, return 404
-                    Ok(Self::make_error_response(StatusCode::NOT_FOUND))
+                    Ok(utils::make_error_response(StatusCode::NOT_FOUND))
                 }
             }
         })
@@ -173,6 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http_body_util::Full;
     use std::process::{Child, Command};
 
     struct TestServer {

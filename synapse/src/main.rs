@@ -18,6 +18,8 @@ enum CliError {
     ConfigLoadError(#[from] config::ConfigError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
+    #[error("Failed to create runtime: {0}")]
+    RuntimeError(#[from] std::io::Error),
 }
 
 fn main() {
@@ -36,7 +38,7 @@ fn cli() -> Result<(), CliError> {
             let locator_config = config.locator.ok_or(CliError::InvalidConfig(
                 "Missing locator config".to_string(),
             ))?;
-            run_async(locator::run(locator_config));
+            run_async(locator::run(locator_config))?;
             Ok(())
         }
         CliCommand::Proxy(proxy_args) => {
@@ -44,7 +46,7 @@ fn cli() -> Result<(), CliError> {
                 .expect("Failed to load config file")
                 .proxy
                 .expect("Proxy config missing");
-            run_async(proxy::run(config));
+            run_async(proxy::run(config))?;
             Ok(())
         }
         CliCommand::IngestRouter => {
@@ -54,15 +56,17 @@ fn cli() -> Result<(), CliError> {
     }
 }
 
-pub fn run_async(fut: impl Future<Output = Result<(), impl std::error::Error>>) {
+fn run_async(
+    fut: impl Future<Output = Result<(), impl std::error::Error>>,
+) -> Result<(), CliError> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .build()
-        .unwrap();
+        .build()?;
     if let Err(e) = rt.block_on(fut) {
         eprintln!("Error: {e}");
         process::exit(1);
     }
+    Ok(())
 }
 
 #[derive(Args, Debug, Clone)]

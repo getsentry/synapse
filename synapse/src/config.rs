@@ -21,7 +21,6 @@ pub struct CommonConfig {
     pub logging: Option<LoggingConfig>,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]

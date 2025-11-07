@@ -45,7 +45,7 @@ impl Locator {
         let org_to_cell_map_clone = org_to_cell_map.clone();
         let handle = tokio::spawn(async move {
             if let Err(err) = org_to_cell_map_clone.start(rx).await {
-                eprintln!("Failed to start locator: {err:?}. Exiting process.");
+                tracing::error!("Failed to start locator: {err:?}. Exiting process.");
                 std::process::exit(1);
             }
         });
@@ -204,7 +204,7 @@ impl OrgToCell {
                 match self.tx.try_send(Command::Refresh(start_lookup, ack_tx)) {
                     Ok(()) => {
                         if let Err(err) = ack_rx.await {
-                            eprintln!("recv error: {:?}", err);
+                            tracing::warn!("recv error: {:?}", err);
                         }
 
                         // Re-acquire the read lock
@@ -224,7 +224,7 @@ impl OrgToCell {
                     }
                     Err(e) => {
                         // channel is closed or full
-                        eprintln!("channel error: {:?}", e);
+                        tracing::warn!("channel error: {:?}", e);
                         None
                     }
                 }
@@ -316,7 +316,7 @@ impl OrgToCell {
             .load_mappings(None)
             .await
             .or_else(|err| {
-                eprintln!(
+                tracing::warn!(
                     "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
 
@@ -337,7 +337,7 @@ impl OrgToCell {
         if snapshot_requested_time.is_some()
             && let Err(e) = self.backup_routes.store(&write_guard.data)
         {
-            eprintln!("Warning: failed to store backup routes: {e:?}");
+            tracing::error!("Failed to store backup routes: {e:?}");
         }
 
         Ok(())

@@ -34,7 +34,7 @@ pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
         Version::HTTP_2 => "2",
         Version::HTTP_3 => "3",
         _ => {
-            eprintln!(
+            tracing::warn!(
                 "Unknown/future HTTP version, skipping Via header: {:?}",
                 version
             );

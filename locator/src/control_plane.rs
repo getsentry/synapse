@@ -120,7 +120,7 @@ impl ControlPlane {
             }
         }
 
-        println!("Fetched {page_fetches} pages from control plane");
+        tracing::info!("Fetched {page_fetches} pages from control plane");
 
         let cursor = next_cursor.ok_or(ControlPlaneError::MissingCursor)?;
         let data = RouteData::from(org_to_cell, cursor, cell_to_locality);

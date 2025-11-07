@@ -75,7 +75,7 @@ where
     fn call(&self, request: Request<B>) -> Self::Future {
         let route = self.route_actions.resolve(&request);
 
-        println!("Resolved route: {route:?}");
+        tracing::debug!("Resolved route: {route:?}");
 
         let upstreams = self.upstreams.clone();
         let resolvers = self.resolvers.clone();
@@ -102,7 +102,7 @@ where
 
             let upstream = upstream_name.as_deref().and_then(|u| upstreams.get(u));
 
-            println!("Resolved upstream: {:?}", upstream);
+            tracing::debug!("Resolved upstream: {:?}", upstream);
 
             match upstream {
                 Some(u) => {
@@ -113,7 +113,7 @@ where
                     let path_and_query = match parts.uri.path_and_query() {
                         Some(pq) => pq.as_str(),
                         None => {
-                            eprintln!("Request URI missing path and query");
+                            tracing::warn!("Request URI missing path and query");
                             return Ok(utils::make_error_response(StatusCode::BAD_REQUEST));
                         }
                     };
@@ -126,7 +126,7 @@ where
                     {
                         Ok(uri) => uri,
                         Err(e) => {
-                            eprintln!("Failed to build target URI: {e}");
+                            tracing::error!("Failed to build target URI: {e}");
                             return Ok(utils::make_error_response(
                                 StatusCode::INTERNAL_SERVER_ERROR,
                             ));
@@ -155,7 +155,7 @@ where
                             Ok(Response::from_parts(parts, boxed_body))
                         }
                         Err(e) => {
-                            eprintln!("Upstream request failed: {e}");
+                            tracing::error!("Upstream request failed: {e}");
                             Ok(utils::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
@@ -271,7 +271,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get("x-custom").unwrap(), "test");
         assert_eq!(response.headers().get("host").unwrap(), "127.0.0.1:9000");
-        println!("response headers: {:?}", response.headers());
+        tracing::debug!("response headers: {:?}", response.headers());
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body_bytes.as_ref(), content);
 

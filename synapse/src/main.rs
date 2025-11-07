@@ -4,7 +4,10 @@ use std::path::PathBuf;
 mod config;
 use config::{Config, MetricsConfig};
 use metrics_exporter_statsd::StatsdBuilder;
+use std::future::Future;
 use std::process;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Parser)]
 enum CliCommand {
@@ -24,8 +27,10 @@ enum CliError {
 }
 
 fn main() {
+    init_tracing();
+
     if let Err(e) = cli() {
-        eprintln!("Error: {e}");
+        tracing::error!(error = %e, "Startup error");
         std::process::exit(1);
     }
 }
@@ -68,7 +73,7 @@ fn cli() -> Result<(), CliError> {
                 .ingest_router
                 .ok_or(CliError::InvalidConfig("Missing ingest-router config"))?;
 
-            println!("Starting ingest-router with config {ingest_router_config:#?}");
+            tracing::info!("Starting ingest-router with config {ingest_router_config:#?}");
 
             Ok(())
         }
@@ -96,13 +101,27 @@ fn run_async(
         .enable_all()
         .build()?;
     if let Err(e) = rt.block_on(fut) {
-        eprintln!("Error: {e}");
+        tracing::error!(error = %e, "Runtime error");
         process::exit(1);
     }
     Ok(())
 }
 
+fn init_tracing() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with(sentry::integrations::tracing::layer())
+        .init();
+}
+
 fn init_sentry(logging_config: Option<config::LoggingConfig>) -> Option<sentry::ClientInitGuard> {
+    // Initialize Sentry client if configured
+    // The Sentry tracing layer (already initialized in main) will automatically
+    // start sending events to Sentry once this client is initialized
     logging_config.map(|cfg| {
         sentry::init((
             cfg.sentry_dsn,

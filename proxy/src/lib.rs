@@ -8,6 +8,7 @@ mod resolvers;
 mod route_actions;
 mod service;
 mod upstreams;
+mod utils;
 
 use crate::errors::ProxyError;
 use crate::locator::Locator;

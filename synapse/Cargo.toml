@@ -5,8 +5,10 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
+ingest-router = { path = "../ingest-router" }
 locator = { path = "../locator" }
 proxy = { path = "../proxy" }
+sentry = { workspace = true }
 serde = { workspace = true }
 serde_yaml = "0.9.34"
 metrics = { workspace = true }

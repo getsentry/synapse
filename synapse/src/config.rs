@@ -1,3 +1,4 @@
+use ingest_router::config::Config as IngestRouterConfig;
 use locator::config::Config as LocatorConfig;
 use proxy::config::Config as ProxyConfig;
 use serde::Deserialize;
@@ -10,20 +11,16 @@ pub struct MetricsConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct LoggingConfig {
-    #[allow(dead_code)]
-    sentry_dsn: String,
+pub struct LoggingConfig {
+    pub sentry_dsn: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CommonConfig {
     pub metrics: Option<MetricsConfig>,
-    #[allow(dead_code)]
-    logging: Option<LoggingConfig>,
+    pub logging: Option<LoggingConfig>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct IngestRouterConfig {}
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -57,6 +54,7 @@ mod tests {
     use locator::config::BackupRouteStoreType;
     use proxy::config::Listener;
     use std::io::Write;
+    use std::path::Path;
 
     fn write_tmp_file(s: &str) -> tempfile::NamedTempFile {
         let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
@@ -134,5 +132,21 @@ mod tests {
                 action: proxy::config::Action::Static { to: "local".into() }
             }]
         );
+    }
+
+    #[test]
+    fn test_parse_example_config_file() {
+        let path = Path::new("../example_config_ingest_router.yaml");
+        let config = Config::from_file(path).expect("load config");
+        let ingest_router_config = config.ingest_router.expect("ingest router config");
+
+        ingest_router_config
+            .validate()
+            .expect("Example config validation failed");
+
+        assert_eq!(ingest_router_config.listener.port, 3000);
+        assert_eq!(ingest_router_config.admin_listener.port, 3001);
+        assert!(!ingest_router_config.upstreams.is_empty());
+        assert!(!ingest_router_config.routes.is_empty());
     }
 }

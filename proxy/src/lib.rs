@@ -1,12 +1,14 @@
 mod admin_service;
 pub mod config;
 mod errors;
+mod headers;
 mod locator;
 mod proxy_service;
 mod resolvers;
 mod route_actions;
 mod service;
 mod upstreams;
+mod utils;
 
 use crate::errors::ProxyError;
 use crate::locator::Locator;

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 axum = "0.8.4"
 bincode = { version = "2.0.1", features = ["std", "serde"] }
+metrics = { workspace = true }
 moka = { version = "0.12.11", features = ["sync"] }
 parking_lot = "0.12.4"
 serde = { workspace = true }

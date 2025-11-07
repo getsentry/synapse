@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use ingest_router::config::Config as IngestRouterConfig;
 use locator::config::Config as LocatorConfig;
 use proxy::config::Config as ProxyConfig;
@@ -7,9 +5,9 @@ use serde::Deserialize;
 use std::fs::File;
 
 #[derive(Debug, Deserialize)]
-struct MetricsConfig {
-    statsd_host: String,
-    statsd_port: u16,
+pub struct MetricsConfig {
+    pub statsd_host: String,
+    pub statsd_port: u16,
 }
 
 #[derive(Debug, Deserialize)]
@@ -19,7 +17,7 @@ pub struct LoggingConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct CommonConfig {
-    metrics: Option<MetricsConfig>,
+    pub metrics: Option<MetricsConfig>,
     pub logging: Option<LoggingConfig>,
 }
 

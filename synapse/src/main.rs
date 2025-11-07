@@ -51,7 +51,7 @@ fn cli() -> Result<(), CliError> {
                 .proxy
                 .ok_or(CliError::InvalidConfig("Missing proxy config".to_string()))?;
 
-            run_async(proxy::run(proxy_config));
+            run_async(proxy::run(proxy_config))?;
             Ok(())
         }
         CliCommand::IngestRouter(ingest_router_args) => {

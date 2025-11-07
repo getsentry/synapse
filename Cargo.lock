@@ -2057,6 +2057,7 @@ name = "synapse"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "ingest-router",
  "locator",
  "proxy",
  "sentry",

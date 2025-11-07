@@ -38,23 +38,9 @@ pub enum ResolverType {
     RelayMergeProjectConfigs,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Config {
-    pub ingest_router: IngestRouterConfig,
-    pub logging: LoggingConfig,
-    pub metrics: MetricsConfig,
-}
-
-impl Config {
-    /// Validates the entire configuration
-    pub fn validate(&self) -> Result<(), ValidationError> {
-        self.ingest_router.validate()
-    }
-}
-
 /// Proxy configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct IngestRouterConfig {
+pub struct Config {
     /// Main listener for incoming requests
     pub listener: Listener,
     /// Admin listener for administrative endpoints
@@ -71,7 +57,7 @@ pub struct IngestRouterConfig {
     pub routes: Vec<Route>,
 }
 
-impl IngestRouterConfig {
+impl Config {
     /// Validates the proxy configuration
     pub fn validate(&self) -> Result<(), ValidationError> {
         // Validate listeners
@@ -179,22 +165,6 @@ impl Action {
     }
 }
 
-/// Logging configuration
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct LoggingConfig {
-    /// Sentry DSN for error reporting
-    pub sentry_dsn: String,
-}
-
-/// Metrics configuration
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct MetricsConfig {
-    /// StatsD server hostname
-    pub statsd_host: String,
-    /// StatsD server port
-    pub statsd_port: u16,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,25 +172,24 @@ mod tests {
     #[test]
     fn test_parse_valid_config() {
         let yaml = r#"
-ingest_router:
-  listener:
+listener:
     host: "0.0.0.0"
     port: 3000
-  admin_listener:
+admin_listener:
     host: "127.0.0.1"
     port: 3001
-  locale_to_cells:
+locale_to_cells:
     us:
-      - us1
-      - us2
+        - us1
+        - us2
     de:
-      - de1
-  upstreams:
+        - de1
+upstreams:
     - name: us1
       url: "http://127.0.0.1:8080"
     - name: us2
       url: "http://10.0.0.2:8080"
-  routes:
+routes:
     - match:
         host: us.sentry.io
         path: /api/0/relays/projectconfigs/
@@ -236,71 +205,52 @@ ingest_router:
         locale:
           - us
           - de
-
-logging:
-  sentry_dsn: "https://example.com/sentry"
-
-metrics:
-  statsd_host: "127.0.0.1"
-  statsd_port: 8126
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
         assert!(config.validate().is_ok());
 
         // Verify key config values
-        assert_eq!(config.ingest_router.listener.port, 3000);
-        assert_eq!(config.ingest_router.upstreams.len(), 2);
-        assert_eq!(config.ingest_router.routes.len(), 2);
-        assert_eq!(
-            config.ingest_router.routes[0].r#match.method,
-            Some(HttpMethod::Post)
-        );
-        assert_eq!(config.ingest_router.routes[1].r#match.host, None);
-        assert_eq!(config.ingest_router.routes[1].action.locale.len(), 2);
+        assert_eq!(config.listener.port, 3000);
+        assert_eq!(config.upstreams.len(), 2);
+        assert_eq!(config.routes.len(), 2);
+        assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
+        assert_eq!(config.routes[1].r#match.host, None);
+        assert_eq!(config.routes[1].action.locale.len(), 2);
     }
 
     #[test]
     fn test_validation_errors() {
         let base_config = Config {
-            ingest_router: IngestRouterConfig {
-                listener: Listener {
-                    host: "0.0.0.0".to_string(),
-                    port: 3000,
+            listener: Listener {
+                host: "0.0.0.0".to_string(),
+                port: 3000,
+            },
+            admin_listener: Listener {
+                host: "127.0.0.1".to_string(),
+                port: 3001,
+            },
+            locale_to_cells: HashMap::from([("us".to_string(), vec!["us1".to_string()])]),
+            upstreams: vec![UpstreamConfig {
+                name: "us1".to_string(),
+                url: Url::parse("http://127.0.0.1:8080").unwrap(),
+            }],
+            routes: vec![Route {
+                r#match: Match {
+                    path: Some("/api/".to_string()),
+                    host: None,
+                    method: None,
                 },
-                admin_listener: Listener {
-                    host: "127.0.0.1".to_string(),
-                    port: 3001,
+                action: Action {
+                    resolver: ResolverType::RelayMergeProjectConfigs,
+                    locale: vec!["us".to_string()],
                 },
-                locale_to_cells: HashMap::from([("us".to_string(), vec!["us1".to_string()])]),
-                upstreams: vec![UpstreamConfig {
-                    name: "us1".to_string(),
-                    url: Url::parse("http://127.0.0.1:8080").unwrap(),
-                }],
-                routes: vec![Route {
-                    r#match: Match {
-                        path: Some("/api/".to_string()),
-                        host: None,
-                        method: None,
-                    },
-                    action: Action {
-                        resolver: ResolverType::RelayMergeProjectConfigs,
-                        locale: vec!["us".to_string()],
-                    },
-                }],
-            },
-            logging: LoggingConfig {
-                sentry_dsn: "https://example.com/sentry".to_string(),
-            },
-            metrics: MetricsConfig {
-                statsd_host: "127.0.0.1".to_string(),
-                statsd_port: 8126,
-            },
+            }],
         };
 
         // Test invalid port
         let mut config = base_config.clone();
-        config.ingest_router.listener.port = 0;
+        config.listener.port = 0;
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::InvalidPort
@@ -308,7 +258,7 @@ metrics:
 
         // Test duplicate upstream names
         let mut config = base_config.clone();
-        config.ingest_router.upstreams.push(UpstreamConfig {
+        config.upstreams.push(UpstreamConfig {
             name: "us1".to_string(),
             url: Url::parse("http://10.0.0.2:8080").unwrap(),
         });
@@ -319,7 +269,7 @@ metrics:
 
         // Test empty upstream name
         let mut config = base_config.clone();
-        config.ingest_router.upstreams.push(UpstreamConfig {
+        config.upstreams.push(UpstreamConfig {
             name: "".to_string(),
             url: Url::parse("http://10.0.0.2:8080").unwrap(),
         });
@@ -330,7 +280,7 @@ metrics:
 
         // Test unknown locale in action
         let mut config = base_config.clone();
-        config.ingest_router.routes[0].action.locale = vec!["unknown".to_string()];
+        config.routes[0].action.locale = vec!["unknown".to_string()];
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::UnknownLocale(_)
@@ -338,7 +288,7 @@ metrics:
 
         // Test empty locale in action
         let mut config = base_config;
-        config.ingest_router.routes[0].action.locale = vec![];
+        config.routes[0].action.locale = vec![];
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::EmptyLocale
@@ -351,14 +301,11 @@ metrics:
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-ingest_router:
-  listener: {host: "0.0.0.0", port: 3000}
-  admin_listener: {host: "127.0.0.1", port: 3001}
-  locale_to_cells: {us: [us1]}
-  upstreams: [{name: us1, url: "not-a-url"}]
-  routes: []
-logging: {sentry_dsn: "https://example.com"}
-metrics: {statsd_host: "127.0.0.1", statsd_port: 8126}
+listener: {host: "0.0.0.0", port: 3000}
+admin_listener: {host: "127.0.0.1", port: 3001}
+locale_to_cells: {us: [us1]}
+upstreams: [{name: us1, url: "not-a-url"}]
+routes: []
 "#
             )
             .is_err()
@@ -368,8 +315,7 @@ metrics: {statsd_host: "127.0.0.1", statsd_port: 8126}
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-ingest_router:
-  listener: {host: "0.0.0.0", port: "not_a_number"}
+listener: {host: "0.0.0.0", port: "not_a_number"}
 "#
             )
             .is_err()
@@ -379,8 +325,7 @@ ingest_router:
         assert!(
             serde_yaml::from_str::<Config>(
                 r#"
-ingest_router:
-  listener: {host: "0.0.0.0"}
+listener: {host: "0.0.0.0"}
 "#
             )
             .is_err()
@@ -418,21 +363,5 @@ ingest_router:
             serde_yaml::from_str::<ResolverType>("relay_merge_project_configs").unwrap(),
             ResolverType::RelayMergeProjectConfigs
         );
-    }
-
-    #[test]
-    fn test_parse_example_config_file() {
-        let yaml = std::fs::read_to_string("../example_config_ingest_router.yaml")
-            .expect("Failed to read example config file");
-
-        let config: Config =
-            serde_yaml::from_str(&yaml).expect("Failed to parse example config file");
-
-        config.validate().expect("Example config validation failed");
-
-        assert_eq!(config.ingest_router.listener.port, 3000);
-        assert_eq!(config.ingest_router.admin_listener.port, 3001);
-        assert!(!config.ingest_router.upstreams.is_empty());
-        assert!(!config.ingest_router.routes.is_empty());
     }
 }

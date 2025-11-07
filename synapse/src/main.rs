@@ -45,10 +45,9 @@ fn cli() -> Result<(), CliError> {
             let config = Config::from_file(&proxy_args.base.config_file_path)?;
             let _sentry_guard = init_sentry(config.common.logging);
 
-            let proxy_config = config.proxy.ok_or(CliError::InvalidConfig(
-                "Missing proxy config".to_string(),
-            ))?;
-
+            let proxy_config = config
+                .proxy
+                .ok_or(CliError::InvalidConfig("Missing proxy config".to_string()))?;
 
             run_async(proxy::run(proxy_config));
             Ok(())
@@ -57,9 +56,9 @@ fn cli() -> Result<(), CliError> {
             let config = Config::from_file(&ingest_router_args.base.config_file_path)?;
             let _sentry_guard = init_sentry(config.common.logging);
 
-            let ingest_router_config = config
-                .ingest_router
-                .ok_or(CliError::InvalidConfig("Missing ingest-router config".to_string()))?;
+            let ingest_router_config = config.ingest_router.ok_or(CliError::InvalidConfig(
+                "Missing ingest-router config".to_string(),
+            ))?;
 
             println!("Starting ingest-router with config {ingest_router_config:#?}");
             Ok(())

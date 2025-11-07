@@ -12,24 +12,24 @@ struct MetricsConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct LoggingConfig {
-    sentry_dsn: String,
+pub struct LoggingConfig {
+    pub sentry_dsn: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct CommonConfig {
+pub struct CommonConfig {
     metrics: Option<MetricsConfig>,
-    logging: Option<LoggingConfig>,
+    pub logging: Option<LoggingConfig>,
 }
 
 #[derive(Debug, Deserialize)]
-struct IngestRouterConfig {}
+pub struct IngestRouterConfig {}
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
-    common: CommonConfig,
-    ingest_router: Option<IngestRouterConfig>,
+    pub common: CommonConfig,
+    pub ingest_router: Option<IngestRouterConfig>,
     pub proxy: Option<ProxyConfig>,
     pub locator: Option<LocatorConfig>,
 }

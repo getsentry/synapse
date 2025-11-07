@@ -38,8 +38,8 @@ ingest_router:
         locale:
           - de
 
-logging:
-  sentry_dsn: "your_sentry_dsn_here"
+# logging:
+#   sentry_dsn: "your_sentry_dsn_here"
 
 metrics:
   statsd_host: "127.0.0.1"

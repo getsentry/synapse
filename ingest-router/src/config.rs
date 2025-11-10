@@ -118,7 +118,6 @@ impl Listener {
     }
 }
 
-
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct AdminListener {
     /// Host address to bind to (e.g., "0.0.0.0" or "127.0.0.1")
@@ -265,7 +264,7 @@ routes:
                 host: "0.0.0.0".to_string(),
                 port: 3000,
             },
-            admin_listener: Listener {
+            admin_listener: AdminListener {
                 host: "127.0.0.1".to_string(),
                 port: 3001,
             },

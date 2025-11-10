@@ -6,10 +6,10 @@ use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
 use crate::utils;
-use bytes::Bytes;
 use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
-use hyper::service::Service as HyperService;
+use hyper::body::Bytes;
+use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -61,14 +61,14 @@ where
     }
 }
 
-impl<B> HyperService<Request<B>> for ProxyService<B>
+impl<B> Service<Request<B>> for ProxyService<B>
 where
     B: BodyExt<Data = Bytes> + Send + Sync + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     B: Unpin,
 {
-    type Response = Response<BoxBody<Bytes, hyper::Error>>;
-    type Error = hyper::Error;
+    type Response = Response<BoxBody<Bytes, ProxyError>>;
+    type Error = ProxyError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
@@ -151,7 +151,7 @@ where
 
                             // Convert the response body to BoxBody
                             let (parts, body) = response.into_parts();
-                            let boxed_body = body.map_err(|e| e).boxed();
+                            let boxed_body = body.map_err(Into::into).boxed();
                             Ok(Response::from_parts(parts, boxed_body))
                         }
                         Err(e) => {
@@ -198,7 +198,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_proxy_service() {
-        use hyper::service::Service as HyperService;
         use std::time::Duration;
 
         // Start the test echo server

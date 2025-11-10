@@ -42,7 +42,7 @@ pub async fn run(config: config::Config) -> Result<(), ProxyError> {
             result?;
         }
         _ = tokio::signal::ctrl_c() => {
-            println!("Shutting down proxy...");
+            tracing::info!("Shutting down proxy...");
         }
     }
 

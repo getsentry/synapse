@@ -67,10 +67,10 @@ impl Locator {
 
     pub async fn shutdown(&self) {
         // Send shutdown command to the worker thread to end the incremental loading loop
-        println!("shutting down locator");
+        tracing::info!("shutting down locator");
 
         if let Err(e) = self.inner.org_to_cell_map.tx.send(Command::Shutdown).await {
-            eprintln!("Failed to send shutdown command: {:?}", e);
+            tracing::error!("Failed to send shutdown command: {:?}", e);
             return;
         }
 
@@ -78,7 +78,7 @@ impl Locator {
             return;
         };
         if let Err(e) = handle.await {
-            eprintln!("Worker task panicked during shutdown: {:?}", e);
+            tracing::error!("Worker task panicked during shutdown: {:?}", e);
         }
     }
 

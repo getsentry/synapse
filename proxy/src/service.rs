@@ -3,7 +3,7 @@ use hyper::service::Service as HyperService;
 use crate::admin_service::AdminService;
 use crate::proxy_service::ProxyService;
 
-use bytes::Bytes;
+use hyper::body::Bytes;
 use http_body_util::combinators::BoxBody;
 use hyper::body::Incoming;
 use hyper::{Request, Response};

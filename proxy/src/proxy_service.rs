@@ -6,7 +6,7 @@ use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
 use crate::utils;
-use bytes::Bytes;
+use hyper::body::Bytes;
 use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
 use hyper::service::Service as HyperService;

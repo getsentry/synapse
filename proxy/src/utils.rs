@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use hyper::body::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::{Response, StatusCode};

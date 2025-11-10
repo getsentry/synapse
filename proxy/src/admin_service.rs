@@ -1,6 +1,6 @@
 use crate::locator::Locator;
 use crate::utils::make_error_response;
-use bytes::Bytes;
+use hyper::body::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;

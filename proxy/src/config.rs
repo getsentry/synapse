@@ -23,7 +23,7 @@ impl Default for Listener {
     fn default() -> Self {
         Listener {
             host: "0.0.0.0".into(),
-            port: 3000
+            port: 3000,
         }
     }
 }
@@ -38,11 +38,10 @@ impl Default for AdminListener {
     fn default() -> Self {
         AdminListener {
             host: "0.0.0.0".into(),
-            port: 3001
+            port: 3001,
         }
     }
 }
-
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct UpstreamConfig {

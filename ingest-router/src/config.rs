@@ -42,9 +42,11 @@ pub enum ResolverType {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
     /// Main listener for incoming requests
+    #[serde(default)]
     pub listener: Listener,
     /// Admin listener for administrative endpoints
-    pub admin_listener: Listener,
+    #[serde(default)]
+    pub admin_listener: AdminListener,
     /// Maps locale identifiers to lists of cell names
     ///
     /// Note: Uses String keys instead of an enum to allow flexible,
@@ -101,10 +103,21 @@ impl Default for Listener {
     fn default() -> Self {
         Listener {
             host: "0.0.0.0".into(),
-            port: 3000
+            port: 3000,
         }
     }
 }
+
+impl Listener {
+    /// Validates the listener configuration
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.port == 0 {
+            return Err(ValidationError::InvalidPort);
+        }
+        Ok(())
+    }
+}
+
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct AdminListener {
@@ -118,15 +131,13 @@ impl Default for AdminListener {
     fn default() -> Self {
         AdminListener {
             host: "0.0.0.0".into(),
-            port: 3001
+            port: 3001,
         }
     }
 }
 
-
-
-impl Listener {
-    /// Validates the listener configuration
+impl AdminListener {
+    /// Validates the admin listener configuration
     pub fn validate(&self) -> Result<(), ValidationError> {
         if self.port == 0 {
             return Err(ValidationError::InvalidPort);

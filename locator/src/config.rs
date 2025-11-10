@@ -31,7 +31,7 @@ impl Default for Listener {
     fn default() -> Self {
         Listener {
             host: "127.0.0.1".into(),
-            port: 3000
+            port: 3000,
         }
     }
 }

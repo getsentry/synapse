@@ -1,9 +1,10 @@
+use crate::errors::ProxyError;
 use crate::locator::Locator;
-use bytes::Bytes;
+use crate::utils::make_error_response;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
-use hyper::service::Service as HyperService;
+use hyper::body::{Bytes, Incoming};
+use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use std::future::Future;
 use std::pin::Pin;
@@ -18,9 +19,9 @@ impl AdminService {
     }
 }
 
-impl HyperService<Request<Incoming>> for AdminService {
-    type Response = Response<BoxBody<Bytes, hyper::Error>>;
-    type Error = hyper::Error;
+impl Service<Request<Incoming>> for AdminService {
+    type Response = Response<BoxBody<Bytes, ProxyError>>;
+    type Error = ProxyError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
@@ -34,23 +35,9 @@ impl HyperService<Request<Incoming>> for AdminService {
                 }
                 "/ready" => match is_ready {
                     true => Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed()),
-                    false => Response::builder()
-                        .status(StatusCode::SERVICE_UNAVAILABLE)
-                        .body(
-                            Full::new("not ready\n".into())
-                                .map_err(|e| match e {})
-                                .boxed(),
-                        )
-                        .unwrap(),
+                    false => make_error_response(StatusCode::SERVICE_UNAVAILABLE),
                 },
-                _ => Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(
-                        Full::new("not found\n".into())
-                            .map_err(|e| match e {})
-                            .boxed(),
-                    )
-                    .unwrap(),
+                _ => make_error_response(StatusCode::NOT_FOUND),
             };
             Ok(res)
         })

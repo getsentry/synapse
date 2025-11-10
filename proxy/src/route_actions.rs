@@ -147,7 +147,7 @@ impl RouteActions {
     /// Matches the incoming request to a route, and returns the first matched route if any.
     /// If no matches are found, return none.
     pub fn resolve<B>(&self, request: &http::Request<B>) -> Option<RouteMatch> {
-        println!("Resolving route for request URI: {:?}", request.uri());
+        tracing::debug!("Resolving route for request URI: {:?}", request.uri());
 
         // Host may come from authority part of URI (if absolute-form request)
         // or from the Host header (most common in HTTP/1.1).
@@ -159,8 +159,8 @@ impl RouteActions {
         let path = request.uri().path();
         let query = request.uri().query();
 
-        println!("Request path: {path}");
-        println!("Request query: {query:?}");
+        tracing::debug!("Request path: {path}");
+        tracing::debug!("Request query: {query:?}");
 
         // Return the first matching route, if any
         self.routes

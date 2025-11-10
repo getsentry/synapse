@@ -9,7 +9,10 @@ thiserror = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 hyper = { version = "1.7.0" }
 async-trait = "0.1"
+tracing = { workspace = true }
 url = { workspace = true }
+shared = { path = "../shared" }
+http-body-util = { workspace = true }
 
 [dev-dependencies]
 serde_yaml = "0.9.33"

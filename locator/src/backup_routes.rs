@@ -81,7 +81,7 @@ pub struct NoopRouteProvider {}
 
 impl BackupRouteProvider for NoopRouteProvider {
     fn load(&self) -> Result<RouteData, BackupError> {
-        eprintln!(
+        tracing::warn!(
             "Warning: loading backup routes from the no-op provider. This is unsafe for production use."
         );
 
@@ -127,9 +127,10 @@ impl BackupRouteProvider for FilesystemRouteProvider {
 
         let size = self.codec.write(&mut writer, route_data);
 
-        println!(
+        tracing::info!(
             "Stored backup routes to {:?}, bytes: {:?}",
-            &self.path, size
+            &self.path,
+            size
         );
 
         Ok(())

@@ -1,18 +1,19 @@
 use crate::config;
 use crate::errors::ProxyError;
-use crate::headers::{add_via_header, filter_hop_by_hop};
 use crate::locator::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
-use bytes::Bytes;
+use crate::utils;
+use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Full};
-use hyper::service::Service as HyperService;
+use hyper::body::Bytes;
+use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
+use shared::http::{add_via_header, filter_hop_by_hop};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -58,34 +59,23 @@ where
             resolvers,
         })
     }
-
-    fn make_error_response(status_code: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> {
-        let message = status_code
-            .canonical_reason()
-            .unwrap_or("an error occurred");
-
-        Response::builder()
-            .status(status_code)
-            .body(Full::new(message.into()).map_err(|e| match e {}).boxed())
-            .unwrap()
-    }
 }
 
-impl<B> HyperService<Request<B>> for ProxyService<B>
+impl<B> Service<Request<B>> for ProxyService<B>
 where
     B: BodyExt<Data = Bytes> + Send + Sync + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     B: Unpin,
 {
-    type Response = Response<BoxBody<Bytes, hyper::Error>>;
-    type Error = hyper::Error;
+    type Response = Response<BoxBody<Bytes, ProxyError>>;
+    type Error = ProxyError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, request: Request<B>) -> Self::Future {
         let route = self.route_actions.resolve(&request);
 
-        println!("Resolved route: {route:?}");
+        tracing::debug!("Resolved route: {route:?}");
 
         let upstreams = self.upstreams.clone();
         let resolvers = self.resolvers.clone();
@@ -112,7 +102,7 @@ where
 
             let upstream = upstream_name.as_deref().and_then(|u| upstreams.get(u));
 
-            println!("Resolved upstream: {:?}", upstream);
+            tracing::debug!("Resolved upstream: {:?}", upstream);
 
             match upstream {
                 Some(u) => {
@@ -120,19 +110,28 @@ where
                     let (mut parts, body) = request.into_parts();
 
                     // Compose new URI: {scheme}://{authority}{path_and_query}
-                    let path_and_query = parts
-                        .uri
-                        .path_and_query()
-                        .map(|pq| pq.as_str())
-                        .unwrap_or("/");
+                    let path_and_query = match parts.uri.path_and_query() {
+                        Some(pq) => pq.as_str(),
+                        None => {
+                            tracing::warn!("Request URI missing path and query");
+                            return Ok(utils::make_error_response(StatusCode::BAD_REQUEST));
+                        }
+                    };
 
-                    // TODO: actually handle error, don't unwrap
-                    let new_uri = http::Uri::builder()
+                    let new_uri = match http::Uri::builder()
                         .scheme(u.scheme.clone())
                         .authority(u.authority.clone())
                         .path_and_query(path_and_query)
                         .build()
-                        .unwrap();
+                    {
+                        Ok(uri) => uri,
+                        Err(e) => {
+                            tracing::error!("Failed to build target URI: {e}");
+                            return Ok(utils::make_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            ));
+                        }
+                    };
 
                     parts.uri = new_uri;
 
@@ -152,18 +151,18 @@ where
 
                             // Convert the response body to BoxBody
                             let (parts, body) = response.into_parts();
-                            let boxed_body = body.map_err(|e| e).boxed();
+                            let boxed_body = body.map_err(Into::into).boxed();
                             Ok(Response::from_parts(parts, boxed_body))
                         }
                         Err(e) => {
-                            eprintln!("Upstream request failed: {e}");
-                            Ok(Self::make_error_response(StatusCode::BAD_GATEWAY))
+                            tracing::error!("Upstream request failed: {e}");
+                            Ok(utils::make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
                 }
                 None => {
                     // No upstream found, return 404
-                    Ok(Self::make_error_response(StatusCode::NOT_FOUND))
+                    Ok(utils::make_error_response(StatusCode::NOT_FOUND))
                 }
             }
         })
@@ -173,6 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http_body_util::Full;
     use std::process::{Child, Command};
 
     struct TestServer {
@@ -198,7 +198,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_proxy_service() {
-        use hyper::service::Service as HyperService;
         use std::time::Duration;
 
         // Start the test echo server
@@ -271,7 +270,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get("x-custom").unwrap(), "test");
         assert_eq!(response.headers().get("host").unwrap(), "127.0.0.1:9000");
-        println!("response headers: {:?}", response.headers());
+        tracing::debug!("response headers: {:?}", response.headers());
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body_bytes.as_ref(), content);
 

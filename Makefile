@@ -71,7 +71,7 @@ run-proxy:
 	cargo run proxy --config-file-path example_config_proxy.yaml
 
 run-ingest-router:
-	cargo run ingest-router
+	cargo run ingest-router --config-file-path example_config_ingest_router.yaml
 
 run-mock-control-api:
 	python scripts/mock_control_api.py

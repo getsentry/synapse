@@ -24,6 +24,13 @@ impl NegativeCache {
     }
 
     pub fn contains(&self, key: &str) -> bool {
-        self.cache.contains_key(key)
+        let cache_hit = self.cache.contains_key(key);
+        let metric_name = if cache_hit {
+            "negative_cache.hit"
+        } else {
+            "negative_cache.miss"
+        };
+        metrics::counter!(metric_name).increment(1);
+        cache_hit
     }
 }

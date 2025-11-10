@@ -9,13 +9,12 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::{AcquireError, mpsc, oneshot};
+use tokio::sync::{AcquireError, Mutex, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 struct LocatorInner {
     org_to_cell_map: Arc<OrgToCell>,
-    #[allow(dead_code)]
-    handle: tokio::task::JoinHandle<()>,
+    handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 #[derive(Clone)]
@@ -45,7 +44,7 @@ impl Locator {
         let org_to_cell_map_clone = org_to_cell_map.clone();
         let handle = tokio::spawn(async move {
             if let Err(err) = org_to_cell_map_clone.start(rx).await {
-                eprintln!("Failed to start locator: {err:?}. Exiting process.");
+                tracing::error!("Failed to start locator: {err:?}. Exiting process.");
                 std::process::exit(1);
             }
         });
@@ -53,7 +52,7 @@ impl Locator {
         Locator {
             inner: Arc::new(LocatorInner {
                 org_to_cell_map,
-                handle,
+                handle: Mutex::new(Some(handle)),
             }),
         }
     }
@@ -66,8 +65,21 @@ impl Locator {
         self.inner.org_to_cell_map.lookup(org_id, locality).await
     }
 
-    pub fn shutdown(&self) {
-        unimplemented!();
+    pub async fn shutdown(&self) {
+        // Send shutdown command to the worker thread to end the incremental loading loop
+        tracing::info!("shutting down locator");
+
+        if let Err(e) = self.inner.org_to_cell_map.tx.send(Command::Shutdown).await {
+            tracing::error!("Failed to send shutdown command: {:?}", e);
+            return;
+        }
+
+        let Some(handle) = self.inner.handle.lock().await.take() else {
+            return;
+        };
+        if let Err(e) = handle.await {
+            tracing::error!("Worker task panicked during shutdown: {:?}", e);
+        }
     }
 
     pub fn is_ready(&self) -> bool {
@@ -204,7 +216,7 @@ impl OrgToCell {
                 match self.tx.try_send(Command::Refresh(start_lookup, ack_tx)) {
                     Ok(()) => {
                         if let Err(err) = ack_rx.await {
-                            eprintln!("recv error: {:?}", err);
+                            tracing::warn!("recv error: {:?}", err);
                         }
 
                         // Re-acquire the read lock
@@ -224,7 +236,7 @@ impl OrgToCell {
                     }
                     Err(e) => {
                         // channel is closed or full
-                        eprintln!("channel error: {:?}", e);
+                        tracing::warn!("channel error: {:?}", e);
                         None
                     }
                 }
@@ -316,7 +328,7 @@ impl OrgToCell {
             .load_mappings(None)
             .await
             .or_else(|err| {
-                eprintln!(
+                tracing::warn!(
                     "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
 
@@ -337,7 +349,7 @@ impl OrgToCell {
         if snapshot_requested_time.is_some()
             && let Err(e) = self.backup_routes.store(&write_guard.data)
         {
-            eprintln!("Warning: failed to store backup routes: {e:?}");
+            tracing::error!("Failed to store backup routes: {e:?}");
         }
 
         Ok(())

@@ -1,12 +1,44 @@
-// This module provides helpers to strip hop-by-hop headers and add the via header.
-// They should be applied by the proxy in both directions: requests from clients to upstreams,
-// and responses coming back from upstreams to client.
-
 use http::Version;
 use http::header::{
     CONNECTION, HeaderMap, HeaderName, HeaderValue, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE,
     TRAILER, TRANSFER_ENCODING, UPGRADE, VIA,
 };
+use http_body_util::combinators::BoxBody;
+use hyper::body::{Bytes, Incoming};
+use hyper::service::Service;
+use hyper::{Request, Response};
+use hyper_util::rt::TokioExecutor;
+use hyper_util::rt::TokioIo;
+use hyper_util::server::conn::auto::Builder;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+
+pub async fn run_http_service<S, E>(host: &str, port: u16, service: S) -> Result<(), E>
+where
+    S: Service<Request<Incoming>, Response = Response<BoxBody<Bytes, E>>, Error = E>
+        + Send
+        + Sync
+        + 'static,
+    S::Future: Send + 'static,
+    E: From<std::io::Error> + std::error::Error + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind(format!("{host}:{port}")).await?;
+    let service_arc = Arc::new(service);
+
+    loop {
+        let (stream, _peer_addr) = listener.accept().await?;
+        let _ = stream.set_nodelay(true);
+        let io = TokioIo::new(stream);
+        let svc = service_arc.clone();
+
+        // Hand the connection to hyper; auto-detect h1/h2 on this socket
+        tokio::spawn(async move {
+            let _ = Builder::new(TokioExecutor::new())
+                .serve_connection(io, svc)
+                .await;
+        });
+    }
+}
 
 static HOP_BY_HOP_NAMES: &[HeaderName] = &[
     CONNECTION,
@@ -18,12 +50,13 @@ static HOP_BY_HOP_NAMES: &[HeaderName] = &[
     PROXY_AUTHENTICATE,
 ];
 
-pub fn is_http1(v: Version) -> bool {
+fn is_http1(v: Version) -> bool {
     matches!(v, Version::HTTP_09 | Version::HTTP_10 | Version::HTTP_11)
 }
 
 /// Adds a Via header to indicate the request/response passed through this proxy.
 /// Appends to existing if Via is already present.
+/// Should be applied to proxied requests in both directions
 pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
     let proxy_name = "synapse";
 
@@ -34,7 +67,7 @@ pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
         Version::HTTP_2 => "2",
         Version::HTTP_3 => "3",
         _ => {
-            eprintln!(
+            tracing::warn!(
                 "Unknown/future HTTP version, skipping Via header: {:?}",
                 version
             );
@@ -62,6 +95,7 @@ pub fn add_via_header(headers: &mut HeaderMap, version: Version) {
 // - keep-alive header for HTTP/0.9 and HTTP/1.0 only
 //
 // HTTP/2 and HTTP/3 don't use hop-by-hop headers, so no filtering is performed.
+/// Should be applied to proxied requests in both directions
 pub fn filter_hop_by_hop(headers: &mut HeaderMap, version: Version) -> &mut HeaderMap {
     if !is_http1(version) {
         return headers;

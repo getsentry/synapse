@@ -1,6 +1,6 @@
-use hyper::body::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
+use hyper::body::Bytes;
 use hyper::{Response, StatusCode};
 
 pub fn make_error_response(status_code: StatusCode) -> Response<BoxBody<Bytes, hyper::Error>> {

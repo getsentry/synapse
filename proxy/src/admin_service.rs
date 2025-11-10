@@ -1,8 +1,8 @@
 use crate::locator::Locator;
 use crate::utils::make_error_response;
-use hyper::body::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
+use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::service::Service as HyperService;
 use hyper::{Request, Response, StatusCode};

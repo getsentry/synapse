@@ -16,4 +16,6 @@ pub enum ProxyError {
     ResolverError,
     #[error("locator error")]
     LocatorError(#[from] locator::locator::LocatorError),
+    #[error("locator reqwest error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
 }

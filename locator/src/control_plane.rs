@@ -34,6 +34,8 @@ pub enum ControlPlaneError {
     InvalidUrl(String),
     #[error("control plane unavailable")]
     ControlPlaneRetriesExceeded,
+    #[error("missing cursor in response")]
+    MissingCursor,
 }
 
 pub struct ControlPlane {
@@ -118,9 +120,10 @@ impl ControlPlane {
             }
         }
 
-        println!("Fetched {page_fetches} pages from control plane");
+        tracing::info!("Fetched {page_fetches} pages from control plane");
 
-        let data = RouteData::from(org_to_cell, next_cursor.unwrap(), cell_to_locality);
+        let cursor = next_cursor.ok_or(ControlPlaneError::MissingCursor)?;
+        let data = RouteData::from(org_to_cell, cursor, cell_to_locality);
 
         Ok(data)
     }

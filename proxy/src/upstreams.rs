@@ -1,13 +1,13 @@
 use crate::config::UpstreamConfig;
 use crate::errors::ProxyError;
-use http::uri::{Scheme, Uri};
+use http::uri::{Authority, Scheme, Uri};
 use std::collections::HashMap;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Upstream {
     pub scheme: Scheme,
-    pub authority: String,
+    pub authority: Authority,
 }
 
 impl TryFrom<UpstreamConfig> for Upstream {
@@ -15,10 +15,7 @@ impl TryFrom<UpstreamConfig> for Upstream {
     fn try_from(config: UpstreamConfig) -> Result<Self, Self::Error> {
         let uri: Uri = config.url.parse()?;
         let scheme = uri.scheme().ok_or(ProxyError::InvalidUpstream)?.clone();
-        let authority = uri
-            .authority()
-            .map(|a| a.to_string())
-            .ok_or(ProxyError::InvalidUpstream)?;
+        let authority = uri.authority().ok_or(ProxyError::InvalidUpstream)?.clone();
 
         Ok(Self { scheme, authority })
     }

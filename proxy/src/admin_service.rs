@@ -1,4 +1,5 @@
 use crate::locator::Locator;
+use crate::utils::make_error_response;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
@@ -34,23 +35,9 @@ impl HyperService<Request<Incoming>> for AdminService {
                 }
                 "/ready" => match is_ready {
                     true => Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed()),
-                    false => Response::builder()
-                        .status(StatusCode::SERVICE_UNAVAILABLE)
-                        .body(
-                            Full::new("not ready\n".into())
-                                .map_err(|e| match e {})
-                                .boxed(),
-                        )
-                        .unwrap(),
+                    false => make_error_response(StatusCode::SERVICE_UNAVAILABLE),
                 },
-                _ => Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(
-                        Full::new("not found\n".into())
-                            .map_err(|e| match e {})
-                            .boxed(),
-                    )
-                    .unwrap(),
+                _ => make_error_response(StatusCode::NOT_FOUND),
             };
             Ok(res)
         })

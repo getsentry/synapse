@@ -242,7 +242,7 @@ mod tests {
                 host: "127.0.0.1".to_string(),
                 port: 8080,
             },
-            admin_listener: config::Listener {
+            admin_listener: config::AdminListener {
                 host: "127.0.0.1".to_string(),
                 port: 8081,
             },

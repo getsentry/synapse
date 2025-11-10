@@ -97,6 +97,34 @@ pub struct Listener {
     pub port: u16,
 }
 
+impl Default for Listener {
+    fn default() -> Self {
+        Listener {
+            host: "0.0.0.0".into(),
+            port: 3000
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct AdminListener {
+    /// Host address to bind to (e.g., "0.0.0.0" or "127.0.0.1")
+    pub host: String,
+    /// Port number to listen on
+    pub port: u16,
+}
+
+impl Default for AdminListener {
+    fn default() -> Self {
+        AdminListener {
+            host: "0.0.0.0".into(),
+            port: 3001
+        }
+    }
+}
+
+
+
 impl Listener {
     /// Validates the listener configuration
     pub fn validate(&self) -> Result<(), ValidationError> {

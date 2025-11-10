@@ -74,7 +74,6 @@ enum LocatorInner {
     Url(Url),
 }
 
-
 #[derive(serde::Deserialize)]
 struct LocatorApiResponse {
     cell: String,
@@ -102,7 +101,12 @@ impl Url {
             query_params.insert("locality", loc);
         }
 
-        let response = self.client.get(&self.url).query(&query_params).send().await?;
+        let response = self
+            .client
+            .get(&self.url)
+            .query(&query_params)
+            .send()
+            .await?;
         Ok(response.json::<LocatorApiResponse>().await?.cell)
     }
 
@@ -110,6 +114,5 @@ impl Url {
         true
     }
 
-    fn shutdown(&self) {
-    }
+    fn shutdown(&self) {}
 }

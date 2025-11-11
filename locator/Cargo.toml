@@ -8,7 +8,7 @@ axum = "0.8.4"
 bincode = { version = "2.0.1", features = ["std", "serde"] }
 metrics = { workspace = true }
 moka = { version = "0.12.11", features = ["sync"] }
-parking_lot = "0.12.4"
+parking_lot = "0.12.5"
 serde = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }

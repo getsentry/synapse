@@ -1,10 +1,10 @@
+use crate::errors::ProxyError;
 use crate::locator::Locator;
 use crate::utils::make_error_response;
-use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
-use hyper::service::Service as HyperService;
+use hyper::body::{Bytes, Incoming};
+use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use std::future::Future;
 use std::pin::Pin;
@@ -19,9 +19,9 @@ impl AdminService {
     }
 }
 
-impl HyperService<Request<Incoming>> for AdminService {
-    type Response = Response<BoxBody<Bytes, hyper::Error>>;
-    type Error = hyper::Error;
+impl Service<Request<Incoming>> for AdminService {
+    type Response = Response<BoxBody<Bytes, ProxyError>>;
+    type Error = ProxyError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 

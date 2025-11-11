@@ -1,3 +1,8 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = []
+# ///
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 

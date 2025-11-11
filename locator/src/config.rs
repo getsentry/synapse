@@ -27,8 +27,18 @@ pub struct Listener {
     pub port: u16,
 }
 
+impl Default for Listener {
+    fn default() -> Self {
+        Listener {
+            host: "127.0.0.1".into(),
+            port: 3000,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    #[serde(default)]
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,

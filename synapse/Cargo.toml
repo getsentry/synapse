@@ -7,12 +7,12 @@ edition = "2024"
 clap = { version = "4.5.40", features = ["derive"] }
 ingest-router = { path = "../ingest-router" }
 locator = { path = "../locator" }
+metrics = { workspace = true }
+metrics-exporter-statsd = { workspace = true }
 proxy = { path = "../proxy" }
 sentry = { workspace = true }
 serde = { workspace = true }
-serde_yaml = "0.9.34"
-metrics = { workspace = true }
-metrics-exporter-statsd = { workspace = true }
+serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

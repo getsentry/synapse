@@ -18,4 +18,6 @@ pub enum ProxyError {
     LocatorError(#[from] locator::locator::LocatorError),
     #[error("locator reqwest error: {0}")]
     ReqwestError(#[from] reqwest::Error),
+    #[error("hyper error: {0}")]
+    Hyper(#[from] hyper::Error),
 }

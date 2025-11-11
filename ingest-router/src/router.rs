@@ -75,15 +75,17 @@ impl Router {
 
         // Match path if specified
         if let Some(expected_path) = &route.r#match.path
-            && req.uri().path() != expected_path {
-                return false;
-            }
+            && req.uri().path() != expected_path
+        {
+            return false;
+        }
 
         // Match method if specified
         if let Some(expected_method) = &route.r#match.method
-            && expected_method != req.method() {
-                return false;
-            }
+            && expected_method != req.method()
+        {
+            return false;
+        }
 
         true
     }

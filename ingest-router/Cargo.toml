@@ -4,15 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+hyper = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-hyper = { version = "1.7.0" }
-async-trait = "0.1"
+tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 shared = { path = "../shared" }
 http-body-util = { workspace = true }
 
 [dev-dependencies]
-serde_yaml = "0.9.33"
+serde_yaml = { workspace = true }

@@ -31,11 +31,29 @@ pub enum HttpMethod {
     Delete,
 }
 
-/// Resolver types for handling requests
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ResolverType {
-    RelayMergeProjectConfigs,
+impl PartialEq<hyper::Method> for HttpMethod {
+    fn eq(&self, other: &hyper::Method) -> bool {
+        match self {
+            HttpMethod::Get => other == hyper::Method::GET,
+            HttpMethod::Post => other == hyper::Method::POST,
+            HttpMethod::Put => other == hyper::Method::PUT,
+            HttpMethod::Delete => other == hyper::Method::DELETE,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "handler", content = "args", rename_all = "snake_case")]
+pub enum HandlerAction {
+    /// Merges project configs from multiple relay instances
+    RelayProjectConfigs(RelayProjectConfigsArgs),
+}
+
+/// Arguments for the relay_project_configs handler
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct RelayProjectConfigsArgs {
+    /// Locale identifier to route the request to
+    pub locale: String,
 }
 
 /// Proxy configuration
@@ -163,7 +181,7 @@ pub struct Route {
     /// Conditions for matching incoming requests
     pub r#match: Match,
     /// Action to take when the match conditions are met
-    pub action: Action,
+    pub action: HandlerAction,
 }
 
 /// Request matching criteria
@@ -177,29 +195,17 @@ pub struct Match {
     pub method: Option<HttpMethod>,
 }
 
-/// Action to perform when a route matches
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Action {
-    /// Type of resolver to use for handling the request
-    pub resolver: ResolverType,
-    /// List of locale identifiers to route the request to
-    pub locale: Vec<String>,
-}
-
-impl Action {
-    /// Validates the action configuration
+impl HandlerAction {
+    /// Validates the handler action configuration
     pub fn validate(&self, valid_locales: &HashSet<&String>) -> Result<(), ValidationError> {
-        if self.locale.is_empty() {
-            return Err(ValidationError::EmptyLocale);
-        }
-
-        for locale in &self.locale {
-            if !valid_locales.contains(locale) {
-                return Err(ValidationError::UnknownLocale(locale.clone()));
+        match self {
+            HandlerAction::RelayProjectConfigs(args) => {
+                if !valid_locales.contains(&args.locale) {
+                    return Err(ValidationError::UnknownLocale(args.locale.clone()));
+                }
+                Ok(())
             }
         }
-
-        Ok(())
     }
 }
 
@@ -233,16 +239,15 @@ routes:
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - us
+        handler: relay_project_configs
+        args:
+          locale: us
     - match:
         path: /api/healthcheck
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - us
-          - de
+        handler: relay_project_configs
+        args:
+          locale: us
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
@@ -254,7 +259,12 @@ routes:
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
-        assert_eq!(config.routes[1].action.locale.len(), 2);
+        // Verify the handler action structure
+        match &config.routes[1].action {
+            HandlerAction::RelayProjectConfigs(args) => {
+                assert_eq!(args.locale, "us");
+            }
+        }
     }
 
     #[test]
@@ -279,10 +289,9 @@ routes:
                     host: None,
                     method: None,
                 },
-                action: Action {
-                    resolver: ResolverType::RelayMergeProjectConfigs,
-                    locale: vec!["us".to_string()],
-                },
+                action: HandlerAction::RelayProjectConfigs(RelayProjectConfigsArgs {
+                    locale: "us".to_string(),
+                }),
             }],
         };
 
@@ -318,18 +327,12 @@ routes:
 
         // Test unknown locale in action
         let mut config = base_config.clone();
-        config.routes[0].action.locale = vec!["unknown".to_string()];
+        config.routes[0].action = HandlerAction::RelayProjectConfigs(RelayProjectConfigsArgs {
+            locale: "unknown".to_string(),
+        });
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::UnknownLocale(_)
-        ));
-
-        // Test empty locale in action
-        let mut config = base_config;
-        config.routes[0].action.locale = vec![];
-        assert!(matches!(
-            config.validate().unwrap_err(),
-            ValidationError::EmptyLocale
         ));
     }
 
@@ -372,8 +375,13 @@ listener: {host: "0.0.0.0"}
         // Invalid HTTP method
         assert!(serde_yaml::from_str::<HttpMethod>("INVALID_METHOD").is_err());
 
-        // Invalid resolver type
-        assert!(serde_yaml::from_str::<ResolverType>("invalid_resolver").is_err());
+        // Invalid handler type
+        assert!(serde_yaml::from_str::<HandlerAction>(r#"handler: invalid_handler"#).is_err());
+
+        // Missing required args field
+        assert!(
+            serde_yaml::from_str::<HandlerAction>(r#"handler: relay_project_configs"#).is_err()
+        );
     }
 
     #[test]
@@ -396,10 +404,19 @@ listener: {host: "0.0.0.0"}
             HttpMethod::Delete
         );
 
-        // Resolver types
-        assert_eq!(
-            serde_yaml::from_str::<ResolverType>("relay_merge_project_configs").unwrap(),
-            ResolverType::RelayMergeProjectConfigs
-        );
+        // Handler action deserialization
+        let action: HandlerAction = serde_yaml::from_str(
+            r#"
+handler: relay_project_configs
+args:
+  locale: us
+"#,
+        )
+        .unwrap();
+        match action {
+            HandlerAction::RelayProjectConfigs(args) => {
+                assert_eq!(args.locale, "us");
+            }
+        }
     }
 }

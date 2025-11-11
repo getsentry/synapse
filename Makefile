@@ -36,7 +36,9 @@ build:
 
 # Test all workspace members
 test:
+	docker compose -f docker-compose.test.yml up -d
 	cargo test --workspace
+	docker compose -f docker-compose.test.yml down -v
 
 # Format code
 fmt:

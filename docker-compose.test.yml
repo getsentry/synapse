@@ -1,0 +1,5 @@
+services:
+  gcs:
+    image: gcr.io/cloud-devrel-public-resources/storage-testbench:latest
+    ports:
+      - "4443:4443"

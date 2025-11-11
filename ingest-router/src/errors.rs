@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Errors that can occur during proxy operations
+/// Errors that can occur during ingest-router operations
 #[derive(Error, Debug)]
 pub enum IngestRouterError {
     #[error("Failed to read request body: {0}")]
@@ -32,4 +32,7 @@ pub enum IngestRouterError {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }

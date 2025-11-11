@@ -26,17 +26,17 @@ ingest_router:
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - us
+        handler: relay_project_configs
+        args:
+          locale: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - de
+        handler: relay_project_configs
+        args:
+          locale: de
 
 # logging:
 #   sentry_dsn: "your_sentry_dsn_here"

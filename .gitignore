@@ -1,2 +1,7 @@
 target/
 .DS_Store
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc

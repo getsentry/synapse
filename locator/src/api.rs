@@ -26,12 +26,21 @@ pub async fn serve(
     locality_to_default_cell: Option<HashMap<String, String>>,
 ) -> Result<(), LocatorApiError> {
     let locator = Locator::new(control_plane.url, provider, locality_to_default_cell);
-    let app = Router::new().route("/", get(handler)).with_state(locator);
+    let app = Router::new()
+        .route("/", get(handler))
+        .with_state(locator.clone());
 
     let addr = format!("{}:{}", listener.host, listener.port);
 
     let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
+
+    locator.shutdown().await;
+
     Ok(())
 }
 

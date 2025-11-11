@@ -1,7 +1,6 @@
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
 use crate::types::RouteData;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -76,28 +75,6 @@ impl Codec {
     }
 }
 
-// No-op backup route provider for testing
-pub struct NoopRouteProvider {}
-
-impl BackupRouteProvider for NoopRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
-        tracing::warn!(
-            "Warning: loading backup routes from the no-op provider. This is unsafe for production use."
-        );
-
-        Ok(RouteData {
-            org_to_cell: HashMap::new(),
-            last_cursor: "test".into(),
-            cells: HashMap::new(),
-        })
-    }
-
-    fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
-        // Do nothing
-        Ok(())
-    }
-}
-
 pub struct FilesystemRouteProvider {
     path: PathBuf,
     codec: Codec,
@@ -159,6 +136,7 @@ impl BackupRouteProvider for GcsRouteProvider {
 mod tests {
     use super::*;
     use crate::types::Cell;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn get_route_data() -> RouteData {

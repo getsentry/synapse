@@ -6,8 +6,10 @@ use std::collections::HashMap;
 pub struct Config {
     pub upstreams: Vec<UpstreamConfig>,
     pub routes: Vec<Route>,
+    #[serde(default)]
     pub listener: Listener,
-    pub admin_listener: Listener,
+    #[serde(default)]
+    pub admin_listener: AdminListener,
     pub locator: Locator,
 }
 
@@ -15,6 +17,30 @@ pub struct Config {
 pub struct Listener {
     pub host: String,
     pub port: u16,
+}
+
+impl Default for Listener {
+    fn default() -> Self {
+        Listener {
+            host: "0.0.0.0".into(),
+            port: 3000,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct AdminListener {
+    pub host: String,
+    pub port: u16,
+}
+
+impl Default for AdminListener {
+    fn default() -> Self {
+        AdminListener {
+            host: "0.0.0.0".into(),
+            port: 3001,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]

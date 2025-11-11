@@ -1,9 +1,9 @@
 use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
+use http::StatusCode;
 use locator::get_provider;
 use locator::locator::{Locator as LocatorService, LocatorError};
 use std::collections::HashMap;
-use http::StatusCode;
 
 #[derive(Clone)]
 pub struct Locator(LocatorInner);
@@ -112,7 +112,9 @@ impl Url {
         match response.status() {
             StatusCode::OK => Ok(response.json::<LocatorApiResponse>().await?.cell),
             StatusCode::NOT_FOUND => Err(ProxyError::LocatorError(LocatorError::NoCell)),
-            StatusCode::SERVICE_UNAVAILABLE => Err(ProxyError::LocatorError(LocatorError::NotReady)),
+            StatusCode::SERVICE_UNAVAILABLE => {
+                Err(ProxyError::LocatorError(LocatorError::NotReady))
+            }
             _ => Err(ProxyError::LocatorError(LocatorError::InternalError)),
         }
     }

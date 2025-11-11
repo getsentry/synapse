@@ -1,7 +1,9 @@
 use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
+use http::StatusCode;
 use locator::get_provider;
-use locator::locator::Locator as LocatorService;
+use locator::locator::{Locator as LocatorService, LocatorError};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Locator(LocatorInner);
@@ -21,14 +23,14 @@ impl Locator {
                     locality_to_default_cell,
                 )))
             }
-            LocatorType::Url { .. } => Locator(LocatorInner::Url(Url {})),
+            LocatorType::Url { url } => Locator(LocatorInner::Url(Url::new(url))),
         }
     }
 
     pub async fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
         match &self.0 {
             LocatorInner::InProcess(l) => Ok(l.lookup(org_id, locality).await?),
-            LocatorInner::Url(url) => url.lookup(org_id, locality),
+            LocatorInner::Url(url) => Ok(url.lookup(org_id, locality).await?),
         }
     }
 
@@ -50,8 +52,6 @@ impl Locator {
 #[cfg(test)]
 use locator::backup_routes::BackupRouteProvider;
 #[cfg(test)]
-use std::collections::HashMap;
-#[cfg(test)]
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -72,23 +72,56 @@ impl Locator {
 #[derive(Clone)]
 enum LocatorInner {
     InProcess(LocatorService),
-    #[allow(dead_code)]
     Url(Url),
 }
 
+#[derive(serde::Deserialize)]
+struct LocatorApiResponse {
+    cell: String,
+}
+
 #[derive(Clone)]
-struct Url {}
+struct Url {
+    client: reqwest::Client,
+    url: String,
+}
 
 impl Url {
-    fn lookup(&self, _org_id: &str, _locality: Option<&str>) -> Result<String, ProxyError> {
-        todo!();
+    pub fn new(url: String) -> Self {
+        Url {
+            client: reqwest::Client::new(),
+            url,
+        }
+    }
+
+    async fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
+        let mut query_params = HashMap::new();
+        query_params.insert("org_id", org_id);
+
+        if let Some(loc) = locality {
+            query_params.insert("locality", loc);
+        }
+
+        let response = self
+            .client
+            .get(&self.url)
+            .query(&query_params)
+            .send()
+            .await?;
+
+        match response.status() {
+            StatusCode::OK => Ok(response.json::<LocatorApiResponse>().await?.cell),
+            StatusCode::NOT_FOUND => Err(ProxyError::LocatorError(LocatorError::NoCell)),
+            StatusCode::SERVICE_UNAVAILABLE => {
+                Err(ProxyError::LocatorError(LocatorError::NotReady))
+            }
+            _ => Err(ProxyError::LocatorError(LocatorError::InternalError)),
+        }
     }
 
     fn is_ready(&self) -> bool {
-        todo!();
+        true
     }
 
-    fn shutdown(&self) {
-        todo!();
-    }
+    fn shutdown(&self) {}
 }

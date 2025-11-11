@@ -3,7 +3,6 @@ use crate::errors::ProxyError;
 use http::uri::{Authority, Scheme, Uri};
 use std::collections::HashMap;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Upstream {
     pub scheme: Scheme,

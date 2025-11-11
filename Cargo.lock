@@ -1518,6 +1518,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "locator",
+ "reqwest",
  "serde",
  "shared",
  "tempfile",

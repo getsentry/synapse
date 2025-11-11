@@ -60,7 +60,7 @@ mod tests {
     use locator::types::RouteData;
     use std::sync::Arc;
 
-    fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
+    async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
         let route_data = RouteData::from(
             HashMap::from([
                 ("org_0".into(), "us1".into()),
@@ -73,13 +73,13 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
-        provider.store(&route_data).unwrap();
+        provider.store(&route_data).await.unwrap();
         (dir, provider)
     }
 
     #[tokio::test]
     async fn test_resolve() {
-        let (_dir, provider) = get_mock_provider();
+        let (_dir, provider) = get_mock_provider().await;
         let locator = Locator::new_in_process(
             "http://control-plane-url".to_string(),
             Arc::new(provider),

@@ -33,4 +33,3 @@ pub enum IngestRouterError {
     #[error("Internal error: {0}")]
     InternalError(String),
 }
-

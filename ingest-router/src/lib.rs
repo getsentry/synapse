@@ -1,5 +1,5 @@
 pub mod config;
-pub mod error;
+pub mod errors;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::Bytes;
@@ -31,7 +31,7 @@ impl Service<Request<Incoming>> for IngestRouterService {
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
-        println!("Received request: {:?}", req);
+        println!("Received request: {req:?}");
         Box::pin(async move {
             Ok(Response::new(
                 Full::new("ok\n".into()).map_err(|e| match e {}).boxed(),

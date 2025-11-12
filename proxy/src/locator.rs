@@ -99,7 +99,7 @@ impl Url {
 
     async fn lookup(&self, org_id: &str, locality: Option<&str>) -> Result<String, ProxyError> {
         let mut query_params = HashMap::new();
-        query_params.insert("org_id", org_id);
+        query_params.insert("id", org_id);
 
         if let Some(loc) = locality {
             query_params.insert("locality", loc);

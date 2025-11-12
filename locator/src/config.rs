@@ -5,7 +5,6 @@ use std::collections::HashMap;
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
-    None,
     Filesystem { base_dir: String, filename: String },
     Gcs { bucket: String },
 }

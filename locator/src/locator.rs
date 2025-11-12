@@ -88,7 +88,7 @@ impl Locator {
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum LocatorError {
-    #[error("no cell found for organization")]
+    #[error("no cell found for id")]
     NoCell,
 
     #[error("requested locality does not match the cell's locality")]
@@ -133,7 +133,7 @@ struct IdToCell {
     locality_to_default_cell: HashMap<String, String>,
     data: RwLock<RouteDataWithTimestamp>,
     // Keeps track of recently failed lookups to avoid repeated queries against
-    // non-existent or recently deleted organizations from adding load to the system.
+    // non-existent or recently deleted organizations/project keys from adding load to the system.
     negative_cache: NegativeCache,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot

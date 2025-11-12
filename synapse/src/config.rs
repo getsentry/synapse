@@ -75,6 +75,7 @@ mod tests {
                     type: filesystem
                     base_dir: /var/lib/locator/
                     filename: backup.bin
+                data_type: organization
             "#;
         let tmp = write_tmp_file(locator_yaml);
         let config = Config::from_file(tmp.path()).expect("load config");

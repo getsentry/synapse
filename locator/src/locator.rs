@@ -1,3 +1,4 @@
+use crate::config::LocatorDataType;
 use crate::control_plane::ControlPlane;
 use crate::types::RouteData;
 use std::sync::Arc;
@@ -13,7 +14,7 @@ use tokio::sync::{AcquireError, Mutex, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 struct LocatorInner {
-    org_to_cell_map: Arc<OrgToCell>,
+    id_to_cell_map: Arc<IdToCell>,
     handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
@@ -24,6 +25,7 @@ pub struct Locator {
 
 impl Locator {
     pub fn new(
+        data_type: LocatorDataType,
         control_plane_url: String,
         backup_provider: Arc<dyn BackupRouteProvider + 'static>,
         locality_to_default_cell: Option<HashMap<String, String>>,
@@ -31,7 +33,8 @@ impl Locator {
         // Channel to send commands to the worker thread.
         let (tx, rx) = mpsc::channel::<Command>(64);
 
-        let org_to_cell_map = Arc::new(OrgToCell::new(
+        let id_to_cell_map = Arc::new(IdToCell::new(
+            data_type,
             control_plane_url,
             backup_provider,
             locality_to_default_cell,
@@ -41,9 +44,9 @@ impl Locator {
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
-        let org_to_cell_map_clone = org_to_cell_map.clone();
+        let id_to_cell_map_clone = id_to_cell_map.clone();
         let handle = tokio::spawn(async move {
-            if let Err(err) = org_to_cell_map_clone.start(rx).await {
+            if let Err(err) = id_to_cell_map_clone.start(rx).await {
                 tracing::error!("Failed to start locator: {err:?}. Exiting process.");
                 std::process::exit(1);
             }
@@ -51,25 +54,21 @@ impl Locator {
 
         Locator {
             inner: Arc::new(LocatorInner {
-                org_to_cell_map,
+                id_to_cell_map,
                 handle: Mutex::new(Some(handle)),
             }),
         }
     }
 
-    pub async fn lookup(
-        &self,
-        org_id: &str,
-        locality: Option<&str>,
-    ) -> Result<String, LocatorError> {
-        self.inner.org_to_cell_map.lookup(org_id, locality).await
+    pub async fn lookup(&self, id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
+        self.inner.id_to_cell_map.lookup(id, locality).await
     }
 
     pub async fn shutdown(&self) {
         // Send shutdown command to the worker thread to end the incremental loading loop
         tracing::info!("shutting down locator");
 
-        if let Err(e) = self.inner.org_to_cell_map.tx.send(Command::Shutdown).await {
+        if let Err(e) = self.inner.id_to_cell_map.tx.send(Command::Shutdown).await {
             tracing::error!("Failed to send shutdown command: {:?}", e);
             return;
         }
@@ -83,7 +82,7 @@ impl Locator {
     }
 
     pub fn is_ready(&self) -> bool {
-        self.inner.org_to_cell_map.ready.load(Ordering::Relaxed)
+        self.inner.id_to_cell_map.ready.load(Ordering::Relaxed)
     }
 }
 
@@ -127,9 +126,9 @@ struct RouteDataWithTimestamp {
     last_updated: Option<Instant>,
 }
 
-/// Synchronizes the org to cell mappings from the control plane and backup route provider.
+/// Synchronizes the id to cell mappings from the control plane and backup route provider.
 /// This struct is used internally by the Locator.
-struct OrgToCell {
+struct IdToCell {
     control_plane: ControlPlane,
     locality_to_default_cell: HashMap<String, String>,
     data: RwLock<RouteDataWithTimestamp>,
@@ -149,8 +148,9 @@ struct OrgToCell {
     tx: mpsc::Sender<Command>,
 }
 
-impl OrgToCell {
+impl IdToCell {
     pub fn new(
+        data_type: LocatorDataType,
         control_plane_url: String,
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
         locality_to_default_cell: Option<HashMap<String, String>>,
@@ -160,15 +160,15 @@ impl OrgToCell {
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
-                org_to_cell: HashMap::new(),
+                id_to_cell: HashMap::new(),
                 last_cursor: "".into(),
                 cells: HashMap::new(),
             },
             last_updated: None,
         };
 
-        OrgToCell {
-            control_plane: ControlPlane::new(control_plane_url),
+        IdToCell {
+            control_plane: ControlPlane::new(data_type, control_plane_url),
             locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
             data: RwLock::new(data),
             negative_cache: NegativeCache::new(),
@@ -181,14 +181,11 @@ impl OrgToCell {
         }
     }
 
-    pub async fn lookup(
-        &self,
-        org_id: &str,
-        locality: Option<&str>,
-    ) -> Result<String, LocatorError> {
-        // Looks up the cell for a given organization ID and locality.
+    pub async fn lookup(&self, id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
+        // Looks up the cell for a given id and locality.
+        // Id is generally either an org id, org slug or project key
         // Returns `Ok(Cell)` if found, or a default applies.
-        // Returns an error if locality is passed and the org_id/locality pair is not valid.
+        // Returns an error if locality is passed and the id/locality pair is not valid.
         // Or if a locality is passed but no defualt cell is found for that locality
         if !self.ready.load(Ordering::Relaxed) {
             return Err(LocatorError::NotReady);
@@ -201,14 +198,14 @@ impl OrgToCell {
             let read_guard = self.data.read();
             read_guard
                 .data
-                .org_to_cell
-                .get(org_id)
+                .id_to_cell
+                .get(id)
                 .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned())
         };
 
         // Check the negative cache and possibly refresh data from control plane
         let cell = if cell.is_none() {
-            if self.negative_cache.contains(org_id) {
+            if self.negative_cache.contains(id) {
                 None
             } else {
                 let (ack_tx, ack_rx) = oneshot::channel::<Result<(), LoadError>>();
@@ -223,13 +220,13 @@ impl OrgToCell {
                         let read_guard = self.data.read();
                         let res = read_guard
                             .data
-                            .org_to_cell
-                            .get(org_id)
+                            .id_to_cell
+                            .get(id)
                             .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned());
 
                         // Record still not found after refresh, add to negative cache
                         if res.is_none() {
-                            self.negative_cache.insert(org_id);
+                            self.negative_cache.insert(id);
                         }
 
                         res
@@ -340,7 +337,7 @@ impl OrgToCell {
 
         let mut write_guard = self.data.write();
 
-        write_guard.data.org_to_cell = route_data.org_to_cell;
+        write_guard.data.id_to_cell = route_data.id_to_cell;
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells = route_data.cells;
         write_guard.last_updated = snapshot_requested_time;
@@ -376,7 +373,7 @@ impl OrgToCell {
 
         // Merge the incremental data with the existing data
         let mut write_guard = self.data.write();
-        write_guard.data.org_to_cell.extend(route_data.org_to_cell);
+        write_guard.data.id_to_cell.extend(route_data.id_to_cell);
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells.extend(route_data.cells);
         write_guard.last_updated = Some(incremental_requested_time);
@@ -426,6 +423,7 @@ mod tests {
         let (_dir, provider) = get_mock_provider();
 
         let locator = Locator::new(
+            LocatorDataType::Organization,
             format!("http://{host}:{port}").to_string(),
             provider.clone(),
             Some(HashMap::from([("de".into(), "de".into())])),
@@ -450,7 +448,7 @@ mod tests {
 
         // Org "0" should be written to the backup provider
         let provider_data = provider.load().unwrap();
-        assert_eq!(provider_data.org_to_cell.get("0").unwrap(), "us1");
+        assert_eq!(provider_data.id_to_cell.get("0").unwrap(), "us1");
     }
 
     #[tokio::test]
@@ -460,6 +458,7 @@ mod tests {
         let (_dir, provider) = get_mock_provider();
 
         let locator = Locator::new(
+            LocatorDataType::Organization,
             "http://invalid-control-plane:9000".to_string(),
             provider,
             Some(HashMap::from([("de".into(), "de".into())])),

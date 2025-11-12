@@ -1,6 +1,7 @@
 use crate::config::{Locator as LocatorConfig, LocatorType};
 use crate::errors::ProxyError;
 use http::StatusCode;
+use locator::config::LocatorDataType;
 use locator::get_provider;
 use locator::locator::{Locator as LocatorService, LocatorError};
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ impl Locator {
             } => {
                 let provider = get_provider(backup_route_store.r#type);
                 Locator(LocatorInner::InProcess(LocatorService::new(
+                    LocatorDataType::Organization,
                     control_plane.url,
                     provider,
                     locality_to_default_cell,
@@ -62,6 +64,7 @@ impl Locator {
         locality_to_default_cell: Option<HashMap<String, String>>,
     ) -> Self {
         Locator(LocatorInner::InProcess(LocatorService::new(
+            LocatorDataType::Organization,
             control_plane_url,
             backup_provider,
             locality_to_default_cell,

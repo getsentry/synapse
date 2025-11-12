@@ -1,5 +1,6 @@
 use crate::config::{HandlerAction, Route};
 use crate::errors::IngestRouterError;
+use crate::relay_project_config_handler::RelayProjectConfigsHandler;
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::Bytes;
 use hyper::{Request, Response, StatusCode};
@@ -9,13 +10,15 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct Router {
     routes: Arc<Vec<Route>>,
+    handler: Arc<RelayProjectConfigsHandler>,
 }
 
 impl Router {
-    /// Creates a new router with the given routes
-    pub fn new(routes: Vec<Route>) -> Self {
+    /// Creates a new router with the given routes and handler
+    pub fn new(routes: Vec<Route>, handler: RelayProjectConfigsHandler) -> Self {
         Self {
             routes: Arc::new(routes),
+            handler: Arc::new(handler),
         }
     }
 
@@ -26,6 +29,8 @@ impl Router {
     ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError>
     where
         B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: std::error::Error + Send + Sync + 'static,
     {
         // Find a matching route
         match self.find_matching_route(&req) {
@@ -90,37 +95,22 @@ impl Router {
         true
     }
 
-    /// Handles a matched action (placeholder for now)
+    /// Handles a matched action by calling the appropriate handler
     async fn handle_action<B>(
         &self,
-        _req: Request<B>,
+        req: Request<B>,
         action: &HandlerAction,
     ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError>
     where
         B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: std::error::Error + Send + Sync + 'static,
     {
-        // TODO: Implement actual handler logic
-        // This will need to be passed to a separate Handler interface that has access to
-        // locale_to_cells mapping and upstreams
-
-        // For now, just return a debug response showing which handler would be called
-        let response_body = match action {
+        match action {
             HandlerAction::RelayProjectConfigs(args) => {
-                format!(
-                    "Route matched!\nHandler: RelayProjectConfigs\nLocale: {}\n",
-                    args.locale
-                )
+                self.handler.handle(&args.locale, req).await
             }
-        };
-
-        Response::builder()
-            .status(StatusCode::OK)
-            .body(
-                Full::new(response_body.into())
-                    .map_err(|e| match e {})
-                    .boxed(),
-            )
-            .map_err(|e| IngestRouterError::InternalError(format!("Failed to build response: {e}")))
+        }
     }
 
     /// Handles an unmatched request
@@ -142,13 +132,50 @@ impl Router {
 mod tests {
     use super::*;
     use crate::config::{HttpMethod, Match, RelayProjectConfigsArgs, Route};
-    use http_body_util::Empty;
     use hyper::body::Bytes;
     use hyper::header::HOST;
     use hyper::{Method, Request};
 
     fn test_router(routes: Vec<Route>) -> Router {
-        Router::new(routes)
+        use crate::config::CellConfig;
+        use std::collections::HashMap;
+        use url::Url;
+
+        // Create test locales
+        let mut locales = HashMap::new();
+        locales.insert(
+            "us".to_string(),
+            HashMap::from([(
+                "us-cell-1".to_string(),
+                CellConfig {
+                    relay_url: Url::parse("http://us-relay.example.com:8080").unwrap(),
+                    sentry_url: Url::parse("http://us-sentry.example.com:8080").unwrap(),
+                },
+            )]),
+        );
+        locales.insert(
+            "de".to_string(),
+            HashMap::from([(
+                "de-cell-1".to_string(),
+                CellConfig {
+                    relay_url: Url::parse("http://de-relay.example.com:8080").unwrap(),
+                    sentry_url: Url::parse("http://de-sentry.example.com:8080").unwrap(),
+                },
+            )]),
+        );
+        locales.insert(
+            "local".to_string(),
+            HashMap::from([(
+                "local-cell".to_string(),
+                CellConfig {
+                    relay_url: Url::parse("http://local-relay.example.com:8080").unwrap(),
+                    sentry_url: Url::parse("http://local-sentry.example.com:8080").unwrap(),
+                },
+            )]),
+        );
+
+        let handler = RelayProjectConfigsHandler::new(locales);
+        Router::new(routes, handler)
     }
 
     fn test_request(
@@ -156,13 +183,20 @@ mod tests {
         path: &str,
         host: Option<&str>,
     ) -> Request<BoxBody<Bytes, std::convert::Infallible>> {
+        // Create a valid relay project configs request body with empty publicKeys
+        // so we don't need to contact upstreams in routing tests
+        let request_body = serde_json::json!({
+            "publicKeys": []
+        });
+        let body_str = serde_json::to_string(&request_body).unwrap();
+
         let mut builder = Request::builder().method(method).uri(path);
         if let Some(h) = host {
             builder = builder.header(HOST, h);
         }
         builder
             .body(
-                Empty::<Bytes>::new()
+                http_body_util::Full::new(Bytes::from(body_str))
                     .map_err(|never| match never {})
                     .boxed(),
             )

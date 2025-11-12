@@ -2,43 +2,57 @@ pub mod config;
 pub mod errors;
 pub mod http;
 pub mod locale;
+pub mod relay_project_config_handler;
 pub mod router;
 
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
 use hyper::service::Service;
 use hyper::{Request, Response};
 use shared::http::run_http_service;
+use std::collections::HashMap;
 use std::pin::Pin;
+use crate::config::{Config, CellConfig, Route};
+use crate::router::Router;
+use crate::relay_project_config_handler::RelayProjectConfigsHandler;
+use crate::errors::IngestRouterError;
 
-#[derive(thiserror::Error, Debug)]
-pub enum IngestRouterError {
-    #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
-}
-
-pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
-    let router_service = IngestRouterService {};
+pub async fn run(config: Config) -> Result<(), errors::IngestRouterError> {
+    let router_service = IngestRouterService::new(config.routes.clone(), config.locales.clone());
     let router_task = run_http_service(&config.listener.host, config.listener.port, router_service);
     router_task.await?;
     Ok(())
 }
 
-struct IngestRouterService {}
+#[derive(Clone)]
+struct IngestRouterService {
+    router: Router,
+}
+
+impl IngestRouterService {
+    fn new(
+        routes: Vec<Route>,
+        locales: HashMap<
+            String,
+            HashMap<String, CellConfig>,
+        >,
+    ) -> Self {
+        let handler = RelayProjectConfigsHandler::new(locales);
+        Self {
+            router: Router::new(routes, handler),
+        }
+    }
+}
 
 impl Service<Request<Incoming>> for IngestRouterService {
-    type Response = Response<BoxBody<Bytes, Self::Error>>;
+    type Response = Response<BoxBody<Bytes, IngestRouterError>>;
     type Error = IngestRouterError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
-        println!("Received request: {req:?}");
-        Box::pin(async move {
-            Ok(Response::new(
-                Full::new("ok\n".into()).map_err(|e| match e {}).boxed(),
-            ))
-        })
+        let router = self.router.clone();
+        Box::pin(async move { router.route(req).await })
     }
 }

@@ -10,6 +10,8 @@ import base64
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
 import argparse
+from enum import Enum
+import itertools
 
 
 # This API mocks the control plane snapshot request, split across pages
@@ -24,14 +26,42 @@ Cursor = Optional[str]
 HasMore = bool
 
 
-ALL_RESULTS = [
-    # org_id, slug, cell, updated_at
-    (str(i), f"sentry{i}", f"us{i % 2 + 1}", START_TIME + i)
+ALL_ORG_RESULTS = [
+    {
+        "id": str(i),
+        "slug": f"sentry{i}",
+        "cell": f"us{i % 2 + 1}",
+        "updated_at": START_TIME + i
+    }
     for i in range(TOTAL_RESULTS)
 ]
 
 
-def get_results(cursor: Optional[str]) -> tuple[Results, Cursor, HasMore]:
+ALL_PROJECTKEY_RESULTS = [
+    {
+        "id": d * 32,
+        "cell": f"us{i % 2 + 1}",
+        "updated_at": START_TIME + i
+    }
+    for i, d in zip(range(TOTAL_RESULTS), itertools.cycle("0123456789abcdef"))
+]
+
+
+class EntityType(Enum):
+    ORG = "org"
+    PROJECT_KEY = "projectkey"
+
+
+def get_results(
+    entity: EntityType, cursor: Optional[str]
+) -> tuple[Results, Cursor, HasMore]:
+
+    all_results = (
+        ALL_PROJECTKEY_RESULTS
+        if entity == EntityType.PROJECT_KEY
+        else ALL_ORG_RESULTS
+    )
+
     from_idx: Optional[int] = None
 
     if cursor is None:
@@ -39,19 +69,22 @@ def get_results(cursor: Optional[str]) -> tuple[Results, Cursor, HasMore]:
     else:
         decoded = json.loads(base64.b64decode(cursor).decode("utf-8"))
         updated_at = decoded["updated_at"]
-        org_id = decoded["org_id"]
 
-        for idx, result in enumerate(ALL_RESULTS):
+        # this is the org id or project key id depending on the result type
+        entity_key = "org_id" if entity == EntityType.ORG else "project_key"
+        entity_id = decoded[entity_key]
+
+        for idx, result in enumerate(all_results):
             # cursor matches exactly, start from next result
-            if result[3] == updated_at and result[0] == org_id:
+            if result["updated_at"] == updated_at and result["id"] == entity_id:
                 from_idx = idx
                 break
-            # the cursor doesn't have an org_id
-            elif result[3] == updated_at and org_id is None:
+            # the cursor doesn't have an entity_id
+            elif result["updated_at"] == updated_at and entity_id is None:
                 from_idx = idx
                 break
             # we passed the cursor and there was no exact match
-            elif result[3] > updated_at:
+            elif result["updated_at"] > updated_at:
                 from_idx = idx
                 break
 
@@ -65,18 +98,28 @@ def get_results(cursor: Optional[str]) -> tuple[Results, Cursor, HasMore]:
     has_more = to_idx < TOTAL_RESULTS - 1
 
     if has_more:
-        next_result = ALL_RESULTS[to_idx + 1]
-        next_cursor = make_cursor(next_result[3], next_result[0])
+        next_result = all_results[to_idx + 1]
+        next_cursor = make_cursor(entity, next_result["updated_at"], next_result["id"])
     else:
-        next_cursor = make_cursor(to_idx, None)
+        next_cursor = make_cursor(entity, to_idx, None)
 
     results = []
     for i in range(from_idx, to_idx + 1):
-        results.append({
-            "id": str(i),
-            "slug": f"sentry{i}",
-            "cell": f"us{i % 2 + 1}",
-        })
+        if entity == EntityType.ORG:
+            results.append(
+                {
+                    "id": all_results[i]["id"],
+                    "slug": all_results[i]["slug"],
+                    "cell": all_results[i]["cell"],
+                }
+            )
+        else:
+            results.append(
+                {
+                    "id": all_results[i]["id"],
+                    "cell": all_results[i]["cell"],
+                }
+            )
     return results, next_cursor, has_more
 
 
@@ -88,7 +131,7 @@ class MockControlApi(BaseHTTPRequestHandler):
 
         if base_path == "/org-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
-            (data, next_cursor, has_more) = get_results(cursor)
+            (data, next_cursor, has_more) = get_results(EntityType.ORG, cursor)
 
             response = {
                 "data": data,
@@ -98,8 +141,29 @@ class MockControlApi(BaseHTTPRequestHandler):
                     "cell_to_locality": {
                         "us1": "us",
                         "us2": "us",
-                    }
-                }
+                    },
+                },
+            }
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode("utf-8"))
+
+        elif base_path == "projectkey-cell-mappings/":
+            cursor = query_params.get("cursor", [None])[0]
+            (data, next_cursor, has_more) = get_results(EntityType.PROJECT_KEY, cursor)
+
+            response = {
+                "data": data,
+                "metadata": {
+                    "cursor": next_cursor,
+                    "has_more": has_more,
+                    "cell_to_locality": {
+                        "us1": "us",
+                        "us2": "us",
+                    },
+                },
             }
 
             self.send_response(200)
@@ -113,11 +177,17 @@ class MockControlApi(BaseHTTPRequestHandler):
             self.wfile.write(b"Not Found")
 
 
-def make_cursor(updated_at: int, org_id: Optional[str]) -> str:
-    return base64.b64encode(json.dumps({
-        "org_id": org_id,
-        "updated_at": updated_at,
-    }).encode("utf-8")).decode("utf-8")
+def make_cursor(entity: EntityType, updated_at: int, entity_id: Optional[str]) -> str:
+    entity_key = "org_id" if entity == EntityType.ORG else "project_key"
+
+    return base64.b64encode(
+        json.dumps(
+            {
+                entity_key: entity_id,
+                "updated_at": updated_at,
+            }
+        ).encode("utf-8")
+    ).decode("utf-8")
 
 
 if __name__ == "__main__":

@@ -27,15 +27,22 @@ HasMore = bool
 
 
 ALL_ORG_RESULTS = [
-    # org_id, slug, cell, updated_at
-    (str(i), f"sentry{i}", f"us{i % 2 + 1}", START_TIME + i)
+    {
+        "id": str(i),
+        "slug": f"sentry{i}",
+        "cell": f"us{i % 2 + 1}",
+        "updated_at": START_TIME + i
+    }
     for i in range(TOTAL_RESULTS)
 ]
 
 
 ALL_PROJECTKEY_RESULTS = [
-    # projectkey, cell, updated_at
-    (d * 32, f"us{i % 2 + 1}", START_TIME + i)
+    {
+        "id": d * 32,
+        "cell": f"us{i % 2 + 1}",
+        "updated_at": START_TIME + i
+    }
     for i, d in zip(range(TOTAL_RESULTS), itertools.cycle("0123456789abcdef"))
 ]
 
@@ -69,15 +76,15 @@ def get_results(
 
         for idx, result in enumerate(all_results):
             # cursor matches exactly, start from next result
-            if result[3] == updated_at and result[0] == entity_id:
+            if result["updated_at"] == updated_at and result["id"] == entity_id:
                 from_idx = idx
                 break
             # the cursor doesn't have an entity_id
-            elif result[3] == updated_at and entity_id is None:
+            elif result["updated_at"] == updated_at and entity_id is None:
                 from_idx = idx
                 break
             # we passed the cursor and there was no exact match
-            elif result[3] > updated_at:
+            elif result["updated_at"] > updated_at:
                 from_idx = idx
                 break
 
@@ -92,7 +99,7 @@ def get_results(
 
     if has_more:
         next_result = all_results[to_idx + 1]
-        next_cursor = make_cursor(entity, next_result[3], next_result[0])
+        next_cursor = make_cursor(entity, next_result["updated_at"], next_result["id"])
     else:
         next_cursor = make_cursor(entity, to_idx, None)
 
@@ -101,16 +108,16 @@ def get_results(
         if entity == EntityType.ORG:
             results.append(
                 {
-                    "id": all_results[i][0],
-                    "slug": all_results[i][1],
-                    "cell": all_results[i][2],
+                    "id": all_results[i]["id"],
+                    "slug": all_results[i]["slug"],
+                    "cell": all_results[i]["cell"],
                 }
             )
         else:
             results.append(
                 {
-                    "id": all_results[i][0],
-                    "cell": all_results[i][1],
+                    "id": all_results[i]["id"],
+                    "cell": all_results[i]["cell"],
                 }
             )
     return results, next_cursor, has_more

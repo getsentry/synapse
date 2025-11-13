@@ -2027,6 +2027,7 @@ dependencies = [
  "hyper-util",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

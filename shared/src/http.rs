@@ -3,15 +3,19 @@ use http::header::{
     CONNECTION, HeaderMap, HeaderName, HeaderValue, PROXY_AUTHENTICATE, PROXY_AUTHORIZATION, TE,
     TRAILER, TRANSFER_ENCODING, UPGRADE, VIA,
 };
+use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
 use hyper::body::{Bytes, Incoming};
 use hyper::service::Service;
 use hyper::{Request, Response};
+use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto::Builder;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio::time::timeout;
 
 pub async fn run_http_service<S, E>(host: &str, port: u16, service: S) -> Result<(), E>
 where
@@ -130,6 +134,109 @@ pub fn filter_hop_by_hop(headers: &mut HeaderMap, version: Version) -> &mut Head
 
     headers
 }
+
+/// Send a request to a single upstream with configurable timeout
+pub async fn send_to_upstream<C, B, E>(
+    client: &Client<C, B>,
+    upstream_url: &url::Url,
+    request: Request<B>,
+    timeout_secs: u64,
+) -> Result<Response<Bytes>, E>
+where
+    C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
+    B: hyper::body::Body + Send + Unpin + 'static,
+    B::Data: Send,
+    B::Error: std::error::Error + Send + Sync + 'static,
+    E: From<UpstreamError>,
+{
+    // Use host as identifier for error messages
+    let upstream_identifier = upstream_url.host_str().unwrap_or(upstream_url.as_str());
+
+    // Build the full upstream URI by combining base URL with request path
+    let path_and_query = request
+        .uri()
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/");
+
+    let mut url = upstream_url.clone();
+    if let Some((path, query)) = path_and_query.split_once('?') {
+        url.set_path(path);
+        url.set_query(Some(query));
+    } else {
+        url.set_path(path_and_query);
+    }
+    let upstream_uri = url.to_string();
+
+    // Build request to send to upstream with modified URI and filtered headers
+    let (mut parts, body) = request.into_parts();
+    filter_hop_by_hop(&mut parts.headers, parts.version);
+
+    let mut req_builder = Request::builder()
+        .method(parts.method)
+        .uri(upstream_uri)
+        .version(parts.version);
+
+    for (name, value) in parts.headers.iter() {
+        req_builder = req_builder.header(name, value);
+    }
+
+    let upstream_request = req_builder.body(body).map_err(|e| {
+        E::from(UpstreamError::InternalError(format!(
+            "Failed to build request: {e}"
+        )))
+    })?;
+
+    // Send request with timeout
+    let response = timeout(
+        Duration::from_secs(timeout_secs),
+        client.request(upstream_request),
+    )
+    .await
+    .map_err(|_| E::from(UpstreamError::Timeout(upstream_identifier.to_string())))?
+    .map_err(|e| {
+        E::from(UpstreamError::RequestFailed(
+            upstream_identifier.to_string(),
+            e.to_string(),
+        ))
+    })?;
+
+    // Collect response body bytes
+    let (parts, body) = response.into_parts();
+    let body_bytes = body
+        .collect()
+        .await
+        .map(|collected| collected.to_bytes())
+        .map_err(|e| E::from(UpstreamError::ResponseBodyError(e.to_string())))?;
+
+    Ok(Response::from_parts(parts, body_bytes))
+}
+
+/// Errors that can occur during upstream operations
+#[derive(Debug)]
+pub enum UpstreamError {
+    RequestBodyError(String),
+    ResponseBodyError(String),
+    Timeout(String),
+    RequestFailed(String, String),
+    InternalError(String),
+}
+
+impl std::fmt::Display for UpstreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UpstreamError::RequestBodyError(s) => write!(f, "Failed to read request body: {}", s),
+            UpstreamError::ResponseBodyError(s) => write!(f, "Failed to read response body: {}", s),
+            UpstreamError::Timeout(name) => write!(f, "Upstream timeout for {}", name),
+            UpstreamError::RequestFailed(name, err) => {
+                write!(f, "Upstream request failed for {}: {}", name, err)
+            }
+            UpstreamError::InternalError(s) => write!(f, "Internal error: {}", s),
+        }
+    }
+}
+
+impl std::error::Error for UpstreamError {}
 
 #[cfg(test)]
 mod tests {

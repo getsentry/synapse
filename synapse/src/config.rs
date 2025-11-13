@@ -145,7 +145,7 @@ mod tests {
 
         assert_eq!(ingest_router_config.listener.port, 3000);
         assert_eq!(ingest_router_config.admin_listener.port, 3001);
-        assert!(!ingest_router_config.upstreams.is_empty());
+        assert!(!ingest_router_config.locales.is_empty());
         assert!(!ingest_router_config.routes.is_empty());
     }
 }

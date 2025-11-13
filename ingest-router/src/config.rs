@@ -19,6 +19,9 @@ pub enum ValidationError {
 
     #[error("Empty locale in action")]
     EmptyLocale,
+
+    #[error("Locale '{0}' has no valid cells (none of its cells match any upstream)")]
+    LocaleHasNoValidCells(String),
 }
 
 /// HTTP methods supported for route matching
@@ -56,6 +59,16 @@ pub struct RelayProjectConfigsArgs {
     pub locale: String,
 }
 
+/// Cell/upstream configuration
+/// Note: The cell name is the HashMap key in Config.locales
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CellConfig {
+    /// URL of the Sentry upstream server
+    pub sentry_url: Url,
+    /// URL of the Relay upstream server
+    pub relay_url: Url,
+}
+
 /// Proxy configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
@@ -65,14 +78,12 @@ pub struct Config {
     /// Admin listener for administrative endpoints
     #[serde(default)]
     pub admin_listener: AdminListener,
-    /// Maps locale identifiers to lists of cell names
+    /// Maps locale identifiers to their cells (cell name -> cell config)
     ///
     /// Note: Uses String keys instead of an enum to allow flexible,
     /// deployment-specific locale configuration without code changes.
     /// Different deployments may use different locale identifiers.
-    pub locale_to_cells: HashMap<String, Vec<String>>,
-    /// List of upstream servers
-    pub upstreams: Vec<UpstreamConfig>,
+    pub locales: HashMap<String, HashMap<String, CellConfig>>,
     /// Request routing rules
     pub routes: Vec<Route>,
 }
@@ -84,20 +95,23 @@ impl Config {
         self.listener.validate()?;
         self.admin_listener.validate()?;
 
-        // Validate upstreams
-        let mut upstream_names = HashSet::new();
-        for upstream in &self.upstreams {
-            if upstream.name.is_empty() {
-                return Err(ValidationError::EmptyUpstreamName);
+        // Validate locales and cells
+        for (locale, cells) in &self.locales {
+            // Check that locale has at least one cell
+            if cells.is_empty() {
+                return Err(ValidationError::LocaleHasNoValidCells(locale.clone()));
             }
 
-            if !upstream_names.insert(&upstream.name) {
-                return Err(ValidationError::DuplicateUpstream(upstream.name.clone()));
+            // Check for empty cell names (HashMap keys)
+            for cell_name in cells.keys() {
+                if cell_name.is_empty() {
+                    return Err(ValidationError::EmptyUpstreamName);
+                }
             }
         }
 
-        // Collect valid locales from locale_to_cells
-        let valid_locales: HashSet<&String> = self.locale_to_cells.keys().collect();
+        // Collect valid locales
+        let valid_locales: HashSet<&String> = self.locales.keys().collect();
 
         // Validate route actions
         for route in &self.routes {
@@ -163,23 +177,6 @@ impl AdminListener {
     }
 }
 
-/// Upstream server configuration
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct UpstreamConfig {
-    /// Unique identifier for this upstream
-    pub name: String,
-    /// URL of the Sentry upstream server
-    ///
-    /// Note: Uses the `url::Url` type for compile-time URL validation.
-    /// Invalid URLs will be rejected during config deserialization.
-    pub sentry_url: Url,
-    /// URL of the Relay upstream server
-    ///
-    /// Note: Uses the `url::Url` type for compile-time URL validation.
-    /// Invalid URLs will be rejected during config deserialization.
-    pub relay_url: Url,
-}
-
 /// Routing rule configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Route {
@@ -227,19 +224,18 @@ listener:
 admin_listener:
     host: "127.0.0.1"
     port: 3001
-locale_to_cells:
+locales:
     us:
-        - us1
-        - us2
+        us1:
+            sentry_url: "http://127.0.0.1:8080"
+            relay_url: "http://127.0.0.1:8090"
+        us2:
+            sentry_url: "http://10.0.0.2:8080"
+            relay_url: "http://10.0.0.2:8090"
     de:
-        - de1
-upstreams:
-    - name: us1
-      sentry_url: "http://127.0.0.1:8080"
-      relay_url: "http://127.0.0.1:8090"
-    - name: us2
-      sentry_url: "http://10.0.0.2:8080"
-      relay_url: "http://10.0.0.2:8090"
+        de1:
+            sentry_url: "http://10.0.0.3:8080"
+            relay_url: "http://10.0.0.3:8090"
 routes:
     - match:
         host: us.sentry.io
@@ -262,7 +258,9 @@ routes:
 
         // Verify key config values
         assert_eq!(config.listener.port, 3000);
-        assert_eq!(config.upstreams.len(), 2);
+        assert_eq!(config.locales.len(), 2);
+        assert_eq!(config.locales.get("us").unwrap().len(), 2);
+        assert_eq!(config.locales.get("de").unwrap().len(), 1);
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
@@ -285,12 +283,16 @@ routes:
                 host: "127.0.0.1".to_string(),
                 port: 3001,
             },
-            locale_to_cells: HashMap::from([("us".to_string(), vec!["us1".to_string()])]),
-            upstreams: vec![UpstreamConfig {
-                name: "us1".to_string(),
-                sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
-                relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
-            }],
+            locales: HashMap::from([(
+                "us".to_string(),
+                HashMap::from([(
+                    "us1".to_string(),
+                    CellConfig {
+                        sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
+                        relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
+                    },
+                )]),
+            )]),
             routes: vec![Route {
                 r#match: Match {
                     path: Some("/api/".to_string()),
@@ -311,25 +313,15 @@ routes:
             ValidationError::InvalidPort
         ));
 
-        // Test duplicate upstream names
+        // Test empty cell name
         let mut config = base_config.clone();
-        config.upstreams.push(UpstreamConfig {
-            name: "us1".to_string(),
-            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
-            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
-        });
-        assert!(matches!(
-            config.validate().unwrap_err(),
-            ValidationError::DuplicateUpstream(_)
-        ));
-
-        // Test empty upstream name
-        let mut config = base_config.clone();
-        config.upstreams.push(UpstreamConfig {
-            name: "".to_string(),
-            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
-            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
-        });
+        config.locales.get_mut("us").unwrap().insert(
+            "".to_string(),
+            CellConfig {
+                sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+                relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
+            },
+        );
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::EmptyUpstreamName
@@ -343,6 +335,16 @@ routes:
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::UnknownLocale(_)
+        ));
+
+        // Test locale with no cells
+        let mut config = base_config.clone();
+        config
+            .locales
+            .insert("invalid_locale".to_string(), HashMap::new());
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::LocaleHasNoValidCells(_)
         ));
     }
 

@@ -13,12 +13,14 @@ ingest_router:
       - de
   upstreams:
     - name: us1
-      url: "http://127.0.0.1:8080"
+      sentry_url: "http://10.0.0.1:8080"
+      relay_url: "http://10.0.0.1:8090"
     - name: us2
-      url: "http://10.0.0.2:8080"
+      sentry_url: "http://10.0.0.2:8080"
+      relay_url: "http://10.0.0.2:8090"
     - name: de
-      url: "http://10.0.0.3:8080"
-
+      sentry_url: "http://10.0.0.3:8080"
+      relay_url: "http://10.0.0.3:8090"
 
   routes:
     - match:

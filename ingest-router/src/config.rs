@@ -168,11 +168,16 @@ impl AdminListener {
 pub struct UpstreamConfig {
     /// Unique identifier for this upstream
     pub name: String,
-    /// URL of the upstream server
+    /// URL of the Sentry upstream server
     ///
     /// Note: Uses the `url::Url` type for compile-time URL validation.
     /// Invalid URLs will be rejected during config deserialization.
-    pub url: Url,
+    pub sentry_url: Url,
+    /// URL of the Relay upstream server
+    ///
+    /// Note: Uses the `url::Url` type for compile-time URL validation.
+    /// Invalid URLs will be rejected during config deserialization.
+    pub relay_url: Url,
 }
 
 /// Routing rule configuration
@@ -230,9 +235,11 @@ locale_to_cells:
         - de1
 upstreams:
     - name: us1
-      url: "http://127.0.0.1:8080"
+      sentry_url: "http://127.0.0.1:8080"
+      relay_url: "http://127.0.0.1:8090"
     - name: us2
-      url: "http://10.0.0.2:8080"
+      sentry_url: "http://10.0.0.2:8080"
+      relay_url: "http://10.0.0.2:8090"
 routes:
     - match:
         host: us.sentry.io
@@ -281,7 +288,8 @@ routes:
             locale_to_cells: HashMap::from([("us".to_string(), vec!["us1".to_string()])]),
             upstreams: vec![UpstreamConfig {
                 name: "us1".to_string(),
-                url: Url::parse("http://127.0.0.1:8080").unwrap(),
+                sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
+                relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
             }],
             routes: vec![Route {
                 r#match: Match {
@@ -307,7 +315,8 @@ routes:
         let mut config = base_config.clone();
         config.upstreams.push(UpstreamConfig {
             name: "us1".to_string(),
-            url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
         });
         assert!(matches!(
             config.validate().unwrap_err(),
@@ -318,7 +327,8 @@ routes:
         let mut config = base_config.clone();
         config.upstreams.push(UpstreamConfig {
             name: "".to_string(),
-            url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
         });
         assert!(matches!(
             config.validate().unwrap_err(),
@@ -345,7 +355,7 @@ routes:
 listener: {host: "0.0.0.0", port: 3000}
 admin_listener: {host: "127.0.0.1", port: 3001}
 locale_to_cells: {us: [us1]}
-upstreams: [{name: us1, url: "not-a-url"}]
+upstreams: [{name: us1, sentry_url: "not-a-url", relay_url: "http://127.0.0.1:8090"}]
 routes: []
 "#
             )

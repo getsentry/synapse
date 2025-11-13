@@ -1,5 +1,7 @@
 use crate::backup_routes::BackupRouteProvider;
-use crate::config::{ControlPlane as ControlPlaneConfig, Listener as ListenerConfig};
+use crate::config::{
+    ControlPlane as ControlPlaneConfig, Listener as ListenerConfig, LocatorDataType,
+};
 use crate::locator::{Locator, LocatorError};
 use axum::{
     Json, Router,
@@ -20,12 +22,18 @@ pub enum LocatorApiError {
 }
 
 pub async fn serve(
+    data_type: LocatorDataType,
     listener: ListenerConfig,
     control_plane: ControlPlaneConfig,
     provider: Arc<dyn BackupRouteProvider + 'static>,
     locality_to_default_cell: Option<HashMap<String, String>>,
 ) -> Result<(), LocatorApiError> {
-    let locator = Locator::new(control_plane.url, provider, locality_to_default_cell);
+    let locator = Locator::new(
+        data_type,
+        control_plane.url,
+        provider,
+        locality_to_default_cell,
+    );
     let app = Router::new()
         .route("/", get(handler))
         .with_state(locator.clone());
@@ -68,7 +76,7 @@ struct ApiErrorResponse {
 
 #[derive(Deserialize, Debug)]
 struct Params {
-    org_id: String,
+    id: String,
     locality: Option<String>,
 }
 
@@ -77,7 +85,7 @@ async fn handler(
     Query(params): Query<Params>,
 ) -> Result<ApiResponse, LocatorError> {
     locator
-        .lookup(&params.org_id, params.locality.as_deref())
+        .lookup(&params.id, params.locality.as_deref())
         .await
         .map(|cell| cell.into())
 }

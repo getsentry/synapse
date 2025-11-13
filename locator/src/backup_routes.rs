@@ -141,7 +141,7 @@ mod tests {
 
     fn get_route_data() -> RouteData {
         RouteData {
-            org_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
+            id_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
             last_cursor: "cursor1".into(),
             cells: HashMap::from([(
                 "cell1".into(),

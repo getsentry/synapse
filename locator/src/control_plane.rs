@@ -1,5 +1,6 @@
 const BASE_DELAY: u64 = 500;
 
+use crate::config::LocatorDataType;
 use crate::types::{CellId, RouteData};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
@@ -44,12 +45,13 @@ pub struct ControlPlane {
 }
 
 impl ControlPlane {
-    pub fn new(base_url: String) -> Self {
-        let full_url = format!(
-            "{}/{}/",
-            base_url.trim_end_matches('/'),
-            "org-cell-mappings"
-        );
+    pub fn new(data_type: LocatorDataType, base_url: String) -> Self {
+        let path = match data_type {
+            LocatorDataType::Organization => "org-cell-mappings",
+            LocatorDataType::ProjectKey => "projectkey-cell-mappings",
+        };
+
+        let full_url = format!("{}/{}/", base_url.trim_end_matches('/'), path);
 
         ControlPlane {
             client: reqwest::Client::new(),
@@ -138,10 +140,13 @@ mod tests {
     #[tokio::test]
     async fn test_control_plane() {
         let _server = TestControlPlaneServer::spawn("127.0.0.1", 9000).unwrap();
-        let control_plane = ControlPlane::new("http://127.0.0.1:9000/".to_string());
+        let control_plane = ControlPlane::new(
+            LocatorDataType::Organization,
+            "http://127.0.0.1:9000/".to_string(),
+        );
         let response = control_plane.load_mappings(None).await;
 
-        let mapping = response.unwrap().org_to_cell;
+        let mapping = response.unwrap().id_to_cell;
 
         assert_eq!(mapping.len(), 30);
 

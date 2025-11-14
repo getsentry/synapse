@@ -1,5 +1,6 @@
 pub mod config;
 pub mod errors;
+pub mod locale;
 pub mod router;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};

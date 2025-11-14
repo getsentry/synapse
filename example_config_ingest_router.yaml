@@ -5,22 +5,18 @@ ingest_router:
   admin_listener:
     host: "0.0.0.0"
     port: 3001
-  locale_to_cells:
+  locales:
     us:
-      - us1
-      - us2
+      us1:
+        sentry_url: "http://10.0.0.1:8080"
+        relay_url: "http://10.0.0.1:8090"
+      us2:
+        sentry_url: "http://10.0.0.2:8080"
+        relay_url: "http://10.0.0.2:8090"
     de:
-      - de
-  upstreams:
-    - name: us1
-      sentry_url: "http://10.0.0.1:8080"
-      relay_url: "http://10.0.0.1:8090"
-    - name: us2
-      sentry_url: "http://10.0.0.2:8080"
-      relay_url: "http://10.0.0.2:8090"
-    - name: de
-      sentry_url: "http://10.0.0.3:8080"
-      relay_url: "http://10.0.0.3:8090"
+      de:
+        sentry_url: "http://10.0.0.3:8080"
+        relay_url: "http://10.0.0.3:8090"
 
   routes:
     - match:

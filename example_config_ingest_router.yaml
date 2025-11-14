@@ -13,12 +13,14 @@ ingest_router:
       - de
   upstreams:
     - name: us1
-      url: "http://127.0.0.1:8080"
+      sentry_url: "http://10.0.0.1:8080"
+      relay_url: "http://10.0.0.1:8090"
     - name: us2
-      url: "http://10.0.0.2:8080"
+      sentry_url: "http://10.0.0.2:8080"
+      relay_url: "http://10.0.0.2:8090"
     - name: de
-      url: "http://10.0.0.3:8080"
-
+      sentry_url: "http://10.0.0.3:8080"
+      relay_url: "http://10.0.0.3:8090"
 
   routes:
     - match:
@@ -26,17 +28,17 @@ ingest_router:
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - us
+        handler: relay_project_configs
+        args:
+          locale: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
-        resolver: relay_merge_project_configs
-        locale:
-          - de
+        handler: relay_project_configs
+        args:
+          locale: de
 
 # logging:
 #   sentry_dsn: "your_sentry_dsn_here"

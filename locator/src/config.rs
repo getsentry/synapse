@@ -5,7 +5,6 @@ use std::collections::HashMap;
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
-    None,
     Filesystem { base_dir: String, filename: String },
     Gcs { bucket: String },
 }
@@ -27,10 +26,28 @@ pub struct Listener {
     pub port: u16,
 }
 
+impl Default for Listener {
+    fn default() -> Self {
+        Listener {
+            host: "127.0.0.1".into(),
+            port: 3000,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum LocatorDataType {
+    Organization,
+    ProjectKey,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
+    #[serde(default)]
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,
     pub locality_to_default_cell: Option<HashMap<String, String>>,
+    pub data_type: LocatorDataType,
 }

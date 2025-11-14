@@ -9,6 +9,7 @@ http-body-util = { workspace = true}
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 locator = { path = "../locator" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 shared = { path = "../shared" }
 thiserror = { workspace = true }

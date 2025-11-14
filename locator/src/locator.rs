@@ -1,3 +1,4 @@
+use crate::config::LocatorDataType;
 use crate::control_plane::ControlPlane;
 use crate::types::RouteData;
 use std::sync::Arc;
@@ -5,15 +6,15 @@ use std::time::Instant;
 
 use crate::backup_routes::{BackupError, BackupRouteProvider};
 use crate::negative_cache::NegativeCache;
-use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::sync::{AcquireError, Mutex, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 struct LocatorInner {
-    org_to_cell_map: Arc<OrgToCell>,
+    id_to_cell_map: Arc<IdToCell>,
     handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
@@ -24,6 +25,7 @@ pub struct Locator {
 
 impl Locator {
     pub fn new(
+        data_type: LocatorDataType,
         control_plane_url: String,
         backup_provider: Arc<dyn BackupRouteProvider + 'static>,
         locality_to_default_cell: Option<HashMap<String, String>>,
@@ -31,7 +33,8 @@ impl Locator {
         // Channel to send commands to the worker thread.
         let (tx, rx) = mpsc::channel::<Command>(64);
 
-        let org_to_cell_map = Arc::new(OrgToCell::new(
+        let id_to_cell_map = Arc::new(IdToCell::new(
+            data_type,
             control_plane_url,
             backup_provider,
             locality_to_default_cell,
@@ -41,9 +44,9 @@ impl Locator {
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
-        let org_to_cell_map_clone = org_to_cell_map.clone();
+        let id_to_cell_map_clone = id_to_cell_map.clone();
         let handle = tokio::spawn(async move {
-            if let Err(err) = org_to_cell_map_clone.start(rx).await {
+            if let Err(err) = id_to_cell_map_clone.start(rx).await {
                 tracing::error!("Failed to start locator: {err:?}. Exiting process.");
                 std::process::exit(1);
             }
@@ -51,25 +54,21 @@ impl Locator {
 
         Locator {
             inner: Arc::new(LocatorInner {
-                org_to_cell_map,
+                id_to_cell_map,
                 handle: Mutex::new(Some(handle)),
             }),
         }
     }
 
-    pub async fn lookup(
-        &self,
-        org_id: &str,
-        locality: Option<&str>,
-    ) -> Result<String, LocatorError> {
-        self.inner.org_to_cell_map.lookup(org_id, locality).await
+    pub async fn lookup(&self, id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
+        self.inner.id_to_cell_map.lookup(id, locality).await
     }
 
     pub async fn shutdown(&self) {
         // Send shutdown command to the worker thread to end the incremental loading loop
         tracing::info!("shutting down locator");
 
-        if let Err(e) = self.inner.org_to_cell_map.tx.send(Command::Shutdown).await {
+        if let Err(e) = self.inner.id_to_cell_map.tx.send(Command::Shutdown).await {
             tracing::error!("Failed to send shutdown command: {:?}", e);
             return;
         }
@@ -83,13 +82,13 @@ impl Locator {
     }
 
     pub fn is_ready(&self) -> bool {
-        self.inner.org_to_cell_map.ready.load(Ordering::Relaxed)
+        self.inner.id_to_cell_map.ready.load(Ordering::Relaxed)
     }
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum LocatorError {
-    #[error("no cell found for organization")]
+    #[error("no cell found for id")]
     NoCell,
 
     #[error("requested locality does not match the cell's locality")]
@@ -127,14 +126,14 @@ struct RouteDataWithTimestamp {
     last_updated: Option<Instant>,
 }
 
-/// Synchronizes the org to cell mappings from the control plane and backup route provider.
+/// Synchronizes the id to cell mappings from the control plane and backup route provider.
 /// This struct is used internally by the Locator.
-struct OrgToCell {
+struct IdToCell {
     control_plane: ControlPlane,
     locality_to_default_cell: HashMap<String, String>,
     data: RwLock<RouteDataWithTimestamp>,
     // Keeps track of recently failed lookups to avoid repeated queries against
-    // non-existent or recently deleted organizations from adding load to the system.
+    // non-existent or recently deleted organizations/project keys from adding load to the system.
     negative_cache: NegativeCache,
     update_lock: Semaphore,
     // Used by the readiness probe. Initially false and set to true once any snapshot
@@ -149,8 +148,9 @@ struct OrgToCell {
     tx: mpsc::Sender<Command>,
 }
 
-impl OrgToCell {
+impl IdToCell {
     pub fn new(
+        data_type: LocatorDataType,
         control_plane_url: String,
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
         locality_to_default_cell: Option<HashMap<String, String>>,
@@ -160,15 +160,15 @@ impl OrgToCell {
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
-                org_to_cell: HashMap::new(),
+                id_to_cell: HashMap::new(),
                 last_cursor: "".into(),
                 cells: HashMap::new(),
             },
             last_updated: None,
         };
 
-        OrgToCell {
-            control_plane: ControlPlane::new(control_plane_url),
+        IdToCell {
+            control_plane: ControlPlane::new(data_type, control_plane_url),
             locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
             data: RwLock::new(data),
             negative_cache: NegativeCache::new(),
@@ -181,14 +181,11 @@ impl OrgToCell {
         }
     }
 
-    pub async fn lookup(
-        &self,
-        org_id: &str,
-        locality: Option<&str>,
-    ) -> Result<String, LocatorError> {
-        // Looks up the cell for a given organization ID and locality.
+    pub async fn lookup(&self, id: &str, locality: Option<&str>) -> Result<String, LocatorError> {
+        // Looks up the cell for a given id and locality.
+        // Id is generally either an org id, org slug or project key
         // Returns `Ok(Cell)` if found, or a default applies.
-        // Returns an error if locality is passed and the org_id/locality pair is not valid.
+        // Returns an error if locality is passed and the id/locality pair is not valid.
         // Or if a locality is passed but no defualt cell is found for that locality
         if !self.ready.load(Ordering::Relaxed) {
             return Err(LocatorError::NotReady);
@@ -197,18 +194,18 @@ impl OrgToCell {
         let start_lookup = Instant::now();
 
         // Fetch cell and immediately release read lock
-        let cell = {
-            let read_guard = self.data.read();
+        let maybe_cell = {
+            let read_guard = self.data.read().await;
             read_guard
                 .data
-                .org_to_cell
-                .get(org_id)
+                .id_to_cell
+                .get(id)
                 .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned())
         };
 
         // Check the negative cache and possibly refresh data from control plane
-        let cell = if cell.is_none() {
-            if self.negative_cache.contains(org_id) {
+        let maybe_cell = if maybe_cell.is_none() {
+            if self.negative_cache.contains(id) {
                 None
             } else {
                 let (ack_tx, ack_rx) = oneshot::channel::<Result<(), LoadError>>();
@@ -220,16 +217,16 @@ impl OrgToCell {
                         }
 
                         // Re-acquire the read lock
-                        let read_guard = self.data.read();
+                        let read_guard = self.data.read().await;
                         let res = read_guard
                             .data
-                            .org_to_cell
-                            .get(org_id)
+                            .id_to_cell
+                            .get(id)
                             .and_then(|cell_id| read_guard.data.cells.get(cell_id).cloned());
 
                         // Record still not found after refresh, add to negative cache
                         if res.is_none() {
-                            self.negative_cache.insert(org_id);
+                            self.negative_cache.insert(id);
                         }
 
                         res
@@ -242,22 +239,24 @@ impl OrgToCell {
                 }
             }
         } else {
-            cell
-        }
+            maybe_cell
+        };
+
         // If no cell is found, apply locality default
-        .or_else(|| {
+        let maybe_cell = if maybe_cell.is_none() {
             if let Some(loc) = locality {
+                let read_guard = self.data.read().await;
                 self.locality_to_default_cell
                     .get(loc)
-                    .and_then(|default_cell_id| {
-                        let read_guard = self.data.read();
-                        read_guard.data.cells.get(default_cell_id).cloned()
-                    })
+                    .and_then(|default_cell_id| read_guard.data.cells.get(default_cell_id).cloned())
             } else {
                 None
             }
-        })
-        .ok_or(LocatorError::NoCell)?;
+        } else {
+            maybe_cell
+        };
+
+        let cell = maybe_cell.ok_or(LocatorError::NoCell)?;
 
         if let Some(requested_locality) = locality
             && cell.locality != requested_locality
@@ -291,8 +290,10 @@ impl OrgToCell {
                 Some(cmd) = rx.recv() => {
                     match cmd {
                         Command::Refresh(requested_at, tx) => {
+                            let last_updated = self.data.read().await.last_updated;
+
                             // Immediately send response if data is up to date, otherwise load incremental updates
-                            if let Some(updated) = self.data.read().last_updated && updated + self.min_refresh_interval >= requested_at {
+                            if let Some(updated) = last_updated && updated + self.min_refresh_interval >= requested_at {
                                 let _ = tx.send(Ok(()));
                             } else {
                                 let _ = tx.send(self.load_incremental().await);
@@ -323,11 +324,9 @@ impl OrgToCell {
         let _permit = self.get_permit().await?;
 
         // Fetch data from the control plane. If unavailable fallback to the backup route provider.
-        let route_data = self
-            .control_plane
-            .load_mappings(None)
-            .await
-            .or_else(|err| {
+        let route_data = match self.control_plane.load_mappings(None).await {
+            Ok(data) => data,
+            Err(err) => {
                 tracing::warn!(
                     "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
@@ -335,19 +334,20 @@ impl OrgToCell {
                 snapshot_requested_time = None;
 
                 // Load from the backup route provider
-                self.backup_routes.load()
-            })?;
+                self.backup_routes.load().await?
+            }
+        };
 
-        let mut write_guard = self.data.write();
+        let mut write_guard = self.data.write().await;
 
-        write_guard.data.org_to_cell = route_data.org_to_cell;
+        write_guard.data.id_to_cell = route_data.id_to_cell;
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells = route_data.cells;
         write_guard.last_updated = snapshot_requested_time;
 
         // Store the backup if we successfully loaded from the control plane
         if snapshot_requested_time.is_some()
-            && let Err(e) = self.backup_routes.store(&write_guard.data)
+            && let Err(e) = self.backup_routes.store(&write_guard.data).await
         {
             tracing::error!("Failed to store backup routes: {e:?}");
         }
@@ -364,7 +364,7 @@ impl OrgToCell {
 
         // Get the current cursor from the stored data
         let current_cursor = {
-            let read_guard = self.data.read();
+            let read_guard = self.data.read().await;
             read_guard.data.last_cursor.clone()
         };
 
@@ -375,8 +375,8 @@ impl OrgToCell {
             .await?;
 
         // Merge the incremental data with the existing data
-        let mut write_guard = self.data.write();
-        write_guard.data.org_to_cell.extend(route_data.org_to_cell);
+        let mut write_guard = self.data.write().await;
+        write_guard.data.id_to_cell.extend(route_data.id_to_cell);
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells.extend(route_data.cells);
         write_guard.last_updated = Some(incremental_requested_time);
@@ -397,7 +397,7 @@ mod tests {
     use crate::testutils::TestControlPlaneServer;
     use std::time::Duration;
 
-    fn get_mock_provider() -> (tempfile::TempDir, Arc<FilesystemRouteProvider>) {
+    async fn get_mock_provider() -> (tempfile::TempDir, Arc<FilesystemRouteProvider>) {
         let route_data = RouteData::from(
             HashMap::from([
                 ("org_0".into(), "us1".into()),
@@ -410,7 +410,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
-        provider.store(&route_data).unwrap();
+        provider.store(&route_data).await.unwrap();
         (dir, Arc::new(provider))
     }
 
@@ -423,9 +423,10 @@ mod tests {
         // Run the control plane server
         let _server = TestControlPlaneServer::spawn(host, port).unwrap();
 
-        let (_dir, provider) = get_mock_provider();
+        let (_dir, provider) = get_mock_provider().await;
 
         let locator = Locator::new(
+            LocatorDataType::Organization,
             format!("http://{host}:{port}").to_string(),
             provider.clone(),
             Some(HashMap::from([("de".into(), "de".into())])),
@@ -449,17 +450,18 @@ mod tests {
         );
 
         // Org "0" should be written to the backup provider
-        let provider_data = provider.load().unwrap();
-        assert_eq!(provider_data.org_to_cell.get("0").unwrap(), "us1");
+        let provider_data = provider.load().await.unwrap();
+        assert_eq!(provider_data.id_to_cell.get("0").unwrap(), "us1");
     }
 
     #[tokio::test]
     async fn test_locator_control_plane_unavailable() {
         // Control plane unavailable, load from backup provider
 
-        let (_dir, provider) = get_mock_provider();
+        let (_dir, provider) = get_mock_provider().await;
 
         let locator = Locator::new(
+            LocatorDataType::Organization,
             "http://invalid-control-plane:9000".to_string(),
             provider,
             Some(HashMap::from([("de".into(), "de".into())])),

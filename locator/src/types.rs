@@ -25,14 +25,14 @@ impl Cell {
 
 #[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct RouteData {
-    pub org_to_cell: HashMap<String, CellId>,
+    pub id_to_cell: HashMap<String, CellId>,
     pub last_cursor: String,
     pub cells: HashMap<CellId, Arc<Cell>>,
 }
 
 impl RouteData {
     pub fn from(
-        org_to_cell: HashMap<String, CellId>,
+        id_to_cell: HashMap<String, CellId>,
         last_cursor: String,
         cell_to_locality: HashMap<CellId, String>,
     ) -> Self {
@@ -51,7 +51,7 @@ impl RouteData {
             .collect::<HashMap<CellId, Arc<Cell>>>();
 
         RouteData {
-            org_to_cell,
+            id_to_cell,
             last_cursor,
             cells,
         }

@@ -1,7 +1,6 @@
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
 use crate::types::RouteData;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -18,9 +17,10 @@ pub enum BackupError {
     Decode(#[from] bincode::error::DecodeError),
 }
 
+#[async_trait::async_trait]
 pub trait BackupRouteProvider: Send + Sync {
-    fn load(&self) -> Result<RouteData, BackupError>;
-    fn store(&self, route_data: &RouteData) -> Result<(), BackupError>;
+    async fn load(&self) -> Result<RouteData, BackupError>;
+    async fn store(&self, route_data: &RouteData) -> Result<(), BackupError>;
 }
 
 #[derive(Clone)]
@@ -76,28 +76,6 @@ impl Codec {
     }
 }
 
-// No-op backup route provider for testing
-pub struct NoopRouteProvider {}
-
-impl BackupRouteProvider for NoopRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
-        tracing::warn!(
-            "Warning: loading backup routes from the no-op provider. This is unsafe for production use."
-        );
-
-        Ok(RouteData {
-            org_to_cell: HashMap::new(),
-            last_cursor: "test".into(),
-            cells: HashMap::new(),
-        })
-    }
-
-    fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
-        // Do nothing
-        Ok(())
-    }
-}
-
 pub struct FilesystemRouteProvider {
     path: PathBuf,
     codec: Codec,
@@ -112,14 +90,15 @@ impl FilesystemRouteProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl BackupRouteProvider for FilesystemRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
+    async fn load(&self) -> Result<RouteData, BackupError> {
         let file = File::open(&self.path)?;
         let reader = io::BufReader::new(file);
         self.codec.read(reader)
     }
 
-    fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
+    async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
         // Create or overwrite file
         let file = File::create(&self.path)?;
 
@@ -145,12 +124,13 @@ impl GcsRouteProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl BackupRouteProvider for GcsRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
+    async fn load(&self) -> Result<RouteData, BackupError> {
         unimplemented!();
     }
 
-    fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
+    async fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
         unimplemented!();
     }
 }
@@ -159,11 +139,12 @@ impl BackupRouteProvider for GcsRouteProvider {
 mod tests {
     use super::*;
     use crate::types::Cell;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn get_route_data() -> RouteData {
         RouteData {
-            org_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
+            id_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
             last_cursor: "cursor1".into(),
             cells: HashMap::from([(
                 "cell1".into(),
@@ -193,15 +174,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_filesystem() {
+    #[tokio::test]
+    async fn test_filesystem() {
         let dir = tempfile::tempdir().unwrap();
 
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
         let data = get_route_data();
 
-        provider.store(&data).unwrap();
-        let loaded = provider.load().unwrap();
+        provider.store(&data).await.unwrap();
+        let loaded = provider.load().await.unwrap();
         assert_eq!(data, loaded);
     }
 }

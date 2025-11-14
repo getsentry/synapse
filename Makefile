@@ -1,11 +1,12 @@
 # Makefile for Synapse Rust workspace
 
-.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-echo-server run-mock-control-api
+.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-echo-server run-mock-control-api setup-python
 
 # Default target
 help:
 	@echo "Available targets:"
 	@echo "  setup        - Install development dependencies"
+	@echo "  setup-python - Set up Python virtual environment with uv"
 	@echo "  build        - Build all workspace members"
 	@echo "  test         - Run tests for all workspace members"
 	@echo "  fmt          - Format code"
@@ -21,7 +22,7 @@ help:
 
 
 # Setup development environment
-setup:
+setup: setup-python
 	rustup update
 	cargo install cargo-watch
 	@echo "Setting up Git hooks..."
@@ -29,6 +30,14 @@ setup:
 	@cp scripts/pre-commit .git/hooks/pre-commit
 	@chmod +x .git/hooks/pre-commit
 	@echo "Git pre-commit hook installed successfully!"
+
+# Setup Python virtual environment with uv
+setup-python:
+	@echo "Setting up Python virtual environment with uv..."
+	@command -v uv >/dev/null 2>&1 || { echo "Error: uv is not installed. Install it from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
+	uv venv .venv --python 3.13
+	@echo "Python virtual environment created at .venv"
+	@echo "Run 'direnv allow' to automatically activate the virtual environment"
 
 # Build all workspace members
 build:
@@ -84,4 +93,4 @@ ci: fmt-check lint test build
 
 # Server for testing proxy locally
 run-echo-server:
-	python -c scripts/echo_server.py
+	python scripts/echo_server.py

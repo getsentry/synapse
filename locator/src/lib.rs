@@ -10,9 +10,7 @@ use std::sync::Arc;
 #[cfg(test)]
 mod testutils;
 
-use backup_routes::{
-    BackupRouteProvider, FilesystemRouteProvider, GcsRouteProvider, NoopRouteProvider,
-};
+use backup_routes::{BackupRouteProvider, FilesystemRouteProvider, GcsRouteProvider};
 use config::BackupRouteStoreType;
 
 /// Run the locator API in standalone mode.
@@ -21,6 +19,7 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
         get_provider(config.backup_route_store.r#type);
 
     api::serve(
+        config.data_type,
         config.listener,
         config.control_plane,
         provider,
@@ -31,7 +30,6 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
 
 pub fn get_provider(store_type: BackupRouteStoreType) -> Arc<dyn BackupRouteProvider + 'static> {
     match store_type {
-        BackupRouteStoreType::None => Arc::new(NoopRouteProvider {}),
         BackupRouteStoreType::Filesystem { base_dir, filename } => {
             Arc::new(FilesystemRouteProvider::new(&base_dir, &filename))
         }

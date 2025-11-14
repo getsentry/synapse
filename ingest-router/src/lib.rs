@@ -1,7 +1,7 @@
 pub mod config;
 pub mod errors;
+pub mod locale;
 pub mod router;
-pub mod routing;
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::Bytes;

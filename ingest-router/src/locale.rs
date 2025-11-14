@@ -20,7 +20,7 @@
 //!   └─ "us-2" → Upstream { ... }
 //! ```
 //!
-//! The `Locale` is built at startup from configuration and remains immutable
+//! The `Locales` is built at startup from configuration and remains immutable
 //! during request processing.
 
 use std::collections::HashMap;
@@ -66,12 +66,12 @@ impl Cells {
 
 /// Maps locales to their cells (which map to upstreams)
 #[derive(Clone, Debug)]
-pub struct Locale {
+pub struct Locales {
     /// Mapping from locale to cells
     locale_to_cells: HashMap<String, Cells>,
 }
 
-impl Locale {
+impl Locales {
     /// Build locale mappings from configuration
     pub fn new(locales: HashMap<String, HashMap<String, CellConfig>>) -> Self {
         // Build locale -> cells mapping
@@ -104,9 +104,9 @@ mod tests {
     }
 
     #[test]
-    fn test_locale() {
-        let mut locales = HashMap::new();
-        locales.insert(
+    fn test_locales() {
+        let mut locales_config = HashMap::new();
+        locales_config.insert(
             "us".to_string(),
             HashMap::from([
                 (
@@ -125,7 +125,7 @@ mod tests {
                 ),
             ]),
         );
-        locales.insert(
+        locales_config.insert(
             "de".to_string(),
             HashMap::from([(
                 "de".to_string(),
@@ -136,20 +136,20 @@ mod tests {
             )]),
         );
 
-        let locale = Locale::new(locales);
+        let locales = Locales::new(locales_config);
 
         // Verify US locale has 2 cells
-        let us_cells = locale.get_cells("us").unwrap();
+        let us_cells = locales.get_cells("us").unwrap();
         assert_eq!(us_cells.cell_to_upstreams.len(), 2);
         assert!(us_cells.cell_to_upstreams.contains_key("us1"));
         assert!(us_cells.cell_to_upstreams.contains_key("us2"));
 
         // Verify DE locale has 1 cell
-        let de_cells = locale.get_cells("de").unwrap();
+        let de_cells = locales.get_cells("de").unwrap();
         assert_eq!(de_cells.cell_to_upstreams.len(), 1);
         assert!(de_cells.cell_to_upstreams.contains_key("de"));
 
         // Verify unknown locale returns None
-        assert!(locale.get_cells("unknown").is_none());
+        assert!(locales.get_cells("unknown").is_none());
     }
 }

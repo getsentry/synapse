@@ -170,7 +170,9 @@ where
 
     // Build request to send to upstream with modified URI and filtered headers
     let (mut parts, body) = request.into_parts();
-    filter_hop_by_hop(&mut parts.headers, parts.version);
+    let request_version = parts.version;
+    filter_hop_by_hop(&mut parts.headers, request_version);
+    add_via_header(&mut parts.headers, request_version);
 
     let mut req_builder = Request::builder()
         .method(parts.method)
@@ -201,8 +203,12 @@ where
         ))
     })?;
 
-    // Collect response body bytes
-    let (parts, body) = response.into_parts();
+    // Collect response body bytes and filter hop-by-hop headers
+    let (mut parts, body) = response.into_parts();
+    let response_version = parts.version;
+    filter_hop_by_hop(&mut parts.headers, response_version);
+    add_via_header(&mut parts.headers, response_version);
+
     let body_bytes = body
         .collect()
         .await

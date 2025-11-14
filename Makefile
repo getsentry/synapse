@@ -1,6 +1,6 @@
 # Makefile for Synapse Rust workspace
 
-.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-proxy run-echo-server run-mock-control-api setup-python
+.PHONY: help setup build test clean fmt fmt-check lint fix check dev-locator dev-proxy run-locator run-locator-gcs  run-proxy run-echo-server run-mock-control-api setup-python
 
 # Default target
 help:
@@ -46,6 +46,10 @@ build:
 # Test all workspace members
 test:
 	docker compose -f docker-compose.test.yml up -d
+	curl -s -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"name":"test-bucket"}' \
+		http://localhost:4443/storage/v1/b?project=test-project
 	cargo test --workspace
 	docker compose -f docker-compose.test.yml down -v
 
@@ -77,6 +81,9 @@ clean:
 # Run services
 run-locator:
 	cargo run locator --config-file-path example_config_locator.yaml
+
+run-locator-gcs:
+	cargo run locator --config-file-path example_config_locator_gcs.yaml
 
 run-proxy:
 	cargo run proxy --config-file-path example_config_proxy.yaml

@@ -1,5 +1,14 @@
 services:
   gcs:
     image: gcr.io/cloud-devrel-public-resources/storage-testbench:latest
+    platform: linux/amd64 # GCS testbench only supports amd64
+    ports:
+      - "9000:9000"
+  fake-gcs-server:
+    image: fsouza/fake-gcs-server
+    container_name: fake-gcs-server
     ports:
       - "4443:4443"
+    volumes:
+      - ./examples/data:/data
+    command: ["-scheme", "http"]

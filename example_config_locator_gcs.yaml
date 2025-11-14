@@ -1,0 +1,11 @@
+locator:
+  listener:
+    host: "0.0.0.0"
+    port: 3000
+  control_plane:
+    url: "http://127.0.0.1:9000"
+  backup_route_store:
+    type: gcs
+    bucket: synapse
+  locality_to_default_cell:
+    us: us1

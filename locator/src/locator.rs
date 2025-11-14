@@ -6,10 +6,10 @@ use std::time::Instant;
 
 use crate::backup_routes::{BackupError, BackupRouteProvider};
 use crate::negative_cache::NegativeCache;
-use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::sync::{AcquireError, Mutex, mpsc, oneshot};
 use tokio::sync::{Semaphore, SemaphorePermit};
 
@@ -194,8 +194,8 @@ impl IdToCell {
         let start_lookup = Instant::now();
 
         // Fetch cell and immediately release read lock
-        let cell = {
-            let read_guard = self.data.read();
+        let maybe_cell = {
+            let read_guard = self.data.read().await;
             read_guard
                 .data
                 .id_to_cell
@@ -204,7 +204,7 @@ impl IdToCell {
         };
 
         // Check the negative cache and possibly refresh data from control plane
-        let cell = if cell.is_none() {
+        let maybe_cell = if maybe_cell.is_none() {
             if self.negative_cache.contains(id) {
                 None
             } else {
@@ -217,7 +217,7 @@ impl IdToCell {
                         }
 
                         // Re-acquire the read lock
-                        let read_guard = self.data.read();
+                        let read_guard = self.data.read().await;
                         let res = read_guard
                             .data
                             .id_to_cell
@@ -239,22 +239,24 @@ impl IdToCell {
                 }
             }
         } else {
-            cell
-        }
+            maybe_cell
+        };
+
         // If no cell is found, apply locality default
-        .or_else(|| {
+        let maybe_cell = if maybe_cell.is_none() {
             if let Some(loc) = locality {
+                let read_guard = self.data.read().await;
                 self.locality_to_default_cell
                     .get(loc)
-                    .and_then(|default_cell_id| {
-                        let read_guard = self.data.read();
-                        read_guard.data.cells.get(default_cell_id).cloned()
-                    })
+                    .and_then(|default_cell_id| read_guard.data.cells.get(default_cell_id).cloned())
             } else {
                 None
             }
-        })
-        .ok_or(LocatorError::NoCell)?;
+        } else {
+            maybe_cell
+        };
+
+        let cell = maybe_cell.ok_or(LocatorError::NoCell)?;
 
         if let Some(requested_locality) = locality
             && cell.locality != requested_locality
@@ -288,8 +290,10 @@ impl IdToCell {
                 Some(cmd) = rx.recv() => {
                     match cmd {
                         Command::Refresh(requested_at, tx) => {
+                            let last_updated = self.data.read().await.last_updated;
+
                             // Immediately send response if data is up to date, otherwise load incremental updates
-                            if let Some(updated) = self.data.read().last_updated && updated + self.min_refresh_interval >= requested_at {
+                            if let Some(updated) = last_updated && updated + self.min_refresh_interval >= requested_at {
                                 let _ = tx.send(Ok(()));
                             } else {
                                 let _ = tx.send(self.load_incremental().await);
@@ -320,11 +324,9 @@ impl IdToCell {
         let _permit = self.get_permit().await?;
 
         // Fetch data from the control plane. If unavailable fallback to the backup route provider.
-        let route_data = self
-            .control_plane
-            .load_mappings(None)
-            .await
-            .or_else(|err| {
+        let route_data = match self.control_plane.load_mappings(None).await {
+            Ok(data) => data,
+            Err(err) => {
                 tracing::warn!(
                     "Error loading from control plane: {err:?}, falling back to backup route provider"
                 );
@@ -332,10 +334,11 @@ impl IdToCell {
                 snapshot_requested_time = None;
 
                 // Load from the backup route provider
-                self.backup_routes.load()
-            })?;
+                self.backup_routes.load().await?
+            }
+        };
 
-        let mut write_guard = self.data.write();
+        let mut write_guard = self.data.write().await;
 
         write_guard.data.id_to_cell = route_data.id_to_cell;
         write_guard.data.last_cursor = route_data.last_cursor;
@@ -344,7 +347,7 @@ impl IdToCell {
 
         // Store the backup if we successfully loaded from the control plane
         if snapshot_requested_time.is_some()
-            && let Err(e) = self.backup_routes.store(&write_guard.data)
+            && let Err(e) = self.backup_routes.store(&write_guard.data).await
         {
             tracing::error!("Failed to store backup routes: {e:?}");
         }
@@ -361,7 +364,7 @@ impl IdToCell {
 
         // Get the current cursor from the stored data
         let current_cursor = {
-            let read_guard = self.data.read();
+            let read_guard = self.data.read().await;
             read_guard.data.last_cursor.clone()
         };
 
@@ -372,7 +375,7 @@ impl IdToCell {
             .await?;
 
         // Merge the incremental data with the existing data
-        let mut write_guard = self.data.write();
+        let mut write_guard = self.data.write().await;
         write_guard.data.id_to_cell.extend(route_data.id_to_cell);
         write_guard.data.last_cursor = route_data.last_cursor;
         write_guard.data.cells.extend(route_data.cells);
@@ -394,7 +397,7 @@ mod tests {
     use crate::testutils::TestControlPlaneServer;
     use std::time::Duration;
 
-    fn get_mock_provider() -> (tempfile::TempDir, Arc<FilesystemRouteProvider>) {
+    async fn get_mock_provider() -> (tempfile::TempDir, Arc<FilesystemRouteProvider>) {
         let route_data = RouteData::from(
             HashMap::from([
                 ("org_0".into(), "us1".into()),
@@ -407,7 +410,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
-        provider.store(&route_data).unwrap();
+        provider.store(&route_data).await.unwrap();
         (dir, Arc::new(provider))
     }
 
@@ -420,7 +423,7 @@ mod tests {
         // Run the control plane server
         let _server = TestControlPlaneServer::spawn(host, port).unwrap();
 
-        let (_dir, provider) = get_mock_provider();
+        let (_dir, provider) = get_mock_provider().await;
 
         let locator = Locator::new(
             LocatorDataType::Organization,
@@ -447,7 +450,7 @@ mod tests {
         );
 
         // Org "0" should be written to the backup provider
-        let provider_data = provider.load().unwrap();
+        let provider_data = provider.load().await.unwrap();
         assert_eq!(provider_data.id_to_cell.get("0").unwrap(), "us1");
     }
 
@@ -455,7 +458,7 @@ mod tests {
     async fn test_locator_control_plane_unavailable() {
         // Control plane unavailable, load from backup provider
 
-        let (_dir, provider) = get_mock_provider();
+        let (_dir, provider) = get_mock_provider().await;
 
         let locator = Locator::new(
             LocatorDataType::Organization,

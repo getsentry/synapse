@@ -9,6 +9,4 @@ services:
     container_name: fake-gcs-server
     ports:
       - "4443:4443"
-    volumes:
-      - ./examples/data:/data
     command: ["-scheme", "http"]

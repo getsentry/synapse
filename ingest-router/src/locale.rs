@@ -111,11 +111,17 @@ mod tests {
             HashMap::from([
                 (
                     "us1".to_string(),
-                    cell_config("http://us1-sentry.example.com", "http://us1-relay.example.com"),
+                    cell_config(
+                        "http://us1-sentry.example.com",
+                        "http://us1-relay.example.com",
+                    ),
                 ),
                 (
                     "us2".to_string(),
-                    cell_config("http://us2-sentry.example.com", "http://us2-relay.example.com"),
+                    cell_config(
+                        "http://us2-sentry.example.com",
+                        "http://us2-relay.example.com",
+                    ),
                 ),
             ]),
         );
@@ -123,7 +129,10 @@ mod tests {
             "de".to_string(),
             HashMap::from([(
                 "de".to_string(),
-                cell_config("http://de-sentry.example.com", "http://de-relay.example.com"),
+                cell_config(
+                    "http://de-sentry.example.com",
+                    "http://de-relay.example.com",
+                ),
             )]),
         );
 
@@ -144,4 +153,3 @@ mod tests {
         assert!(locale.get_cells("unknown").is_none());
     }
 }
-

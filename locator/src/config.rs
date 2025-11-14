@@ -5,16 +5,8 @@ use std::collections::HashMap;
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
-    Filesystem {
-        base_dir: String,
-        filename: String,
-    },
-    // Default endpoint will be used if `endpoint` is None
-    // Override option exists for testing and local emulators
-    Gcs {
-        // endpoint: Option<String>,
-        bucket: String,
-    },
+    Filesystem { base_dir: String, filename: String },
+    Gcs { bucket: String },
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]

@@ -213,30 +213,19 @@ where
 }
 
 /// Errors that can occur during upstream operations
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum UpstreamError {
+    #[error("Failed to read request body: {0}")]
     RequestBodyError(String),
+    #[error("Failed to read response body: {0}")]
     ResponseBodyError(String),
+    #[error("Upstream timeout for {0}")]
     Timeout(String),
+    #[error("Upstream request failed for {0}: {1}")]
     RequestFailed(String, String),
+    #[error("Internal error: {0}")]
     InternalError(String),
 }
-
-impl std::fmt::Display for UpstreamError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UpstreamError::RequestBodyError(s) => write!(f, "Failed to read request body: {}", s),
-            UpstreamError::ResponseBodyError(s) => write!(f, "Failed to read response body: {}", s),
-            UpstreamError::Timeout(name) => write!(f, "Upstream timeout for {}", name),
-            UpstreamError::RequestFailed(name, err) => {
-                write!(f, "Upstream request failed for {}: {}", name, err)
-            }
-            UpstreamError::InternalError(s) => write!(f, "Internal error: {}", s),
-        }
-    }
-}
-
-impl std::error::Error for UpstreamError {}
 
 #[cfg(test)]
 mod tests {

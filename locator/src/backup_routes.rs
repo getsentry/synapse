@@ -154,7 +154,7 @@ impl GcsRouteProvider {
 impl BackupRouteProvider for GcsRouteProvider {
     async fn load(&self) -> Result<RouteData, BackupError> {
         // Download the object from GCS using the new API
-        let bucket_name = format!("projects/{}/buckets/{}", &self.project, &self.bucket);
+        let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
         let mut response = self
             .client
             .read_object(&bucket_name, &self.object_key)
@@ -183,7 +183,7 @@ impl BackupRouteProvider for GcsRouteProvider {
         let res = self
             .client
             .write_object(&bucket_name, &self.object_key, bytes_data)
-            .set_content_type("text/plain")
+            // .set_content_type("text/plain")
             .send_buffered()
             .await;
 
@@ -272,7 +272,7 @@ mod tests {
         let data = get_route_data();
 
         provider.store(&data).await.unwrap();
-        // let loaded = provider.load().await.unwrap();
-        // assert_eq!(data, loaded);
+        let loaded = provider.load().await.unwrap();
+        assert_eq!(data, loaded);
     }
 }

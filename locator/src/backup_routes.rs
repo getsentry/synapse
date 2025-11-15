@@ -15,6 +15,9 @@ pub enum BackupError {
 
     #[error("decode error: {0}")]
     Decode(#[from] bincode::error::DecodeError),
+
+    #[error("gcs error: {0}")]
+    Gcs(#[from] google_cloud_storage::Error),
 }
 
 #[async_trait::async_trait]
@@ -116,22 +119,80 @@ impl BackupRouteProvider for FilesystemRouteProvider {
     }
 }
 
-pub struct GcsRouteProvider {}
+pub struct GcsRouteProvider {
+    // endpoint: Option<String>,
+    bucket: String,
+    codec: Codec,
+    object_key: String,
+    client: google_cloud_storage::client::Storage,
+}
 
 impl GcsRouteProvider {
-    pub fn new(_bucket: &str) -> Self {
-        GcsRouteProvider {}
+    pub async fn new(bucket: String) -> Result<Self, BackupError> {
+        // TODO: handle error
+        let client = google_cloud_storage::client::Storage::builder()
+            .build()
+            .await
+            .unwrap();
+
+        Ok(GcsRouteProvider {
+            bucket,
+            codec: Codec::new(Compression::Zstd(1)),
+            object_key: "backup-routes.bin".to_string(),
+            client,
+        })
     }
 }
 
 #[async_trait::async_trait]
 impl BackupRouteProvider for GcsRouteProvider {
     async fn load(&self) -> Result<RouteData, BackupError> {
-        unimplemented!();
+        // Download the object from GCS using the new API
+        let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
+        let mut response = self
+            .client
+            .read_object(&bucket_name, &self.object_key)
+            .send()
+            .await?;
+
+        // Collect all chunks into a buffer
+        let mut data = Vec::new();
+        while let Some(chunk) = response.next().await {
+            data.extend_from_slice(&chunk?);
+        }
+
+        // Decode the data using the codec
+        let reader = io::Cursor::new(data);
+        self.codec.read(reader)
     }
 
-    async fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
-        unimplemented!();
+    async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
+        // Encode the data using the codec
+        let mut buffer: Vec<u8> = Vec::new();
+        let size = self.codec.write(&mut buffer, route_data)?;
+
+        // Upload the object to GCS using the new API
+        let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
+        let bytes_data = bytes::Bytes::from(buffer);
+        let res = self
+            .client
+            .write_object(&bucket_name, &self.object_key, bytes_data)
+            // .set_content_type("text/plain")
+            .send_buffered()
+            .await;
+
+        let test = res.unwrap();
+
+        println!("GCS upload response: {:?}", test);
+
+        tracing::info!(
+            "Stored backup routes to GCS bucket {}, object {}, bytes: {}",
+            &self.bucket,
+            &self.object_key,
+            size
+        );
+
+        Ok(())
     }
 }
 
@@ -179,6 +240,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
 
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        let data = get_route_data();
+
+        provider.store(&data).await.unwrap();
+        let loaded = provider.load().await.unwrap();
+        assert_eq!(data, loaded);
+    }
+
+    #[tokio::test]
+    async fn test_gcs() {
+        let endpoint = "http://localhost:4443";
+        let bucket = "test-bucket";
+
+        let mut provider = GcsRouteProvider::new(bucket.into()).await.unwrap();
+
+        // Override the client so we can use the local emulator
+        provider.client = google_cloud_storage::client::Storage::builder()
+            .with_endpoint(endpoint.to_string())
+            .with_credentials(google_cloud_auth::credentials::anonymous::Builder::new().build())
+            .build()
+            .await
+            .unwrap();
+
         let data = get_route_data();
 
         provider.store(&data).await.unwrap();

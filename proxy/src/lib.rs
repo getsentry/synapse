@@ -13,7 +13,7 @@ use crate::locator::Locator;
 use shared::http::run_http_service;
 
 pub async fn run(config: config::Config) -> Result<(), ProxyError> {
-    let locator = Locator::new_from_config(config.locator.clone());
+    let locator = Locator::new_from_config(config.locator.clone()).await;
 
     let proxy_service =
         proxy_service::ProxyService::try_new(locator.clone(), config.routes, config.upstreams)?;

@@ -7,6 +7,8 @@ edition = "2024"
 async-trait = "0.1.89"
 axum = "0.8.4"
 bincode = { version = "2.0.1", features = ["std", "serde"] }
+bytes = "1.9.0"
+google-cloud-storage = "1.2.0"
 metrics = { workspace = true }
 moka = { version = "0.12.11", features = ["sync"] }
 serde = { workspace = true }
@@ -17,4 +19,5 @@ tracing = { workspace = true }
 zstd = { version = "0.13.3" }
 
 [dev-dependencies]
+google-cloud-auth = "1.1.1"
 tempfile = { workspace = true }

@@ -15,6 +15,9 @@ pub enum BackupError {
 
     #[error("decode error: {0}")]
     Decode(#[from] bincode::error::DecodeError),
+
+    #[error("gcs error: {0}")]
+    Gcs(#[from] google_cloud_storage::Error),
 }
 
 #[async_trait::async_trait]
@@ -156,15 +159,12 @@ impl BackupRouteProvider for GcsRouteProvider {
             .client
             .read_object(&bucket_name, &self.object_key)
             .send()
-            .await
-            .map_err(|e| BackupError::Io(io::Error::new(io::ErrorKind::Other, e)))?;
+            .await?;
 
         // Collect all chunks into a buffer
         let mut data = Vec::new();
         while let Some(chunk) = response.next().await {
-            let chunk =
-                chunk.map_err(|e| BackupError::Io(io::Error::new(io::ErrorKind::Other, e)))?;
-            data.extend_from_slice(&chunk);
+            data.extend_from_slice(&chunk?);
         }
 
         // Decode the data using the codec
@@ -179,10 +179,10 @@ impl BackupRouteProvider for GcsRouteProvider {
 
         // Upload the object to GCS using the new API
         let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
-        // let bytes_data = bytes::Bytes::from(buffer);
+        let bytes_data = bytes::Bytes::from(buffer);
         let res = self
             .client
-            .write_object(&bucket_name, &self.object_key, "hello world")
+            .write_object(&bucket_name, &self.object_key, bytes_data)
             .set_content_type("text/plain")
             .send_buffered()
             .await;

@@ -121,7 +121,6 @@ impl BackupRouteProvider for FilesystemRouteProvider {
 
 pub struct GcsRouteProvider {
     // endpoint: Option<String>,
-    project: String,
     bucket: String,
     codec: Codec,
     object_key: String,
@@ -130,9 +129,6 @@ pub struct GcsRouteProvider {
 
 impl GcsRouteProvider {
     pub async fn new(bucket: String) -> Result<Self, BackupError> {
-        // TODO: pass this in
-        let project = "test-project".to_string();
-
         // TODO: handle error
         let client = google_cloud_storage::client::Storage::builder()
             .build()
@@ -140,8 +136,6 @@ impl GcsRouteProvider {
             .unwrap();
 
         Ok(GcsRouteProvider {
-            // endpoint,
-            project,
             bucket,
             codec: Codec::new(Compression::Zstd(1)),
             object_key: "backup-routes.bin".to_string(),
@@ -256,7 +250,6 @@ mod tests {
     #[tokio::test]
     async fn test_gcs() {
         let endpoint = "http://localhost:4443";
-        let project = "test-project";
         let bucket = "test-bucket";
 
         let mut provider = GcsRouteProvider::new(bucket.into()).await.unwrap();

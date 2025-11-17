@@ -4,6 +4,7 @@ use crate::types::RouteData;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
@@ -127,6 +128,9 @@ pub struct GcsRouteProvider {
     codec: Codec,
     object_key: String,
     client: google_cloud_storage::client::Storage,
+    // If the last cursor does not change, skip upload
+    // Though this means this class is aware of the payload shape now
+    last_cursor: Mutex<Option<String>>,
 }
 
 impl GcsRouteProvider {
@@ -143,6 +147,7 @@ impl GcsRouteProvider {
             codec: Codec::new(Compression::Zstd(1)),
             object_key: "backup-routes.bin".to_string(),
             client,
+            last_cursor: Mutex::new(None),
         })
     }
 }
@@ -165,10 +170,28 @@ impl BackupRouteProvider for GcsRouteProvider {
 
         // Decode the data using the codec
         let reader = io::Cursor::new(data);
-        self.codec.read(reader)
+        let data = self.codec.read(reader)?;
+
+        // Better to unwrap than return error here as it should never happen, we
+        // prefer to panic than risk continuing with corrupted state
+        let mut guard = self.last_cursor.lock().unwrap();
+        *guard = Some(data.last_cursor.clone());
+
+        Ok(data)
     }
 
     async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
+        // Return early if the last cursor is unchanged
+        if self.last_cursor.lock().unwrap().as_ref() == Some(&route_data.last_cursor) {
+            tracing::info!(
+                "Skipping upload to GCS bucket {}, object {} as last cursor is unchanged: {}",
+                &self.bucket_name,
+                &self.object_key,
+                &route_data.last_cursor
+            );
+            return Ok(());
+        }
+
         // Encode the data using the codec
         let mut buffer: Vec<u8> = Vec::new();
         let size = self.codec.write(&mut buffer, route_data)?;
@@ -261,6 +284,13 @@ mod tests {
         let data = get_route_data();
 
         provider.store(&data).await.unwrap();
+        let loaded = provider.load().await.unwrap();
+        assert_eq!(data, loaded);
+
+        // The stored data didn't change since the upload is skipped
+        let mut data_modified = data.clone();
+        data_modified.cells = HashMap::new();
+        provider.store(&data_modified).await.unwrap();
         let loaded = provider.load().await.unwrap();
         assert_eq!(data, loaded);
     }

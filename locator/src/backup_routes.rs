@@ -18,6 +18,9 @@ pub enum BackupError {
 
     #[error("gcs error: {0}")]
     Gcs(#[from] google_cloud_storage::Error),
+
+    #[error("gcs client initialization error: {0}")]
+    GcsInit(String),
 }
 
 #[async_trait::async_trait]
@@ -120,8 +123,7 @@ impl BackupRouteProvider for FilesystemRouteProvider {
 }
 
 pub struct GcsRouteProvider {
-    // endpoint: Option<String>,
-    bucket: String,
+    bucket_name: String,
     codec: Codec,
     object_key: String,
     client: google_cloud_storage::client::Storage,
@@ -129,14 +131,15 @@ pub struct GcsRouteProvider {
 
 impl GcsRouteProvider {
     pub async fn new(bucket: String) -> Result<Self, BackupError> {
-        // TODO: handle error
         let client = google_cloud_storage::client::Storage::builder()
             .build()
             .await
-            .unwrap();
+            .map_err(|e| BackupError::GcsInit(e.to_string()))?;
+
+        let bucket_name = format!("projects/_/buckets/{}", &bucket);
 
         Ok(GcsRouteProvider {
-            bucket,
+            bucket_name,
             codec: Codec::new(Compression::Zstd(1)),
             object_key: "backup-routes.bin".to_string(),
             client,
@@ -148,10 +151,9 @@ impl GcsRouteProvider {
 impl BackupRouteProvider for GcsRouteProvider {
     async fn load(&self) -> Result<RouteData, BackupError> {
         // Download the object from GCS using the new API
-        let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
         let mut response = self
             .client
-            .read_object(&bucket_name, &self.object_key)
+            .read_object(&self.bucket_name, &self.object_key)
             .send()
             .await?;
 
@@ -172,22 +174,16 @@ impl BackupRouteProvider for GcsRouteProvider {
         let size = self.codec.write(&mut buffer, route_data)?;
 
         // Upload the object to GCS using the new API
-        let bucket_name = format!("projects/_/buckets/{}", &self.bucket);
         let bytes_data = bytes::Bytes::from(buffer);
-        let res = self
+        let _ = self
             .client
-            .write_object(&bucket_name, &self.object_key, bytes_data)
-            // .set_content_type("text/plain")
+            .write_object(&self.bucket_name, &self.object_key, bytes_data)
             .send_buffered()
-            .await;
-
-        let test = res.unwrap();
-
-        println!("GCS upload response: {:?}", test);
+            .await?;
 
         tracing::info!(
             "Stored backup routes to GCS bucket {}, object {}, bytes: {}",
-            &self.bucket,
+            &self.bucket_name,
             &self.object_key,
             size
         );

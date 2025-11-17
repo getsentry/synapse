@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
     Filesystem { base_dir: String, filename: String },
@@ -36,7 +36,7 @@ impl Default for Listener {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum LocatorDataType {
     Organization,
     ProjectKey,

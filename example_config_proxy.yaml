@@ -56,7 +56,7 @@ proxy:
         host: conduit.us.sentry.io
         path: /organizations/{organization}/*
       action:
-        resolver: resolve_cell_from_organization
+        resolver: cell_from_organization
         cell_to_upstream:
           us1: us1-conduit
           us2: us2-conduit

@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
     #[error("I/O error: {0}")]
@@ -123,11 +122,18 @@ impl BackupRouteProvider for FilesystemRouteProvider {
     }
 }
 
+
+// Route provider alternative that uses Google Cloud storage instead of local filesystem.
+// This code does not handle object versioning and TTLs -- this should be configured at
+//the bucket level.
 pub struct GcsRouteProvider {
     bucket_name: String,
     codec: Codec,
     object_key: String,
+    // GCS Storage client used for reading/writing objects
     client: google_cloud_storage::client::Storage,
+    // StorageControl client used for metadata requests
+    control_client: google_cloud_storage::client::StorageControl,
     // If the last cursor does not change, skip upload
     last_cursor: Mutex<Option<String>>,
 }
@@ -139,6 +145,11 @@ impl GcsRouteProvider {
             .await
             .map_err(|e| BackupError::GcsInit(e.to_string()))?;
 
+        let control_client = google_cloud_storage::client::StorageControl::builder()
+            .build()
+            .await
+            .map_err(|e| BackupError::GcsInit(e.to_string()))?;
+
         let bucket_name = format!("projects/_/buckets/{}", &bucket);
 
         Ok(GcsRouteProvider {
@@ -146,6 +157,7 @@ impl GcsRouteProvider {
             codec: Codec::new(Compression::Zstd(1)),
             object_key: "backup-routes.bin".to_string(),
             client,
+            control_client,
             last_cursor: Mutex::new(None),
         })
     }
@@ -198,8 +210,13 @@ impl BackupRouteProvider for GcsRouteProvider {
         let _ = self
             .client
             .write_object(&self.bucket_name, &self.object_key, bytes_data)
+            .set_metadata([("last_cursor", &route_data.last_cursor)])
             .send_buffered()
             .await?;
+
+        // Update last cursor if the write was successful
+        let mut guard = self.last_cursor.lock().unwrap();
+        *guard = Some(route_data.last_cursor.clone());
 
         tracing::info!(
             "Stored backup routes to GCS bucket {}, object {}, bytes: {}",

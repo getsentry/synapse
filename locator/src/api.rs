@@ -18,9 +18,7 @@ use tokio::net::TcpListener;
 #[derive(thiserror::Error, Debug)]
 pub enum LocatorApiError {
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("locator error: {0}")]
-    Locator(#[from] crate::locator::LocatorError),
+    IoError(#[from] std::io::Error),
     #[error("backup route provider error: {0}")]
     BackupRouteProvider(#[from] crate::backup_routes::BackupError),
 }

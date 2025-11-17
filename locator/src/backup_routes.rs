@@ -194,7 +194,6 @@ impl BackupRouteProvider for GcsRouteProvider {
         let mut buffer: Vec<u8> = Vec::new();
         let size = self.codec.write(&mut buffer, route_data)?;
 
-        // Upload the object to GCS using the new API
         let bytes_data = bytes::Bytes::from(buffer);
         let _ = self
             .client

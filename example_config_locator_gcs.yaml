@@ -9,3 +9,4 @@ locator:
     bucket: synapse
   locality_to_default_cell:
     us: us1
+  data_type: organization

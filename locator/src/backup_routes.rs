@@ -172,8 +172,7 @@ impl BackupRouteProvider for GcsRouteProvider {
         let reader = io::Cursor::new(data);
         let data = self.codec.read(reader)?;
 
-        // Better to unwrap than return error here as it should never happen, we
-        // prefer to panic than risk continuing with corrupted state
+        // This shouldn't happen: prefer to unwrap/panic than risk continuing with corrupted state
         let mut guard = self.last_cursor.lock().unwrap();
         *guard = Some(data.last_cursor.clone());
 

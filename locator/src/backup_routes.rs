@@ -129,7 +129,6 @@ pub struct GcsRouteProvider {
     object_key: String,
     client: google_cloud_storage::client::Storage,
     // If the last cursor does not change, skip upload
-    // Though this means this class is aware of the payload shape now
     last_cursor: Mutex<Option<String>>,
 }
 

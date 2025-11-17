@@ -17,9 +17,10 @@ pub enum BackupError {
     Decode(#[from] bincode::error::DecodeError),
 }
 
+#[async_trait::async_trait]
 pub trait BackupRouteProvider: Send + Sync {
-    fn load(&self) -> Result<RouteData, BackupError>;
-    fn store(&self, route_data: &RouteData) -> Result<(), BackupError>;
+    async fn load(&self) -> Result<RouteData, BackupError>;
+    async fn store(&self, route_data: &RouteData) -> Result<(), BackupError>;
 }
 
 #[derive(Clone)]
@@ -89,14 +90,15 @@ impl FilesystemRouteProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl BackupRouteProvider for FilesystemRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
+    async fn load(&self) -> Result<RouteData, BackupError> {
         let file = File::open(&self.path)?;
         let reader = io::BufReader::new(file);
         self.codec.read(reader)
     }
 
-    fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
+    async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
         // Create or overwrite file
         let file = File::create(&self.path)?;
 
@@ -122,12 +124,13 @@ impl GcsRouteProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl BackupRouteProvider for GcsRouteProvider {
-    fn load(&self) -> Result<RouteData, BackupError> {
+    async fn load(&self) -> Result<RouteData, BackupError> {
         unimplemented!();
     }
 
-    fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
+    async fn store(&self, _route_data: &RouteData) -> Result<(), BackupError> {
         unimplemented!();
     }
 }
@@ -141,7 +144,7 @@ mod tests {
 
     fn get_route_data() -> RouteData {
         RouteData {
-            org_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
+            id_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
             last_cursor: "cursor1".into(),
             cells: HashMap::from([(
                 "cell1".into(),
@@ -171,15 +174,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_filesystem() {
+    #[tokio::test]
+    async fn test_filesystem() {
         let dir = tempfile::tempdir().unwrap();
 
         let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
         let data = get_route_data();
 
-        provider.store(&data).unwrap();
-        let loaded = provider.load().unwrap();
+        provider.store(&data).await.unwrap();
+        let loaded = provider.load().await.unwrap();
         assert_eq!(data, loaded);
     }
 }

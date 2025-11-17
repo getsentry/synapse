@@ -75,6 +75,7 @@ mod tests {
                     type: filesystem
                     base_dir: /var/lib/locator/
                     filename: backup.bin
+                data_type: organization
             "#;
         let tmp = write_tmp_file(locator_yaml);
         let config = Config::from_file(tmp.path()).expect("load config");
@@ -145,7 +146,7 @@ mod tests {
 
         assert_eq!(ingest_router_config.listener.port, 3000);
         assert_eq!(ingest_router_config.admin_listener.port, 3001);
-        assert!(!ingest_router_config.upstreams.is_empty());
+        assert!(!ingest_router_config.locales.is_empty());
         assert!(!ingest_router_config.routes.is_empty());
     }
 }

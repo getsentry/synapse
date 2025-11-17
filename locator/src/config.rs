@@ -36,10 +36,18 @@ impl Default for Listener {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum LocatorDataType {
+    Organization,
+    ProjectKey,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Config {
     #[serde(default)]
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,
     pub locality_to_default_cell: Option<HashMap<String, String>>,
+    pub data_type: LocatorDataType,
 }

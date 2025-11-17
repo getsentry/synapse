@@ -19,6 +19,7 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
         get_provider(config.backup_route_store.r#type);
 
     api::serve(
+        config.data_type,
         config.listener,
         config.control_plane,
         provider,

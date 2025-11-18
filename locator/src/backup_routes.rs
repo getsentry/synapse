@@ -154,6 +154,7 @@ impl GcsRouteProvider {
             .await
             .map_err(|e| BackupError::GcsInit(e.to_string()))?;
 
+        // In GCS, bucket names are globally unique, project is not specified
         let bucket_name = format!("projects/_/buckets/{}", &bucket);
 
         Ok(GcsRouteProvider {

@@ -2,6 +2,7 @@ mod api;
 pub mod backup_routes;
 pub mod config;
 mod control_plane;
+mod cursor;
 pub mod locator;
 mod negative_cache;
 pub mod types;

@@ -62,5 +62,3 @@ struct Cursor {
     id: Option<String>,
     last_updated: u64,
 }
-
-

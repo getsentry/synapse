@@ -1,3 +1,4 @@
+use crate::cursor::Cursor;
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
 use crate::types::RouteData;
@@ -5,6 +6,7 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
     #[error("I/O error: {0}")]
@@ -21,6 +23,9 @@ pub enum BackupError {
 
     #[error("gcs client initialization error: {0}")]
     GcsInit(String),
+
+    #[error("cursor error: {0}")]
+    Cursor(#[from] crate::cursor::CursorError),
 }
 
 #[async_trait::async_trait]
@@ -122,7 +127,6 @@ impl BackupRouteProvider for FilesystemRouteProvider {
     }
 }
 
-
 // Route provider alternative that uses Google Cloud storage instead of local filesystem.
 // This code does not handle object versioning and TTLs -- this should be configured at
 //the bucket level.
@@ -135,7 +139,7 @@ pub struct GcsRouteProvider {
     // StorageControl client used for metadata requests
     control_client: google_cloud_storage::client::StorageControl,
     // If the last cursor does not change, skip upload
-    last_cursor: Mutex<Option<String>>,
+    last_cursor: Mutex<Option<Cursor>>,
 }
 
 impl GcsRouteProvider {
@@ -183,16 +187,22 @@ impl BackupRouteProvider for GcsRouteProvider {
         let reader = io::Cursor::new(data);
         let data = self.codec.read(reader)?;
 
+        let last_cursor = data.last_cursor.parse()?;
+
         // This shouldn't happen: prefer to unwrap/panic than risk continuing with corrupted state
         let mut guard = self.last_cursor.lock().unwrap();
-        *guard = Some(data.last_cursor.clone());
+        *guard = Some(last_cursor);
 
         Ok(data)
     }
 
     async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
-        // Return early if the last cursor is unchanged
-        if self.last_cursor.lock().unwrap().as_ref() == Some(&route_data.last_cursor) {
+        // Return early if the last cursor is not later than the one we have
+        // Note: currently this scenario only happens if we fetched the snapshot from
+        // backup store first since the control plane unavailable. In that case, there
+        // is no reason to write it back again.
+        let new_last_cursor = route_data.last_cursor.parse()?;
+        if self.last_cursor.lock().unwrap().as_ref() >= Some(&new_last_cursor) {
             tracing::info!(
                 "Skipping upload to GCS bucket {}, object {} as last cursor is unchanged: {}",
                 &self.bucket_name,
@@ -201,6 +211,12 @@ impl BackupRouteProvider for GcsRouteProvider {
             );
             return Ok(());
         }
+
+        // TODO: Check the metadata store
+
+
+
+
 
         // Encode the data using the codec
         let mut buffer: Vec<u8> = Vec::new();
@@ -215,8 +231,9 @@ impl BackupRouteProvider for GcsRouteProvider {
             .await?;
 
         // Update last cursor if the write was successful
+        let last_cursor = route_data.last_cursor.parse()?;
         let mut guard = self.last_cursor.lock().unwrap();
-        *guard = Some(route_data.last_cursor.clone());
+        *guard = Some(last_cursor);
 
         tracing::info!(
             "Stored backup routes to GCS bucket {}, object {}, bytes: {}",

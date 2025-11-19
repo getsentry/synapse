@@ -149,4 +149,26 @@ mod tests {
         assert!(!ingest_router_config.locales.is_empty());
         assert!(!ingest_router_config.routes.is_empty());
     }
+
+    #[test]
+    fn test_example_configs() {
+        // Iterate through every example_config_*.yaml file in the root directory and ensure it can be parsed
+
+        let root_dir =  "../";
+        for entry in std::fs::read_dir(root_dir).unwrap() {
+            let path = entry.unwrap().path();
+
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("example_config") && name.ends_with(".yaml") {
+                        let _ = Config::from_file(&path).expect("load config");
+                    }
+                }
+            }
+        }
+
+
+    }
+
+
 }

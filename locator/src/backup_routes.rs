@@ -1,11 +1,13 @@
-use crate::cursor::Cursor;
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
+use crate::cursor::Cursor;
 use crate::types::RouteData;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
+static METADATA_KEY: &str = "last_cursor";
 
 #[derive(thiserror::Error, Debug)]
 pub enum BackupError {
@@ -24,8 +26,14 @@ pub enum BackupError {
     #[error("gcs client initialization error: {0}")]
     GcsInit(String),
 
-    #[error("cursor error: {0}")]
+    #[error("invalid cursor: {0}")]
     Cursor(#[from] crate::cursor::CursorError),
+
+    #[error("metadata error: {0}")]
+    MetadataError(String),
+
+    #[error("reqwest error: {0}")]
+    Reqwest(#[from] reqwest::Error),
 }
 
 #[async_trait::async_trait]
@@ -127,6 +135,49 @@ impl BackupRouteProvider for FilesystemRouteProvider {
     }
 }
 
+// The google-cloud-storage crate does not expose a way to view the object metadata via the Storage client.
+// The StorageControl client does have this functionality but uses the grpc API which doesn't work with our
+// emulator. This client just queries the API directly.
+
+struct MetadataClient {
+    client: reqwest::Client,
+    bucket_name: String,
+    object_key: String,
+    base_url: String,
+}
+
+impl MetadataClient {
+    pub fn new(bucket_name: &str, object_key: &str) -> Self {
+        let base_url = "https://storage.googleapis.com".to_string();
+
+        MetadataClient {
+            client: reqwest::Client::new(),
+            bucket_name: bucket_name.to_string(),
+            object_key: object_key.to_string(),
+            base_url,
+        }
+    }
+
+    pub async fn get_cursor(&self) -> Result<Cursor, BackupError> {
+        let full_url = format!(
+            "{}/storage/v1/b/{}/o/{}",
+            self.base_url, self.bucket_name, &self.object_key
+        );
+
+        let resp = self.client.get(&full_url).send().await?;
+        let json_value: serde_json::Value = resp.json().await?;
+
+        if let Some(val) = json_value["metadata"][METADATA_KEY].as_str() {
+            let cursor: Cursor = val.parse()?;
+            Ok(cursor)
+        } else {
+            Err(BackupError::MetadataError(
+                "Metadata key not found".to_string(),
+            ))
+        }
+    }
+}
+
 // Route provider alternative that uses Google Cloud storage instead of local filesystem.
 // This code does not handle object versioning and TTLs -- this should be configured at
 //the bucket level.
@@ -136,23 +187,22 @@ pub struct GcsRouteProvider {
     object_key: String,
     // GCS Storage client used for reading/writing objects
     client: google_cloud_storage::client::Storage,
-    // StorageControl client used for metadata requests
-    control_client: google_cloud_storage::client::StorageControl,
-    // If the last cursor does not change, skip upload
+    // Client used for metadata requests
+    metadata_client: MetadataClient,
+    // The latest known cursor in the backup store. Used to avoid redundant uploads.
     last_cursor: Mutex<Option<Cursor>>,
 }
 
 impl GcsRouteProvider {
     pub async fn new(bucket: String) -> Result<Self, BackupError> {
+        let object_key = "backup-routes.bin".to_string();
+
         let client = google_cloud_storage::client::Storage::builder()
             .build()
             .await
             .map_err(|e| BackupError::GcsInit(e.to_string()))?;
 
-        let control_client = google_cloud_storage::client::StorageControl::builder()
-            .build()
-            .await
-            .map_err(|e| BackupError::GcsInit(e.to_string()))?;
+        let metadata_client = MetadataClient::new(&bucket, &object_key);
 
         // In GCS, bucket names are globally unique, project is not specified
         let bucket_name = format!("projects/_/buckets/{}", &bucket);
@@ -160,9 +210,9 @@ impl GcsRouteProvider {
         Ok(GcsRouteProvider {
             bucket_name,
             codec: Codec::new(Compression::Zstd(1)),
-            object_key: "backup-routes.bin".to_string(),
+            object_key: object_key.clone(),
             client,
-            control_client,
+            metadata_client,
             last_cursor: Mutex::new(None),
         })
     }
@@ -198,26 +248,21 @@ impl BackupRouteProvider for GcsRouteProvider {
     }
 
     async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
-        // Return early if the last cursor is not later than the one we have
-        // Note: currently this scenario only happens if we fetched the snapshot from
-        // backup store first since the control plane unavailable. In that case, there
-        // is no reason to write it back again.
         let new_last_cursor = route_data.last_cursor.parse()?;
-        if self.last_cursor.lock().unwrap().as_ref() >= Some(&new_last_cursor) {
+
+        // Check the cursor stored in GCS metadata first. Only proceed with
+        // write if the new cursor is later than the one already stored.
+        let metadata_cursor = self.metadata_client.get_cursor().await?;
+
+        if metadata_cursor >= new_last_cursor {
             tracing::info!(
-                "Skipping upload to GCS bucket {}, object {} as last cursor is unchanged: {}",
-                &self.bucket_name,
-                &self.object_key,
-                &route_data.last_cursor
+                metadata_cursor = ?metadata_cursor,
+                new_last_cursor = ?new_last_cursor,
+                "Skipping route store: GCS version is already up to date"
             );
+
             return Ok(());
         }
-
-        // TODO: Check the metadata store
-
-
-
-
 
         // Encode the data using the codec
         let mut buffer: Vec<u8> = Vec::new();
@@ -227,7 +272,7 @@ impl BackupRouteProvider for GcsRouteProvider {
         let _ = self
             .client
             .write_object(&self.bucket_name, &self.object_key, bytes_data)
-            .set_metadata([("last_cursor", &route_data.last_cursor)])
+            .set_metadata([(METADATA_KEY, &route_data.last_cursor)])
             .send_buffered()
             .await?;
 
@@ -251,13 +296,21 @@ impl BackupRouteProvider for GcsRouteProvider {
 mod tests {
     use super::*;
     use crate::types::Cell;
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use std::collections::HashMap;
     use std::sync::Arc;
 
     fn get_route_data() -> RouteData {
+        let cursor_json_str = serde_json::json!({
+            "updated_at": 1757030409,
+            "id": null
+        })
+        .to_string();
+        let last_cursor = STANDARD.encode(cursor_json_str.as_bytes());
+
         RouteData {
             id_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
-            last_cursor: "cursor1".into(),
+            last_cursor,
             cells: HashMap::from([(
                 "cell1".into(),
                 Arc::new(Cell {
@@ -305,13 +358,15 @@ mod tests {
 
         let mut provider = GcsRouteProvider::new(bucket.into()).await.unwrap();
 
-        // Override the client so we can use the local emulator
+        // Override the clients so we can use the local emulator
         provider.client = google_cloud_storage::client::Storage::builder()
             .with_endpoint(endpoint.to_string())
             .with_credentials(google_cloud_auth::credentials::anonymous::Builder::new().build())
             .build()
             .await
             .unwrap();
+
+        provider.metadata_client.base_url = endpoint.to_string();
 
         let data = get_route_data();
 

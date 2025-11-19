@@ -1108,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-gax-internal"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "152076418386463ff650deabbef392672626d62e97639bb5194e11f8984b4835"
+checksum = "69168fd1f81869bb8682883d27c56e3e499840d45b27b884b289ec0d5f2b442a"
 dependencies = [
  "bytes",
  "google-cloud-auth",
@@ -1119,6 +1119,7 @@ dependencies = [
  "google-cloud-wkt",
  "http 1.3.1",
  "http-body-util",
+ "hyper",
  "opentelemetry-semantic-conventions",
  "percent-encoding",
  "prost",
@@ -1129,8 +1130,10 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-prost",
+ "tower",
  "tracing",
 ]
 
@@ -1203,9 +1206,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-storage"
-version = "1.2.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "166471b8f807470024f4533d7229bc98696161b5e1f254d1a485b60c6c42baf3"
+checksum = "931b69ac5996d0216e74e22e1843e025bef605ba8c062003d40c1565d90594b4"
 dependencies = [
  "async-trait",
  "base64",
@@ -1238,6 +1241,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tracing",
  "uuid",

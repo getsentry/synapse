@@ -103,7 +103,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("id".to_string(), "us1".to_string());
         let result = resolvers
-            .resolve(Resolver::CellFromId, &cell_to_upstream, params.clone())
+            .resolve(&Resolver::CellFromId, &cell_to_upstream, params.clone())
             .await
             .unwrap();
         assert_eq!(result, "upstream1");
@@ -112,7 +112,7 @@ mod tests {
         let mut invalid_params = HashMap::new();
         invalid_params.insert("id".to_string(), "us999".to_string());
 
-        let result = resolvers.resolve(Resolver::CellFromId, &cell_to_upstream, invalid_params);
+        let result = resolvers.resolve(&Resolver::CellFromId, &cell_to_upstream, invalid_params);
 
         assert!(result.await.is_err());
 
@@ -122,7 +122,7 @@ mod tests {
 
         let result = resolvers
             .resolve(
-                Resolver::CellFromOrganization,
+                &Resolver::CellFromOrganization,
                 &cell_to_upstream,
                 org_params,
             )
@@ -136,7 +136,7 @@ mod tests {
         invalid_org_params.insert("organization".to_string(), "org_999".to_string());
 
         let result = resolvers.resolve(
-            Resolver::CellFromOrganization,
+            &Resolver::CellFromOrganization,
             &cell_to_upstream,
             invalid_org_params,
         );

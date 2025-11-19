@@ -158,18 +158,26 @@ impl MetadataClient {
         }
     }
 
-    pub async fn get_cursor(&self) -> Result<Cursor, BackupError> {
+    // Returns the cursor if found in metadata or none if it doesn't exist.
+    // BackupError is returned for all other errors.
+    pub async fn get_cursor(&self) -> Result<Option<Cursor>, BackupError> {
         let full_url = format!(
             "{}/storage/v1/b/{}/o/{}",
             self.base_url, self.bucket_name, &self.object_key
         );
 
         let resp = self.client.get(&full_url).send().await?;
+
+        // Object does not exist yet. This happens the first time Synapse is run.
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+
         let json_value: serde_json::Value = resp.json().await?;
 
         if let Some(val) = json_value["metadata"][METADATA_KEY].as_str() {
             let cursor: Cursor = val.parse()?;
-            Ok(cursor)
+            Ok(Some(cursor))
         } else {
             Err(BackupError::MetadataError(
                 "Metadata key not found".to_string(),
@@ -252,11 +260,14 @@ impl BackupRouteProvider for GcsRouteProvider {
 
         // Check the cursor stored in GCS metadata first. Only proceed with
         // write if the new cursor is later than the one already stored.
+        // If there is no cursor, the file may not exist proceed with the write.
         let metadata_cursor = self.metadata_client.get_cursor().await?;
 
-        if metadata_cursor >= new_last_cursor {
+        if let Some(mc) = metadata_cursor
+            && mc >= new_last_cursor
+        {
             tracing::info!(
-                metadata_cursor = ?metadata_cursor,
+                metadata_cursor = ?mc,
                 new_last_cursor = ?new_last_cursor,
                 "Skipping route store: GCS version is already up to date"
             );

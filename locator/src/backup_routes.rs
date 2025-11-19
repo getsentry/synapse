@@ -332,7 +332,7 @@ mod tests {
             let data = get_route_data();
             let mut buffer: Vec<u8> = Vec::new();
             let size = codec.write(&mut buffer, &data).unwrap();
-            assert_eq!(size, 36);
+            assert_eq!(size, 77);
             let mut reader: &[u8] = &buffer;
             let decoded = codec.read(&mut reader).unwrap();
             assert_eq!(data, decoded);

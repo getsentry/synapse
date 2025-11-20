@@ -75,5 +75,11 @@ The incremental API is called periodically, as well as on demand if a cache miss
 $ curl sentry-control.sentry.internal/org-cell-mappings?after=1757030409
 ```
 
-The locator service also periodically flushes a copy of the mapping to a local storage. If the control plane is unavailable, this fallback copy is loaded instead.
+### Backup route store
+The locator is designed to continue to serve routes in the event of control plane unavailability. It achieves this by periodically flushing a copy of the id -> cell mappings to an alternate storage. If the control plane is unavailable, this fallback copy is loaded instead.
 
+Configuring backup route storage is mandatory and there are currently two variants included:
+
+1. filesystem: the minimal set up option. it can be run locally and in many other environments.
+
+2. google cloud storage: provided to simplify scaling and deployment by removing the need for persistent local disk/statefulsets. designed for gcp deployments.

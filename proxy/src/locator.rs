@@ -10,14 +10,15 @@ use std::collections::HashMap;
 pub struct Locator(LocatorInner);
 
 impl Locator {
-    pub fn new_from_config(config: LocatorConfig) -> Self {
+    pub async fn new_from_config(config: LocatorConfig) -> Self {
         match config.r#type {
             LocatorType::InProcess {
                 control_plane,
                 backup_route_store,
                 locality_to_default_cell,
             } => {
-                let provider = get_provider(backup_route_store.r#type);
+                // TODO: fix unwrap
+                let provider = get_provider(backup_route_store.r#type).await.unwrap();
                 Locator(LocatorInner::InProcess(LocatorService::new(
                     LocatorDataType::Organization,
                     control_plane.url,

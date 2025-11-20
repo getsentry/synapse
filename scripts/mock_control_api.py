@@ -71,8 +71,7 @@ def get_results(
         updated_at = decoded["updated_at"]
 
         # this is the org id or project key id depending on the result type
-        entity_key = "org_id" if entity == EntityType.ORG else "project_key"
-        entity_id = decoded[entity_key]
+        entity_id = decoded["id"]
 
         for idx, result in enumerate(all_results):
             # cursor matches exactly, start from next result
@@ -99,9 +98,9 @@ def get_results(
 
     if has_more:
         next_result = all_results[to_idx + 1]
-        next_cursor = make_cursor(entity, next_result["updated_at"], next_result["id"])
+        next_cursor = make_cursor(next_result["updated_at"], next_result["id"])
     else:
-        next_cursor = make_cursor(entity, to_idx, None)
+        next_cursor = make_cursor(to_idx, None)
 
     results = []
     for i in range(from_idx, to_idx + 1):
@@ -177,13 +176,11 @@ class MockControlApi(BaseHTTPRequestHandler):
             self.wfile.write(b"Not Found")
 
 
-def make_cursor(entity: EntityType, updated_at: int, entity_id: Optional[str]) -> str:
-    entity_key = "org_id" if entity == EntityType.ORG else "project_key"
-
+def make_cursor(updated_at: int, entity_id: Optional[str]) -> str:
     return base64.b64encode(
         json.dumps(
             {
-                entity_key: entity_id,
+                "id": entity_id,
                 "updated_at": updated_at,
             }
         ).encode("utf-8")

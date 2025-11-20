@@ -5,6 +5,10 @@ pub mod locale;
 pub mod relay_project_config_handler;
 pub mod router;
 
+use crate::config::{CellConfig, Config, Route};
+use crate::errors::IngestRouterError;
+use crate::relay_project_config_handler::RelayProjectConfigsHandler;
+use crate::router::Router;
 use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use hyper::body::Incoming;
@@ -13,10 +17,6 @@ use hyper::{Request, Response};
 use shared::http::run_http_service;
 use std::collections::HashMap;
 use std::pin::Pin;
-use crate::config::{Config, CellConfig, Route};
-use crate::router::Router;
-use crate::relay_project_config_handler::RelayProjectConfigsHandler;
-use crate::errors::IngestRouterError;
 
 pub async fn run(config: Config) -> Result<(), errors::IngestRouterError> {
     let router_service = IngestRouterService::new(config.routes.clone(), config.locales.clone());
@@ -31,13 +31,7 @@ struct IngestRouterService {
 }
 
 impl IngestRouterService {
-    fn new(
-        routes: Vec<Route>,
-        locales: HashMap<
-            String,
-            HashMap<String, CellConfig>,
-        >,
-    ) -> Self {
+    fn new(routes: Vec<Route>, locales: HashMap<String, HashMap<String, CellConfig>>) -> Self {
         let handler = RelayProjectConfigsHandler::new(locales);
         Self {
             router: Router::new(routes, handler),

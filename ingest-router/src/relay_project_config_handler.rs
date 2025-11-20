@@ -602,7 +602,7 @@ impl RelayProjectConfigsHandler {
 
         for task in tasks {
             let task_result = timeout(Duration::from_secs(30), task).await;
-            
+
             // Handle timeout
             let Ok(join_result) = task_result else {
                 tracing::error!("Task timed out after 30 seconds");

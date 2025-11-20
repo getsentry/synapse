@@ -138,7 +138,6 @@ impl BackupRouteProvider for FilesystemRouteProvider {
 // The google-cloud-storage crate does not expose a way to view the object metadata via the Storage client.
 // The StorageControl client does have this functionality but uses the grpc API which doesn't work with our
 // emulator. This client just queries the API directly.
-
 struct MetadataClient {
     client: reqwest::Client,
     bucket_name: String,
@@ -189,6 +188,7 @@ impl MetadataClient {
 // Route provider alternative that uses Google Cloud storage instead of local filesystem.
 // This code does not handle object versioning and TTLs -- this should be configured at
 //the bucket level.
+// This backend assumes Google's Application Default Credentials are being used.
 pub struct GcsRouteProvider {
     bucket_name: String,
     codec: Codec,

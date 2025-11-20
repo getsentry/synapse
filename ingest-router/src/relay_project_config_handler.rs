@@ -623,14 +623,16 @@ impl RelayProjectConfigsHandler {
 
         for task_with_keys in tasks {
             let TaskWithKeys {
-                handle,
+                mut handle,
                 public_keys,
             } = task_with_keys;
-            let task_result = timeout(Duration::from_secs(30), handle).await;
+            let task_result = timeout(Duration::from_secs(30), &mut handle).await;
 
             // Handle timeout
             let Ok(join_result) = task_result else {
                 tracing::error!("Task timed out after 30 seconds");
+                // Abort the timed-out task to prevent it from continuing in background
+                handle.abort();
                 // Add all keys from this upstream to pending (v3 protocol)
                 merged_pending.extend(public_keys);
                 continue;

@@ -6,7 +6,7 @@ use std::str::FromStr;
 pub struct Cursor {
     // seconds since 1970-01-01 00:00:00 UTC
     pub updated_at: u64,
-    // None org_id means no more results. The last cursor is always none.
+    // None id means no more results. The last cursor is always none.
     pub id: Option<String>,
 }
 

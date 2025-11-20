@@ -7,5 +7,5 @@ locator:
     filename: backup.bin
   locality_to_default_cell:
     us: us1
-  # data type must be organization or projectkey
+  # data type must be organization or project_key
   data_type: organization

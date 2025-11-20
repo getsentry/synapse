@@ -1,3 +1,4 @@
+use crate::config::Resolver;
 use crate::errors::ProxyError;
 use crate::locator::Locator;
 use std::collections::HashMap;
@@ -17,16 +18,15 @@ impl Resolvers {
 
     pub async fn resolve<'a>(
         &self,
-        resolver: &str,
+        resolver: &Resolver,
         cell_to_upstream: &'a HashMap<String, String>,
         params: HashMap<String, String>,
     ) -> Result<&'a str, ProxyError> {
         // Resolve the upstream based on the resolver name and parameters
         // Return the upstream name or an error if resolution fails
         let cell = match resolver {
-            "cell_from_organization" => self.cell_from_organization(params).await,
-            "cell_from_id" => self.cell_from_id(params).await,
-            _ => Err(ProxyError::InvalidResolver)?,
+            Resolver::CellFromOrganization => self.cell_from_organization(params).await,
+            Resolver::CellFromId => self.cell_from_id(params).await,
         }?;
         cell_to_upstream
             .get(&cell)
@@ -103,7 +103,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("id".to_string(), "us1".to_string());
         let result = resolvers
-            .resolve("cell_from_id", &cell_to_upstream, params.clone())
+            .resolve(&Resolver::CellFromId, &cell_to_upstream, params.clone())
             .await
             .unwrap();
         assert_eq!(result, "upstream1");
@@ -112,7 +112,7 @@ mod tests {
         let mut invalid_params = HashMap::new();
         invalid_params.insert("id".to_string(), "us999".to_string());
 
-        let result = resolvers.resolve("cell_from_id", &cell_to_upstream, invalid_params);
+        let result = resolvers.resolve(&Resolver::CellFromId, &cell_to_upstream, invalid_params);
 
         assert!(result.await.is_err());
 
@@ -121,7 +121,11 @@ mod tests {
         org_params.insert("organization".to_string(), "org_0".to_string());
 
         let result = resolvers
-            .resolve("cell_from_organization", &cell_to_upstream, org_params)
+            .resolve(
+                &Resolver::CellFromOrganization,
+                &cell_to_upstream,
+                org_params,
+            )
             .await
             .unwrap();
 
@@ -132,7 +136,7 @@ mod tests {
         invalid_org_params.insert("organization".to_string(), "org_999".to_string());
 
         let result = resolvers.resolve(
-            "cell_from_organization",
+            &Resolver::CellFromOrganization,
             &cell_to_upstream,
             invalid_org_params,
         );

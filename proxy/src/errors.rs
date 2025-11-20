@@ -10,8 +10,6 @@ pub enum ProxyError {
     InvalidUpstream,
     #[error("invalid URI: {0}")]
     InvalidUri(#[from] http::uri::InvalidUri),
-    #[error("unknown resolver")]
-    InvalidResolver,
     #[error("could not resolve route")]
     ResolverError,
     #[error("locator error")]

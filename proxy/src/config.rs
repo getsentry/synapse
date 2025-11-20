@@ -62,10 +62,17 @@ pub struct Match {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Resolver {
+    CellFromOrganization,
+    CellFromId,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Action {
     Dynamic {
-        resolver: String,
+        resolver: Resolver,
         cell_to_upstream: HashMap<String, String>,
         default: Option<String>,
     },

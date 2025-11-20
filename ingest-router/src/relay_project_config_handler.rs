@@ -376,6 +376,17 @@ struct MergedResults {
     extra: HashMap<String, JsonValue>,
 }
 
+/// Task handle paired with its public keys for graceful failure handling.
+///
+/// The public keys are tracked outside the task so they can be added to the
+/// pending array if the task times out or panics, maintaining v3 protocol compliance.
+struct TaskWithKeys {
+    /// The spawned task handle.
+    handle: JoinHandle<UpstreamTaskResult>,
+    /// Public keys requested from this upstream.
+    public_keys: Vec<String>,
+}
+
 /// Handler for Relay Project Configs endpoint.
 ///
 /// See module-level docs for complete protocol details, implementation strategy,
@@ -506,16 +517,19 @@ impl RelayProjectConfigsHandler {
         }
 
         // Build a request for each upstream with its assigned publicKeys
-        split
+        // Sort by upstream_index to ensure deterministic ordering
+        let mut sorted_split: Vec<_> = split.into_iter().collect();
+        sorted_split.sort_by_key(|(upstream_index, _)| *upstream_index);
+
+        sorted_split
             .into_iter()
-            .enumerate()
-            .map(|(idx, (upstream_index, public_keys))| {
+            .map(|(upstream_index, public_keys)| {
                 let upstream = upstreams[upstream_index].clone();
 
-                // For v3 protocol: set global=true for only the first upstream
+                // For v3 protocol: set global=true for only the first upstream (index 0)
                 // This avoids needing to merge global configs from multiple responses
-                let global = if idx == 0 {
-                    // First upstream: keep global flag as-is from original request
+                let global = if upstream_index == 0 {
+                    // First upstream (index 0): keep global flag as-is from original request
                     request.global
                 } else {
                     // Other upstreams: explicitly set global=false
@@ -536,11 +550,14 @@ impl RelayProjectConfigsHandler {
     ///
     /// Each task sends the split request to its designated upstream and returns
     /// an `UpstreamTaskResult` containing the response or error.
+    ///
+    /// Returns tuples of (JoinHandle, public_keys) so keys can be added to pending
+    /// if the task times out or panics.
     fn spawn_upstream_tasks(
         &self,
         split_requests: Vec<(Upstream, RelayProjectConfigsRequest)>,
         base_request: &Request<()>,
-    ) -> Result<Vec<JoinHandle<UpstreamTaskResult>>, IngestRouterError> {
+    ) -> Result<Vec<TaskWithKeys>, IngestRouterError> {
         let mut tasks = Vec::new();
 
         for (upstream, split_request) in split_requests {
@@ -569,6 +586,9 @@ impl RelayProjectConfigsHandler {
             let client = self.client.clone();
             let sentry_url = upstream.sentry_url.clone();
 
+            // Clone keys so we can track them even if task times out
+            let public_keys_for_task = public_keys.clone();
+
             // Spawn a task for each upstream request
             let task = tokio::spawn(async move {
                 let sentry_url_str = sentry_url.to_string();
@@ -577,12 +597,16 @@ impl RelayProjectConfigsHandler {
 
                 UpstreamTaskResult {
                     sentry_url: sentry_url_str,
-                    public_keys,
+                    public_keys: public_keys_for_task,
                     result,
                 }
             });
 
-            tasks.push(task);
+            // Store both task handle and keys (keys needed if task times out)
+            tasks.push(TaskWithKeys {
+                handle: task,
+                public_keys,
+            });
         }
 
         Ok(tasks)
@@ -592,20 +616,23 @@ impl RelayProjectConfigsHandler {
     ///
     /// Handles timeouts, task panics, and HTTP failures gracefully.
     /// Failed keys are added to the pending array for retry.
-    async fn collect_task_results(
-        &self,
-        tasks: Vec<JoinHandle<UpstreamTaskResult>>,
-    ) -> MergedResults {
+    async fn collect_task_results(&self, tasks: Vec<TaskWithKeys>) -> MergedResults {
         let mut merged_configs = HashMap::new();
         let mut merged_pending = Vec::new();
         let mut merged_extra = HashMap::new();
 
-        for task in tasks {
-            let task_result = timeout(Duration::from_secs(30), task).await;
+        for task_with_keys in tasks {
+            let TaskWithKeys {
+                handle,
+                public_keys,
+            } = task_with_keys;
+            let task_result = timeout(Duration::from_secs(30), handle).await;
 
             // Handle timeout
             let Ok(join_result) = task_result else {
                 tracing::error!("Task timed out after 30 seconds");
+                // Add all keys from this upstream to pending (v3 protocol)
+                merged_pending.extend(public_keys);
                 continue;
             };
 
@@ -614,6 +641,8 @@ impl RelayProjectConfigsHandler {
                 if let Err(e) = join_result {
                     tracing::error!("Task panicked: {e}");
                 }
+                // Add all keys from this upstream to pending (v3 protocol)
+                merged_pending.extend(public_keys);
                 continue;
             };
 

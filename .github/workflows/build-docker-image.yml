@@ -1,5 +1,7 @@
 # TODO: Add actual push to registry on push to main brain. Right now this just validates build works but doesn't push it.
 name: build-docker-image
+permissions:
+    contents: read
 on:
     push:
         branches: [ main ]

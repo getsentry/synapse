@@ -1681,6 +1681,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "serde",
+ "serde_json",
  "serde_yaml",
  "shared",
  "thiserror 2.0.17",
@@ -3138,6 +3139,7 @@ dependencies = [
  "hyper-util",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

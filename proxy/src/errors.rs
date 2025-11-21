@@ -18,4 +18,6 @@ pub enum ProxyError {
     ReqwestError(#[from] reqwest::Error),
     #[error("hyper error: {0}")]
     Hyper(#[from] hyper::Error),
+    #[error("backup route provider error: {0}")]
+    BackupError(#[from] locator::backup_routes::BackupError),
 }

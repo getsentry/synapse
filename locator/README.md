@@ -1,7 +1,10 @@
 # Synapse: Locator
 
 ### Overview
-The locator is a lightweight, read-only service that returns the cell for a given organization by either ID or slug. It periodically syncs with the authoritative route mappings from the control plane. The service is optimized for low-latency reads, and keeps a copy of all cell routes in memory at all times. Additionally, it stores the last copy of all routes in a durable storage, and is designed to function normally and be safe to restart in the event of control plane unavailability.
+The locator is a lightweight, read-only service that returns the cell for a given identifier: either organization (ID or slug), or project key. It periodically syncs with the authoritative route mappings from the control plane. The service is optimized for low-latency reads, and keeps a copy of all cell routes in memory at all times. Additionally, it stores the last copy of all routes in a durable storage, and is designed to function normally and be safe to restart in the event of control plane unavailability.
+
+### Organization mode vs project key mode
+The locator runs in one of two modes: `organization` or `project_key`. This is specified via config for standalone locator, or is passed into the constructor when the locator is initialized for an in-process locator used as a library. The use case for the `organization` mode is the proxy / Sentry API, and the use case for project_key mode is Relay / ingest routing. The locator requests data from one of the two control plane APIs based on which data type is selected. The rest of the locator functionality is identical in both cases.
 
 ### Usage examples
 There are two ways in which the locator can be used:
@@ -11,7 +14,7 @@ There are two ways in which the locator can be used:
     The locator can be deployed as an independent service serving requests over HTTP:
 
     ```
-    $ curl http://synapse.local/locator?org=1
+    $ curl http://synapse.local/locator?id=1
 
     {
       "1": "us1"
@@ -43,7 +46,8 @@ $ curl sentry-control.internal/org-cell-mappings?cursor=abcdef&limit=100000
 }
 ```
 
-The cursor represents a base64-encoded composite sort key comprised of the last updated timestamp and the organization ID of the row.
+The cursor represents a base64-encoded composite sort key comprised of the last updated timestamp the id of the row.
+The ID is either the org ID for organization mode, or the project key itself for project key mode.
 
 ```python
 cursor = {

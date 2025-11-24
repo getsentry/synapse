@@ -252,7 +252,9 @@ mod tests {
             },
         };
 
-        let locator = Locator::new_from_config(config.locator.clone()).await;
+        let locator = Locator::new_from_config(config.locator.clone())
+            .await
+            .unwrap();
 
         let service = ProxyService::try_new(locator, config.routes, config.upstreams)
             .expect("Failed to create proxy service");

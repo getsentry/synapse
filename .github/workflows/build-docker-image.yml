@@ -19,9 +19,8 @@ jobs:
             -   name: Build Docker image
                 uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
                 with:
-                    # TODO: Change to true when pushing to gar later
-                    push: false
                     image_name: synapse
                     platforms: linux/amd64
+                    # TODO: Change to true when pushing to gar later
                     ghcr: false
                     tag_nightly: false

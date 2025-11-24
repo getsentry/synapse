@@ -17,8 +17,7 @@ impl Locator {
                 backup_route_store,
                 locality_to_default_cell,
             } => {
-                let provider = get_provider(backup_route_store.r#type)
-                    .await?;
+                let provider = get_provider(backup_route_store.r#type).await?;
                 Ok(Locator(LocatorInner::InProcess(LocatorService::new(
                     LocatorDataType::Organization,
                     control_plane.url,

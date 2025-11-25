@@ -88,6 +88,8 @@ impl Route {
 impl TryFrom<RouteConfig> for Route {
     type Error = ProxyError;
     fn try_from(config: RouteConfig) -> Result<Self, Self::Error> {
+        let is_static_action = matches!(config.action, Action::Static { .. });
+
         let path = match config.r#match.path {
             Some(path_str) => {
                 // Trim slashes
@@ -109,6 +111,12 @@ impl TryFrom<RouteConfig> for Route {
                             if let Some(stripped) =
                                 s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
                             {
+                                if is_static_action {
+                                    return Err(ProxyError::InvalidRoute(
+                                        "Dynamic path parameters are not allowed with static actions"
+                                            .to_string(),
+                                    ));
+                                }
                                 let is_valid = stripped.chars().all(|ch| ch.is_ascii_lowercase());
                                 if !is_valid {
                                     return Err(ProxyError::InvalidRoute(format!(

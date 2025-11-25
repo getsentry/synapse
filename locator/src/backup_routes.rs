@@ -382,7 +382,11 @@ mod tests {
     async fn test_filesystem() {
         let dir = tempfile::tempdir().unwrap();
 
-        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin", config::Compression::Zstd1);
+        let provider = FilesystemRouteProvider::new(
+            dir.path().to_str().unwrap(),
+            "backup.bin",
+            config::Compression::Zstd1,
+        );
         let data = get_route_data();
 
         provider.store(&data).await.unwrap();
@@ -395,7 +399,9 @@ mod tests {
         let endpoint = "http://localhost:4443";
         let bucket = "test-bucket";
 
-        let mut provider = GcsRouteProvider::new(bucket.into(), config::Compression::Zstd1).await.unwrap();
+        let mut provider = GcsRouteProvider::new(bucket.into(), config::Compression::Zstd1)
+            .await
+            .unwrap();
 
         // Override the clients so we can use the local emulator
         provider.client = google_cloud_storage::client::Storage::builder()

@@ -36,7 +36,14 @@ impl Router {
         match self.find_matching_route(&req) {
             Some(action) => {
                 tracing::debug!(action = ?action, "Matched route");
-                self.handle_action(req, action).await
+                // Convert errors to HTTP responses with proper status codes
+                match self.handle_action(req, action).await {
+                    Ok(response) => Ok(response),
+                    Err(e) => {
+                        tracing::error!(error = %e, "Handler error");
+                        Ok(e.into_response())
+                    }
+                }
             }
             None => {
                 tracing::warn!(
@@ -137,7 +144,7 @@ mod tests {
     use hyper::{Method, Request};
 
     fn test_router(routes: Vec<Route>) -> Router {
-        use crate::config::CellConfig;
+        use crate::config::{CellConfig, RelayTimeouts};
         use std::collections::HashMap;
         use url::Url;
 
@@ -145,36 +152,30 @@ mod tests {
         let mut locales = HashMap::new();
         locales.insert(
             "us".to_string(),
-            HashMap::from([(
-                "us-cell-1".to_string(),
-                CellConfig {
-                    relay_url: Url::parse("http://us-relay.example.com:8080").unwrap(),
-                    sentry_url: Url::parse("http://us-sentry.example.com:8080").unwrap(),
-                },
-            )]),
+            vec![CellConfig {
+                name: "us-cell-1".to_string(),
+                relay_url: Url::parse("http://us-relay.example.com:8080").unwrap(),
+                sentry_url: Url::parse("http://us-sentry.example.com:8080").unwrap(),
+            }],
         );
         locales.insert(
             "de".to_string(),
-            HashMap::from([(
-                "de-cell-1".to_string(),
-                CellConfig {
-                    relay_url: Url::parse("http://de-relay.example.com:8080").unwrap(),
-                    sentry_url: Url::parse("http://de-sentry.example.com:8080").unwrap(),
-                },
-            )]),
+            vec![CellConfig {
+                name: "de-cell-1".to_string(),
+                relay_url: Url::parse("http://de-relay.example.com:8080").unwrap(),
+                sentry_url: Url::parse("http://de-sentry.example.com:8080").unwrap(),
+            }],
         );
         locales.insert(
             "local".to_string(),
-            HashMap::from([(
-                "local-cell".to_string(),
-                CellConfig {
-                    relay_url: Url::parse("http://local-relay.example.com:8080").unwrap(),
-                    sentry_url: Url::parse("http://local-sentry.example.com:8080").unwrap(),
-                },
-            )]),
+            vec![CellConfig {
+                name: "local-cell".to_string(),
+                relay_url: Url::parse("http://local-relay.example.com:8080").unwrap(),
+                sentry_url: Url::parse("http://local-sentry.example.com:8080").unwrap(),
+            }],
         );
 
-        let handler = RelayProjectConfigsHandler::new(locales);
+        let handler = RelayProjectConfigsHandler::new(locales, RelayTimeouts::default());
         Router::new(routes, handler)
     }
 
@@ -287,5 +288,30 @@ mod tests {
         let req = test_request(Method::GET, "/api/test", None);
         let response = router.route(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_error_converted_to_response() {
+        use std::collections::HashMap;
+
+        // Create a router with a route that references a non-existent locale
+        let handler = RelayProjectConfigsHandler::new(
+            HashMap::new(), // Empty locales
+            crate::config::RelayTimeouts::default(),
+        );
+        let routes = vec![test_route(
+            None,
+            Some("/test".to_string()),
+            None,
+            "nonexistent", // This locale doesn't exist
+        )];
+        let router = Router::new(routes, handler);
+
+        // This should trigger an InternalError (locale not found) and return 500
+        let req = test_request(Method::POST, "/test", None);
+        let response = router.route(req).await.unwrap();
+
+        // Verify the error was converted to a proper HTTP response
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

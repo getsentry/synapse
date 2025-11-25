@@ -7,18 +7,19 @@
 //! # Protocol Overview
 //!
 //! The Relay Project Configs endpoint (version 3) is used by Relay instances to fetch
-//! project configurations needed to process events. This implementation acts as a proxy
-//! that:
+//! project configurations needed to process events. This implementation acts as an
+//! aggregation layer that:
 //! 1. Splits requests across multiple upstream Sentry cells based on project ownership
 //! 2. Fans out requests in parallel to multiple upstreams
 //! 3. Merges responses back into a single v3-compliant response
 //! 4. Passes through all config data unchanged
 //!
 //! ## Endpoint Details
+//! The endpoint implementation is at https://github.com/getsentry/sentry/blob/master/src/sentry/api/endpoints/relay/project_configs.py
 //!
 //! - **Path**: `/api/0/relays/projectconfigs/`
 //! - **Method**: `POST`
-//! - **Protocol Version**: 3 (current)
+//! - **Protocol Version**: 3
 //! - **Authentication**: RelayAuthentication (X-Sentry-Relay-Id, X-Sentry-Relay-Signature)
 //!
 //! # Request Format (Version 3)
@@ -85,11 +86,10 @@
 //!    - Keys routed to the same cell are batched into one request
 //!
 //! 3. **Handle global config flag**
-//!    - First upstream gets `global: true` (or original value)
-//!    - All other upstreams get `global: false`
-//!    - Prevents complex global config merging (only one upstream returns it)
-//!    - TODO: Add capability to send to both but return only from first. This would
-//!      enable a failover mechanism.
+//!    - All upstreams receive the same `global` flag value as the original request
+//!    - Global config is selected from the highest priority cell that returns it
+//!    - Priority is determined by cell order in configuration (first = highest priority)
+//!    - Enables failover: if highest priority cell fails, next cell's global config is used
 //!
 //! ## Response Merging Strategy
 //!
@@ -105,9 +105,9 @@
 //! - Include keys from failed/timed-out upstreams
 //! - Relay will retry these keys in a subsequent request
 //!
-//! ### Extra fields (HashMap merge)
-//! - Merge `extra` fields (includes `global`, `global_status`, future fields)
-//! - No conflicts expected (only first upstream has global config)
+//! ### Extra fields (Priority-based selection)
+//! - Select `extra` fields from highest priority cell that responds successfully
+//! - Priority determined by cell order in configuration (first = highest)
 //! - Forward compatibility: new fields are automatically preserved
 //!
 //! ## Error Handling
@@ -120,7 +120,7 @@
 //! ### Total Failure
 //! - If all upstreams fail: Check if any keys were added to pending
 //! - If pending is not empty: Return 200 OK with pending array (relay will retry)
-//! - If pending is empty: Return 500 error (no recoverable state)
+//! - If pending is empty: Return 503 error (no recoverable state)
 //!
 //! ### Upstream Failure Scenarios
 //! - **Timeout**: All keys from that upstream → pending
@@ -151,7 +151,7 @@
 //! └───┬──────────────────────────┬───────┘
 //!     │                          │
 //!     │ {publicKeys: [A,C,E],    │ {publicKeys: [B,D,F],
-//!     │  global: true}           │  global: false}
+//!     │  global: true}           │  global: true}
 //!     │                          │
 //!     ▼                          ▼
 //! ┌──────────┐              ┌──────────┐
@@ -169,7 +169,7 @@
 //! │  3. Merge responses:                 │
 //! │     • Combine all configs            │
 //! │     • Merge pending arrays           │
-//! │     • Merge extra fields (global)    │
+//! │     • Select others from priority    │
 //! └──────────────┬───────────────────────┘
 //!                │
 //!                │ {configs: {A,B,C,D,E,F},
@@ -269,7 +269,9 @@
 //!
 //! **Splitting**:
 //! - Request to US1: `{"publicKeys": ["key1"], "global": true}`
-//! - Request to US2: `{"publicKeys": ["key2"], "global": false}`
+//! - Request to US2: `{"publicKeys": ["key2"], "global": true}`
+//!
+//! (US1 has higher priority, so its global config will be used in the final response)
 //!
 //! **Response**:
 //! ```json
@@ -284,13 +286,13 @@
 //!
 //! - [`RelayProjectConfigsHandler`] - Main handler struct for processing requests
 
-use crate::config::CellConfig;
+use crate::config::{CellConfig, RelayTimeouts};
 use crate::errors::IngestRouterError;
 use crate::http::send_to_upstream;
-use crate::locale::{Locales, Upstream};
+use crate::locale::{Cells, Locales, Upstream};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::{Body, Bytes};
-use hyper::header::CONTENT_TYPE;
+use hyper::header::{CONTENT_LENGTH, CONTENT_TYPE, HeaderMap};
 use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -300,7 +302,7 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
+use tokio::time::{Instant, timeout};
 
 /// Request format for the relay project configs endpoint.
 ///
@@ -311,13 +313,8 @@ struct RelayProjectConfigsRequest {
     #[serde(rename = "publicKeys")]
     pub public_keys: Vec<String>,
 
-    /// Whether to include global config (optional).
-    ///
-    /// first upstream gets original value, others get `Some(false)`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub global: Option<bool>,
-
-    /// Other fields (`noCache`, future fields) for forward compatibility.
+    /// Other fields (`global`, `noCache`, future fields) for forward compatibility.
+    /// All fields are passed through as-is to upstreams.
     #[serde(flatten)]
     pub extra: HashMap<String, JsonValue>,
 }
@@ -358,6 +355,8 @@ impl RelayProjectConfigsResponse {
 
 /// Result from an upstream task request.
 struct UpstreamTaskResult {
+    /// The cell name this result is from.
+    cell_name: String,
     /// The upstream URL that was contacted.
     sentry_url: String,
     /// The public keys that were requested from this upstream.
@@ -374,6 +373,8 @@ struct MergedResults {
     pending: Vec<String>,
     /// Extra fields (global config, status, etc.).
     extra: HashMap<String, JsonValue>,
+    /// Headers from upstream
+    headers: HeaderMap,
 }
 
 /// Task handle paired with its public keys for graceful failure handling.
@@ -387,13 +388,285 @@ struct TaskWithKeys {
     public_keys: Vec<String>,
 }
 
+/// A request split for a specific upstream cell.
+struct SplitRequest {
+    /// The cell name this request is for
+    cell_name: String,
+    /// The upstream to send the request to
+    upstream: Upstream,
+    /// The request body to send
+    request: RelayProjectConfigsRequest,
+}
+
+/// Executor for spawning and collecting upstream tasks.
+///
+/// Encapsulates the parallel task execution logic for fanning out requests
+/// to multiple upstream Sentry instances and collecting/merging their results.
+struct UpstreamTaskExecutor {
+    /// HTTP client for sending requests to upstream Sentry instances.
+    client: Client<HttpConnector, Full<Bytes>>,
+
+    /// Timeout configuration for HTTP and task-level timeouts.
+    timeouts: RelayTimeouts,
+}
+
+impl UpstreamTaskExecutor {
+    fn new(client: Client<HttpConnector, Full<Bytes>>, timeouts: RelayTimeouts) -> Self {
+        Self { client, timeouts }
+    }
+
+    /// Spawns parallel tasks to fan out requests to multiple upstreams.
+    ///
+    /// Each task performs an HTTP request to an upstream Sentry instance with
+    /// the appropriate subset of public keys.
+    ///
+    /// Uses two-layer timeout strategy:
+    /// - HTTP timeout: Applied to individual HTTP requests
+    /// - Task timeout: Applied at collection level with adaptive strategy
+    fn spawn_tasks(
+        &self,
+        split_requests: Vec<SplitRequest>,
+        base_request: &Request<()>,
+    ) -> Result<Vec<TaskWithKeys>, IngestRouterError> {
+        let mut tasks = Vec::new();
+
+        for split in split_requests {
+            let cell_name = split.cell_name;
+            let upstream = split.upstream;
+            let split_request = split.request;
+            // Track public keys for this upstream
+            let public_keys = split_request.public_keys.clone();
+
+            // Serialize the split request body
+            let request_body = split_request.to_bytes().map_err(|e| {
+                IngestRouterError::InternalError(format!("Failed to serialize request: {e}"))
+            })?;
+
+            // Build request with headers from original request
+            let mut req_builder = Request::builder()
+                .method(base_request.method())
+                .uri(base_request.uri().clone())
+                .version(base_request.version());
+
+            for (name, value) in base_request.headers() {
+                req_builder = req_builder.header(name, value);
+            }
+
+            let request = req_builder
+                .body(Full::new(request_body))
+                .expect("Failed to build request");
+
+            let client = self.client.clone();
+            let sentry_url = upstream.sentry_url.clone();
+            let http_timeout_secs = self.timeouts.http_timeout_secs as u64;
+
+            // Clone data we need to track even if task times out
+            let public_keys_for_task = public_keys.clone();
+            let cell_name_for_task = cell_name.clone();
+
+            // Spawn a task for each upstream request
+            let task = tokio::spawn(async move {
+                let sentry_url_str = sentry_url.to_string();
+                let result: Result<Response<Bytes>, IngestRouterError> =
+                    send_to_upstream(&client, &sentry_url, request, http_timeout_secs).await;
+
+                UpstreamTaskResult {
+                    cell_name: cell_name_for_task,
+                    sentry_url: sentry_url_str,
+                    public_keys: public_keys_for_task,
+                    result,
+                }
+            });
+
+            // Store task handle and keys (keys needed if task times out)
+            tasks.push(TaskWithKeys {
+                handle: task,
+                public_keys,
+            });
+        }
+
+        Ok(tasks)
+    }
+
+    /// Collects results from all spawned tasks and merges them.
+    ///
+    /// Uses adaptive timeouts with cutoff strategy:
+    /// - Initial: Wait up to task_initial_timeout_secs for first upstream to respond
+    /// - Subsequent: Once first succeeds, ALL remaining tasks have task_subsequent_timeout_secs
+    ///   total (from first success) to complete. This prevents slow/down cells from blocking
+    ///   progress when we already have good data.
+    ///
+    /// Failed keys are added to the pending array for retry.
+    ///
+    /// Global config is selected from the highest priority cell based on cells.cell_list order.
+    async fn collect_and_merge(&self, tasks: Vec<TaskWithKeys>, cells: &Cells) -> MergedResults {
+        let mut merged_configs = HashMap::new();
+        let mut merged_pending = Vec::new();
+        let mut extra_by_cell: HashMap<String, HashMap<String, JsonValue>> = HashMap::new();
+        let mut headers_by_cell: HashMap<String, HeaderMap> = HashMap::new();
+        let mut additional_deadline: Option<Instant> = None;
+
+        for task_with_keys in tasks {
+            let TaskWithKeys {
+                mut handle,
+                public_keys,
+            } = task_with_keys;
+
+            // Adaptive timeout
+            // - Before first success: Use task_initial_timeout_secs
+            // - After first success: Use remaining time until deadline
+            let timeout_duration = if let Some(deadline) = additional_deadline {
+                // Calculate remaining time to deadline
+                let now = Instant::now();
+                if now >= deadline {
+                    // Deadline already passed, use minimal timeout
+                    Duration::from_millis(1)
+                } else {
+                    deadline.duration_since(now)
+                }
+            } else {
+                Duration::from_secs(self.timeouts.task_initial_timeout_secs as u64)
+            };
+
+            let task_result = timeout(timeout_duration, &mut handle).await;
+
+            // Handle timeout
+            let Ok(join_result) = task_result else {
+                tracing::error!(
+                    "Task timed out after {} seconds",
+                    timeout_duration.as_secs()
+                );
+                // Abort the timed-out task to prevent it from continuing in background
+                handle.abort();
+                // Add all keys from this upstream to pending (v3 protocol)
+                merged_pending.extend(public_keys);
+                continue;
+            };
+
+            // Handle task panic
+            let Ok(upstream_result) = join_result else {
+                if let Err(e) = join_result {
+                    tracing::error!("Task panicked: {e}");
+                }
+                // Add all keys from this upstream to pending (v3 protocol)
+                merged_pending.extend(public_keys);
+                continue;
+            };
+
+            // Process the upstream result
+            let result_had_configs = upstream_result.result.is_ok();
+            let cell_name_from_result = upstream_result.cell_name.clone();
+            if let Some((extra, headers)) = self.process_upstream_result(
+                upstream_result,
+                &mut merged_configs,
+                &mut merged_pending,
+            ) {
+                // Store extra fields and headers by cell name for later priority-based selection
+                extra_by_cell.insert(cell_name_from_result.clone(), extra);
+                headers_by_cell.insert(cell_name_from_result, headers);
+            }
+
+            // Set deadline on first success
+            if result_had_configs && additional_deadline.is_none() {
+                additional_deadline = Some(
+                    Instant::now()
+                        + Duration::from_secs(self.timeouts.task_subsequent_timeout_secs as u64),
+                );
+            }
+        }
+
+        // Select global config and headers from highest priority cell by iterating cells.cell_list
+        // cell_list is already in priority order (first = highest priority)
+        let (merged_extra, merged_headers) = cells
+            .cell_list
+            .iter()
+            .find_map(|cell_name| {
+                extra_by_cell.get(cell_name).cloned().map(|extra| {
+                    let headers = headers_by_cell.get(cell_name).cloned().unwrap_or_default();
+                    (extra, headers)
+                })
+            })
+            .unwrap_or_default();
+
+        MergedResults {
+            configs: merged_configs,
+            pending: merged_pending,
+            extra: merged_extra,
+            headers: merged_headers,
+        }
+    }
+
+    /// Processes the result from a single upstream task.
+    ///
+    /// Handles both successful and failed upstream responses, merging successful
+    /// configs and adding failed keys to the pending array.
+    ///
+    /// Returns the extra fields (global config, etc.) and headers if the request succeeded,
+    /// which allows the caller to select based on cell priority.
+    fn process_upstream_result(
+        &self,
+        upstream_result: UpstreamTaskResult,
+        merged_configs: &mut HashMap<String, JsonValue>,
+        merged_pending: &mut Vec<String>,
+    ) -> Option<(HashMap<String, JsonValue>, HeaderMap)> {
+        let UpstreamTaskResult {
+            cell_name: _,
+            sentry_url,
+            public_keys,
+            result,
+        } = upstream_result;
+
+        // Handle HTTP request failure
+        let Ok(response) = result else {
+            tracing::error!(
+                sentry_url = %sentry_url,
+                error = %result.unwrap_err(),
+                "Request to upstream failed"
+            );
+            // Add all keys from this upstream to pending (v3 protocol)
+            merged_pending.extend(public_keys);
+            return None;
+        };
+
+        // Extract headers before consuming the response
+        let (parts, body) = response.into_parts();
+        let headers = parts.headers;
+
+        // Parse response body
+        match RelayProjectConfigsResponse::from_bytes(&body) {
+            Ok(response_data) => {
+                // Merge configs from this upstream
+                merged_configs.extend(response_data.configs);
+
+                // Merge pending arrays (v3 protocol)
+                if let Some(pending) = response_data.pending {
+                    merged_pending.extend(pending);
+                }
+
+                // Return extra fields and headers for priority-based selection
+                Some((response_data.extra, headers))
+            }
+            Err(e) => {
+                tracing::error!(
+                    sentry_url = %sentry_url,
+                    error = %e,
+                    "Failed to parse response from upstream"
+                );
+                // Add all keys from this upstream to pending
+                merged_pending.extend(public_keys);
+                None
+            }
+        }
+    }
+}
+
 /// Handler for Relay Project Configs endpoint.
 ///
 /// See module-level docs for complete protocol details, implementation strategy,
 /// and request/response flow diagrams.
 pub struct RelayProjectConfigsHandler {
-    /// HTTP client for sending requests to upstream Sentry instances.
-    client: Client<HttpConnector, Full<Bytes>>,
+    /// Executor for spawning and collecting upstream tasks.
+    executor: UpstreamTaskExecutor,
 
     /// Locales mapping for locale-based upstream lookups.
     ///
@@ -402,14 +675,17 @@ pub struct RelayProjectConfigsHandler {
 }
 
 impl RelayProjectConfigsHandler {
-    pub fn new(locales_config: HashMap<String, HashMap<String, CellConfig>>) -> Self {
+    pub fn new(locales_config: HashMap<String, Vec<CellConfig>>, timeouts: RelayTimeouts) -> Self {
         let connector = HttpConnector::new();
         let client = Client::builder(TokioExecutor::new()).build(connector);
 
         // Build locales from config
         let locales = Locales::new(locales_config);
 
-        Self { client, locales }
+        // Create executor for task management
+        let executor = UpstreamTaskExecutor::new(client, timeouts);
+
+        Self { executor, locales }
     }
 
     pub async fn handle<B>(
@@ -440,7 +716,7 @@ impl RelayProjectConfigsHandler {
         let base_request = Request::from_parts(parts, ());
 
         // Process the request
-        self.handle_with_targets(&cells.cell_to_upstreams, base_request, body_bytes)
+        self.handle_with_targets(cells, base_request, body_bytes)
             .await
     }
 
@@ -453,7 +729,7 @@ impl RelayProjectConfigsHandler {
     /// 4. Build and return the merged response
     async fn handle_with_targets(
         &self,
-        cell_upstreams: &HashMap<String, Upstream>,
+        cells: &Cells,
         base_request: Request<()>,
         body_bytes: Bytes,
     ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError> {
@@ -463,27 +739,33 @@ impl RelayProjectConfigsHandler {
         })?;
 
         // Split publicKeys across upstreams
-        let split_requests = self.split_keys_by_upstream(&request_data, cell_upstreams);
+        let split_requests = self.split_keys_by_upstream(&request_data, cells);
 
         // Spawn tasks to fan out requests in parallel
-        let tasks = self.spawn_upstream_tasks(split_requests, &base_request)?;
+        let tasks = self.executor.spawn_tasks(split_requests, &base_request)?;
 
-        // Collect and merge results from all tasks
-        let results = self.collect_task_results(tasks).await;
+        // Collect and merge results from all tasks (uses cells.cell_list priority order)
+        let results = self.executor.collect_and_merge(tasks, cells).await;
 
         // Only return an error if we have no configs AND no pending AND we had keys to request
         // Having keys in pending is a valid v3 response (relay will retry later)
+        // Return 503 Service Unavailable to indicate temporary unavailability
         if results.configs.is_empty()
             && results.pending.is_empty()
             && !request_data.public_keys.is_empty()
         {
-            return Err(IngestRouterError::InternalError(
-                "All upstream requests failed with no recoverable state".to_string(),
+            return Err(IngestRouterError::ServiceUnavailable(
+                "All upstream cells are unavailable".to_string(),
             ));
         }
 
         // Build merged response in the relay format
-        self.build_merged_response(results.configs, results.pending, results.extra)
+        self.build_merged_response(
+            results.configs,
+            results.pending,
+            results.extra,
+            results.headers,
+        )
     }
 
     /// Splits public keys across multiple upstream cells.
@@ -493,239 +775,57 @@ impl RelayProjectConfigsHandler {
     fn split_keys_by_upstream(
         &self,
         request: &RelayProjectConfigsRequest,
-        cell_upstreams: &HashMap<String, Upstream>,
-    ) -> Vec<(Upstream, RelayProjectConfigsRequest)> {
-        if cell_upstreams.is_empty() {
+        cells: &Cells,
+    ) -> Vec<SplitRequest> {
+        let cell_list = &cells.cell_list;
+        if cell_list.is_empty() {
             return Vec::new();
         }
 
-        // For now, convert HashMap to Vec for round-robin stub
-        // In the future, we'll use cell_upstreams.get(cell_name) directly
-        let upstreams: Vec<&Upstream> = cell_upstreams.values().collect();
+        let mut split: HashMap<String, Vec<String>> = HashMap::new();
 
-        let mut split: HashMap<usize, Vec<String>> = HashMap::new();
-
-        // Round-robin stub: distribute publicKeys evenly across upstreams
         // TODO: Replace with control plane lookup per key
         for (index, public_key) in request.public_keys.iter().enumerate() {
-            let upstream_index = index % upstreams.len();
+            let cell_name = &cell_list[index % cell_list.len()];
 
             split
-                .entry(upstream_index)
+                .entry(cell_name.clone())
                 .or_default()
                 .push(public_key.clone());
         }
 
-        // Build a request for each upstream with its assigned publicKeys
-        // Sort by upstream_index to ensure deterministic ordering
-        let mut sorted_split: Vec<_> = split.into_iter().collect();
-        sorted_split.sort_by_key(|(upstream_index, _)| *upstream_index);
-
-        sorted_split
+        // Build a request for each cell with its assigned publicKeys
+        split
             .into_iter()
-            .map(|(upstream_index, public_keys)| {
-                let upstream = upstreams[upstream_index].clone();
+            .map(|(cell_name, public_keys)| {
+                let upstream = cells
+                    .cell_to_upstreams
+                    .get(&cell_name)
+                    .expect("Cell name in list must exist in HashMap");
 
-                // For v3 protocol: set global=true for only the first upstream (index 0)
-                // This avoids needing to merge global configs from multiple responses
-                let global = if upstream_index == 0 {
-                    // First upstream (index 0): keep global flag as-is from original request
-                    request.global
-                } else {
-                    // Other upstreams: explicitly set global=false
-                    Some(false)
-                };
-
-                let split_request = RelayProjectConfigsRequest {
-                    public_keys,
-                    global,
-                    extra: request.extra.clone(),
-                };
-                (upstream, split_request)
+                // All fields in extra (including global, noCache, etc.) are passed through as-is
+                SplitRequest {
+                    cell_name,
+                    upstream: upstream.clone(),
+                    request: RelayProjectConfigsRequest {
+                        public_keys,
+                        extra: request.extra.clone(),
+                    },
+                }
             })
             .collect()
     }
 
-    /// Spawn async tasks to send requests to all upstreams in parallel.
+    /// Build a merged response from collected configs in relay format.
     ///
-    /// Each task sends the split request to its designated upstream and returns
-    /// an `UpstreamTaskResult` containing the response or error.
-    ///
-    /// Returns tuples of (JoinHandle, public_keys) so keys can be added to pending
-    /// if the task times out or panics.
-    fn spawn_upstream_tasks(
-        &self,
-        split_requests: Vec<(Upstream, RelayProjectConfigsRequest)>,
-        base_request: &Request<()>,
-    ) -> Result<Vec<TaskWithKeys>, IngestRouterError> {
-        let mut tasks = Vec::new();
-
-        for (upstream, split_request) in split_requests {
-            // Track public keys for this upstream (needed if request fails)
-            let public_keys = split_request.public_keys.clone();
-
-            // Serialize the split request body
-            let request_body = split_request.to_bytes().map_err(|e| {
-                IngestRouterError::InternalError(format!("Failed to serialize request: {e}"))
-            })?;
-
-            // Build request with headers from original request
-            let mut req_builder = Request::builder()
-                .method(base_request.method())
-                .uri(base_request.uri().clone())
-                .version(base_request.version());
-
-            for (name, value) in base_request.headers() {
-                req_builder = req_builder.header(name, value);
-            }
-
-            let request = req_builder
-                .body(Full::new(request_body))
-                .expect("Failed to build request");
-
-            let client = self.client.clone();
-            let sentry_url = upstream.sentry_url.clone();
-
-            // Clone keys so we can track them even if task times out
-            let public_keys_for_task = public_keys.clone();
-
-            // Spawn a task for each upstream request
-            let task = tokio::spawn(async move {
-                let sentry_url_str = sentry_url.to_string();
-                let result: Result<Response<Bytes>, IngestRouterError> =
-                    send_to_upstream(&client, &sentry_url, request, 30).await;
-
-                UpstreamTaskResult {
-                    sentry_url: sentry_url_str,
-                    public_keys: public_keys_for_task,
-                    result,
-                }
-            });
-
-            // Store both task handle and keys (keys needed if task times out)
-            tasks.push(TaskWithKeys {
-                handle: task,
-                public_keys,
-            });
-        }
-
-        Ok(tasks)
-    }
-
-    /// Collect results from all spawned tasks and merge them.
-    ///
-    /// Handles timeouts, task panics, and HTTP failures gracefully.
-    /// Failed keys are added to the pending array for retry.
-    async fn collect_task_results(&self, tasks: Vec<TaskWithKeys>) -> MergedResults {
-        let mut merged_configs = HashMap::new();
-        let mut merged_pending = Vec::new();
-        let mut merged_extra = HashMap::new();
-
-        for task_with_keys in tasks {
-            let TaskWithKeys {
-                mut handle,
-                public_keys,
-            } = task_with_keys;
-            let task_result = timeout(Duration::from_secs(30), &mut handle).await;
-
-            // Handle timeout
-            let Ok(join_result) = task_result else {
-                tracing::error!("Task timed out after 30 seconds");
-                // Abort the timed-out task to prevent it from continuing in background
-                handle.abort();
-                // Add all keys from this upstream to pending (v3 protocol)
-                merged_pending.extend(public_keys);
-                continue;
-            };
-
-            // Handle task panic
-            let Ok(upstream_result) = join_result else {
-                if let Err(e) = join_result {
-                    tracing::error!("Task panicked: {e}");
-                }
-                // Add all keys from this upstream to pending (v3 protocol)
-                merged_pending.extend(public_keys);
-                continue;
-            };
-
-            // Process the upstream result
-            self.process_upstream_result(
-                upstream_result,
-                &mut merged_configs,
-                &mut merged_pending,
-                &mut merged_extra,
-            );
-        }
-
-        MergedResults {
-            configs: merged_configs,
-            pending: merged_pending,
-            extra: merged_extra,
-        }
-    }
-
-    /// Process the result from a single upstream task.
-    ///
-    /// Handles both successful and failed upstream responses, merging successful
-    /// configs and adding failed keys to the pending array.
-    fn process_upstream_result(
-        &self,
-        upstream_result: UpstreamTaskResult,
-        merged_configs: &mut HashMap<String, JsonValue>,
-        merged_pending: &mut Vec<String>,
-        merged_extra: &mut HashMap<String, JsonValue>,
-    ) {
-        let UpstreamTaskResult {
-            sentry_url,
-            public_keys,
-            result,
-        } = upstream_result;
-
-        // Handle HTTP request failure
-        let Ok(response) = result else {
-            tracing::error!(
-                sentry_url = %sentry_url,
-                error = %result.unwrap_err(),
-                "Request to upstream failed"
-            );
-            // Add all keys from this upstream to pending (v3 protocol)
-            merged_pending.extend(public_keys);
-            return;
-        };
-
-        // Parse response body
-        let body = response.into_body();
-        match RelayProjectConfigsResponse::from_bytes(&body) {
-            Ok(response_data) => {
-                // Merge configs from this upstream
-                merged_configs.extend(response_data.configs);
-
-                // Merge pending arrays (v3 protocol)
-                if let Some(pending) = response_data.pending {
-                    merged_pending.extend(pending);
-                }
-
-                // Merge extra fields (global, global_status, future fields)
-                merged_extra.extend(response_data.extra);
-            }
-            Err(e) => {
-                tracing::error!(
-                    sentry_url = %sentry_url,
-                    error = %e,
-                    "Failed to parse response from upstream"
-                );
-                // Add all keys from this upstream to pending
-                merged_pending.extend(public_keys);
-            }
-        }
-    }
-
-    /// Build a merged response from collected configs in relay format
+    /// Uses headers from the highest priority cell (same cell used for global config).
+    /// Filters out hop-by-hop headers and Content-Length (which is recalculated for the new body).
     fn build_merged_response(
         &self,
         merged_configs: HashMap<String, JsonValue>,
         merged_pending: Vec<String>,
         merged_extra: HashMap<String, JsonValue>,
+        mut upstream_headers: HeaderMap,
     ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError> {
         // Wrap in relay response format
         let response = RelayProjectConfigsResponse {
@@ -741,9 +841,25 @@ impl RelayProjectConfigsHandler {
         let merged_json = serde_json::to_vec(&response)
             .map_err(|e| IngestRouterError::ResponseSerializationError(e.to_string()))?;
 
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(CONTENT_TYPE, "application/json")
+        // Filter hop-by-hop headers from upstream (assumes HTTP/1.1)
+        // These headers are connection-specific and shouldn't be forwarded
+        shared::http::filter_hop_by_hop(&mut upstream_headers, hyper::Version::HTTP_11);
+
+        // Remove Content-Length since we're creating a new body with different length
+        upstream_headers.remove(CONTENT_LENGTH);
+
+        // Build response with filtered headers from highest priority cell
+        let mut builder = Response::builder().status(StatusCode::OK);
+
+        // Copy filtered headers from upstream
+        for (name, value) in upstream_headers.iter() {
+            builder = builder.header(name, value);
+        }
+
+        // Always set/override Content-Type to ensure it's correct
+        builder = builder.header(CONTENT_TYPE, "application/json");
+
+        builder
             .body(
                 Full::new(Bytes::from(merged_json))
                     .map_err(|e| match e {})
@@ -759,19 +875,19 @@ mod tests {
     use url::Url;
 
     #[tokio::test]
-    async fn test_build_merged_response() {
-        let handler = RelayProjectConfigsHandler::new(HashMap::new());
+    async fn test_response_building_and_v3_protocol() {
+        let handler = RelayProjectConfigsHandler::new(HashMap::new(), RelayTimeouts::default());
 
-        // Test 1: Empty response
+        // Test: Empty response
         let response = handler
-            .build_merged_response(HashMap::new(), Vec::new(), HashMap::new())
+            .build_merged_response(HashMap::new(), Vec::new(), HashMap::new(), HeaderMap::new())
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: JsonValue = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(parsed, serde_json::json!({"configs": {}}));
 
-        // Test 2: Multiple configs with all fields preserved (pass-through verification)
+        // Test: Multiple configs with field preservation
         let mut configs = HashMap::new();
         configs.insert(
             "project1".to_string(),
@@ -789,92 +905,35 @@ mod tests {
         );
 
         let response = handler
-            .build_merged_response(configs, Vec::new(), HashMap::new())
+            .build_merged_response(configs, Vec::new(), HashMap::new(), HeaderMap::new())
             .unwrap();
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: JsonValue = serde_json::from_slice(&body_bytes).unwrap();
-
-        // Verify multiple configs present
         assert!(parsed["configs"].get("project1").is_some());
         assert!(parsed["configs"].get("project2").is_some());
-
-        // Verify all fields preserved exactly as-is (pass-through)
         assert_eq!(parsed["configs"]["project1"]["disabled"], false);
         assert_eq!(parsed["configs"]["project1"]["slug"], "test-project");
-        assert_eq!(parsed["configs"]["project1"]["organizationId"], 42);
-        assert_eq!(parsed["configs"]["project1"]["projectId"], 100);
         assert_eq!(parsed["configs"]["project1"]["customField"], "customValue");
-    }
 
-    #[tokio::test]
-    async fn test_all_upstreams_fail_returns_error() {
-        // Set up handler with invalid upstreams
-        let mut locales = HashMap::new();
-        locales.insert(
-            "us".to_string(),
-            HashMap::from([(
-                "us-cell-1".to_string(),
-                CellConfig {
-                    relay_url: Url::parse("http://invalid-relay.example.com:8080").unwrap(),
-                    sentry_url: Url::parse("http://invalid-sentry.example.com:8080").unwrap(),
-                },
-            )]),
-        );
-
-        let handler = RelayProjectConfigsHandler::new(locales);
-
-        // Create a request with public keys
-        let request_body = serde_json::json!({
-            "publicKeys": ["test-key-1", "test-key-2"]
-        });
-        let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
-
-        // Create empty cell_targets to simulate all upstreams failing
-        let empty_targets = HashMap::new();
-
-        // Create a base request
-        let request = Request::builder().method("POST").uri("/").body(()).unwrap();
-
-        // This should return an error since no upstreams will succeed (empty targets)
-        let result = handler
-            .handle_with_targets(&empty_targets, request, body_bytes)
-            .await;
-
-        assert!(result.is_err());
-        match result {
-            Err(IngestRouterError::InternalError(msg)) => {
-                assert_eq!(
-                    msg,
-                    "All upstream requests failed with no recoverable state"
-                );
-            }
-            _ => panic!("Expected InternalError"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_v3_protocol_fields() {
-        let handler = RelayProjectConfigsHandler::new(HashMap::new());
-
-        // Test 1: Pending array with values
+        // Test: V3 protocol - Pending array with values
         let pending = vec!["key1".to_string(), "key2".to_string(), "key3".to_string()];
         let response = handler
-            .build_merged_response(HashMap::new(), pending, HashMap::new())
+            .build_merged_response(HashMap::new(), pending, HashMap::new(), HeaderMap::new())
             .unwrap();
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: JsonValue = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(parsed["pending"].as_array().unwrap().len(), 3);
         assert_eq!(parsed["pending"][0], "key1");
 
-        // Test 2: Empty pending omitted (skip_serializing_if)
+        // Test: V3 protocol - Empty pending omitted
         let response = handler
-            .build_merged_response(HashMap::new(), Vec::new(), HashMap::new())
+            .build_merged_response(HashMap::new(), Vec::new(), HashMap::new(), HeaderMap::new())
             .unwrap();
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: JsonValue = serde_json::from_slice(&body_bytes).unwrap();
         assert!(parsed.get("pending").is_none());
 
-        // Test 3: Global config and extra fields (forward compatibility)
+        // Test: V3 protocol - Global config and extra fields
         let mut extra = HashMap::new();
         extra.insert(
             "global".to_string(),
@@ -887,19 +946,63 @@ mod tests {
         );
 
         let response = handler
-            .build_merged_response(HashMap::new(), Vec::new(), extra)
+            .build_merged_response(HashMap::new(), Vec::new(), extra, HeaderMap::new())
             .unwrap();
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let parsed: JsonValue = serde_json::from_slice(&body_bytes).unwrap();
-
-        // Verify global config
         assert_eq!(
             parsed["global"]["measurements"]["maxCustomMeasurements"],
             10
         );
         assert_eq!(parsed["global_status"], "ready");
-        // Verify future/extra fields preserved
         assert_eq!(parsed["futureFeature"]["enabled"], true);
+    }
+
+    #[tokio::test]
+    async fn test_all_upstreams_fail_returns_error() {
+        // Set up handler with invalid upstreams
+        let mut locales = HashMap::new();
+        locales.insert(
+            "us".to_string(),
+            vec![CellConfig {
+                name: "us-cell-1".to_string(),
+                relay_url: Url::parse("http://invalid-relay.example.com:8080").unwrap(),
+                sentry_url: Url::parse("http://invalid-sentry.example.com:8080").unwrap(),
+            }],
+        );
+
+        let handler = RelayProjectConfigsHandler::new(locales, RelayTimeouts::default());
+
+        // Create a request with public keys
+        let request_body = serde_json::json!({
+            "publicKeys": ["test-key-1", "test-key-2"]
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        // Create empty cells to simulate all upstreams failing
+        let empty_cells = Cells {
+            cell_list: Vec::new(),
+            cell_to_upstreams: HashMap::new(),
+        };
+
+        // Create a base request
+        let request = Request::builder().method("POST").uri("/").body(()).unwrap();
+
+        // This should return an error since no upstreams will succeed (empty targets)
+        let result = handler
+            .handle_with_targets(&empty_cells, request, body_bytes)
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(IngestRouterError::ServiceUnavailable(msg)) => {
+                assert_eq!(msg, "All upstream cells are unavailable");
+                // Verify the error maps to 503 status code
+                let error = IngestRouterError::ServiceUnavailable(msg);
+                assert_eq!(error.status_code(), hyper::StatusCode::SERVICE_UNAVAILABLE);
+            }
+            _ => panic!("Expected ServiceUnavailable error"),
+        }
     }
 
     #[tokio::test]
@@ -908,16 +1011,14 @@ mod tests {
         let mut locales = HashMap::new();
         locales.insert(
             "us".to_string(),
-            HashMap::from([(
-                "us-cell-1".to_string(),
-                CellConfig {
-                    relay_url: Url::parse("http://localhost:1").unwrap(), // Invalid port
-                    sentry_url: Url::parse("http://localhost:1").unwrap(), // Will fail to connect
-                },
-            )]),
+            vec![CellConfig {
+                name: "us-cell-1".to_string(),
+                relay_url: Url::parse("http://localhost:1").unwrap(), // Invalid port
+                sentry_url: Url::parse("http://localhost:1").unwrap(), // Will fail to connect
+            }],
         );
 
-        let handler = RelayProjectConfigsHandler::new(locales.clone());
+        let handler = RelayProjectConfigsHandler::new(locales.clone(), RelayTimeouts::default());
 
         // Create a request with public keys
         let request_body = serde_json::json!({
@@ -925,16 +1026,16 @@ mod tests {
         });
         let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
 
-        // Get upstreams
+        // Get cells
         let locales = Locales::new(locales);
-        let cell_upstreams = &locales.get_cells("us").unwrap().cell_to_upstreams;
+        let cells = locales.get_cells("us").unwrap();
 
         // Create a base request
         let request = Request::builder().method("POST").uri("/").body(()).unwrap();
 
         // When upstream fails, all its keys should be added to pending
         let result = handler
-            .handle_with_targets(cell_upstreams, request, body_bytes)
+            .handle_with_targets(cells, request, body_bytes)
             .await;
 
         // Should succeed (v3 protocol - returning pending is valid)
@@ -960,48 +1061,51 @@ mod tests {
     }
 
     #[test]
-    fn test_global_field_handling() {
-        // Test 1: Split behavior - first upstream gets true, others get false
+    fn test_extra_fields_passthrough() {
+        // Test 1: Split behavior - all upstreams get the same extra fields (including global)
         let mut locales = HashMap::new();
         locales.insert(
             "us".to_string(),
-            HashMap::from([
-                (
-                    "us-cell-1".to_string(),
-                    CellConfig {
-                        relay_url: Url::parse("http://us1-relay:8080").unwrap(),
-                        sentry_url: Url::parse("http://us1-sentry:8080").unwrap(),
-                    },
-                ),
-                (
-                    "us-cell-2".to_string(),
-                    CellConfig {
-                        relay_url: Url::parse("http://us2-relay:8080").unwrap(),
-                        sentry_url: Url::parse("http://us2-sentry:8080").unwrap(),
-                    },
-                ),
-            ]),
+            vec![
+                CellConfig {
+                    name: "us-cell-1".to_string(),
+                    relay_url: Url::parse("http://us1-relay:8080").unwrap(),
+                    sentry_url: Url::parse("http://us1-sentry:8080").unwrap(),
+                },
+                CellConfig {
+                    name: "us-cell-2".to_string(),
+                    relay_url: Url::parse("http://us2-relay:8080").unwrap(),
+                    sentry_url: Url::parse("http://us2-sentry:8080").unwrap(),
+                },
+            ],
         );
 
-        let handler = RelayProjectConfigsHandler::new(locales.clone());
+        let handler = RelayProjectConfigsHandler::new(locales.clone(), RelayTimeouts::default());
+        let mut extra = HashMap::new();
+        extra.insert("global".to_string(), serde_json::json!(true));
         let request = RelayProjectConfigsRequest {
             public_keys: vec!["key1".to_string(), "key2".to_string()],
-            global: Some(true),
-            extra: HashMap::new(),
+            extra,
         };
 
         let locales_obj = Locales::new(locales);
-        let cell_upstreams = &locales_obj.get_cells("us").unwrap().cell_to_upstreams;
-        let splits = handler.split_keys_by_upstream(&request, cell_upstreams);
+        let cells = locales_obj.get_cells("us").unwrap();
+        let splits = handler.split_keys_by_upstream(&request, cells);
 
         assert_eq!(splits.len(), 2);
-        assert_eq!(splits[0].1.global, Some(true)); // First gets true
-        assert_eq!(splits[1].1.global, Some(false)); // Others get false
+        // All upstreams get the same extra fields (including global: true)
+        assert_eq!(
+            splits[0].request.extra.get("global"),
+            Some(&serde_json::json!(true))
+        );
+        assert_eq!(
+            splits[1].request.extra.get("global"),
+            Some(&serde_json::json!(true))
+        );
 
-        // Test 2: Serialization - global omitted when None
+        // Test 2: Serialization - extra fields are included
         let request = RelayProjectConfigsRequest {
             public_keys: vec!["key1".to_string()],
-            global: None,
             extra: HashMap::new(),
         };
 
@@ -1009,5 +1113,59 @@ mod tests {
         let parsed: JsonValue = serde_json::from_str(&json).unwrap();
         assert!(parsed.get("global").is_none());
         assert!(parsed.get("publicKeys").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_headers_from_highest_priority_cell() {
+        use hyper::header::{CACHE_CONTROL, HeaderValue};
+
+        let mut locales = HashMap::new();
+        locales.insert(
+            "test".to_string(),
+            vec![CellConfig {
+                name: "test-cell".to_string(),
+                relay_url: Url::parse("http://localhost:8090").unwrap(),
+                sentry_url: Url::parse("http://localhost:8080").unwrap(),
+            }],
+        );
+
+        let handler = RelayProjectConfigsHandler::new(locales, RelayTimeouts::default());
+
+        // Create headers from upstream (simulating what we'd get from highest priority cell)
+        let mut upstream_headers = HeaderMap::new();
+        upstream_headers.insert(CACHE_CONTROL, HeaderValue::from_static("max-age=300"));
+        upstream_headers.insert(
+            "X-Sentry-Rate-Limit-Remaining",
+            HeaderValue::from_static("100"),
+        );
+
+        // Add a hop-by-hop header that should be filtered
+        upstream_headers.insert(
+            hyper::header::CONNECTION,
+            HeaderValue::from_static("keep-alive"),
+        );
+
+        let response = handler
+            .build_merged_response(HashMap::new(), Vec::new(), HashMap::new(), upstream_headers)
+            .unwrap();
+
+        // Verify headers are copied
+        assert_eq!(
+            response.headers().get(CACHE_CONTROL),
+            Some(&HeaderValue::from_static("max-age=300"))
+        );
+        assert_eq!(
+            response.headers().get("X-Sentry-Rate-Limit-Remaining"),
+            Some(&HeaderValue::from_static("100"))
+        );
+
+        // Verify hop-by-hop headers are filtered out
+        assert!(response.headers().get(hyper::header::CONNECTION).is_none());
+
+        // Verify Content-Type is always set
+        assert_eq!(
+            response.headers().get(CONTENT_TYPE),
+            Some(&HeaderValue::from_static("application/json"))
+        );
     }
 }

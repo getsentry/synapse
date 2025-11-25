@@ -22,6 +22,9 @@ pub enum ValidationError {
 
     #[error("Locale '{0}' has no valid cells (none of its cells match any upstream)")]
     LocaleHasNoValidCells(String),
+
+    #[error("Invalid timeout configuration: {0}")]
+    InvalidTimeouts(String),
 }
 
 /// HTTP methods supported for route matching
@@ -59,10 +62,63 @@ pub struct RelayProjectConfigsArgs {
     pub locale: String,
 }
 
+/// Timeout configuration for relay project configs handler
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct RelayTimeouts {
+    /// HTTP request timeout for individual upstream calls (seconds).
+    /// This is the maximum time a single HTTP request can take.
+    /// Default: 15 seconds
+    pub http_timeout_secs: u16,
+
+    /// Task timeout when waiting for the first upstream to respond (seconds).
+    /// Must be >= http_timeout_secs to allow HTTP requests to complete.
+    /// Default: 20 seconds
+    pub task_initial_timeout_secs: u16,
+
+    /// Deadline for all remaining tasks after first success (seconds).
+    /// Aggressively cuts off slow upstreams once we have good data.
+    /// Default: 5 seconds
+    pub task_subsequent_timeout_secs: u16,
+}
+
+impl Default for RelayTimeouts {
+    fn default() -> Self {
+        Self {
+            http_timeout_secs: 15,
+            task_initial_timeout_secs: 20,
+            task_subsequent_timeout_secs: 5,
+        }
+    }
+}
+
+impl RelayTimeouts {
+    /// Validates the timeout configuration
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        // Initial task timeout must be >= HTTP timeout to allow requests to complete
+        if self.task_initial_timeout_secs < self.http_timeout_secs {
+            return Err(ValidationError::InvalidTimeouts(
+                "task_initial_timeout_secs must be >= http_timeout_secs".to_string(),
+            ));
+        }
+
+        // Subsequent task timeout should be > 0
+        if self.task_subsequent_timeout_secs == 0 {
+            return Err(ValidationError::InvalidTimeouts(
+                "task_subsequent_timeout_secs must be > 0".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 /// Cell/upstream configuration
 /// Note: The cell name is the HashMap key in Config.locales
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CellConfig {
+    /// Name/identifier of the cell
+    pub name: String,
     /// URL of the Sentry upstream server
     pub sentry_url: Url,
     /// URL of the Relay upstream server
@@ -80,12 +136,14 @@ pub struct Config {
     pub admin_listener: AdminListener,
     /// Maps locale identifiers to their cells (cell name -> cell config)
     ///
-    /// Note: Uses String keys instead of an enum to allow flexible,
-    /// deployment-specific locale configuration without code changes.
-    /// Different deployments may use different locale identifiers.
-    pub locales: HashMap<String, HashMap<String, CellConfig>>,
+    /// Cells are stored as a Vec to maintain priority order - the first cell
+    /// in the list has highest priority for global config responses.
+    pub locales: HashMap<String, Vec<CellConfig>>,
     /// Request routing rules
     pub routes: Vec<Route>,
+    /// Timeout configuration for relay handlers
+    #[serde(default)]
+    pub relay_timeouts: RelayTimeouts,
 }
 
 impl Config {
@@ -95,6 +153,9 @@ impl Config {
         self.listener.validate()?;
         self.admin_listener.validate()?;
 
+        // Validate timeouts
+        self.relay_timeouts.validate()?;
+
         // Validate locales and cells
         for (locale, cells) in &self.locales {
             // Check that locale has at least one cell
@@ -102,10 +163,14 @@ impl Config {
                 return Err(ValidationError::LocaleHasNoValidCells(locale.clone()));
             }
 
-            // Check for empty cell names (HashMap keys)
-            for cell_name in cells.keys() {
-                if cell_name.is_empty() {
+            // Check for empty cell names and collect for duplicate checking
+            let mut seen_names = HashSet::new();
+            for cell in cells {
+                if cell.name.is_empty() {
                     return Err(ValidationError::EmptyUpstreamName);
+                }
+                if !seen_names.insert(&cell.name) {
+                    return Err(ValidationError::DuplicateUpstream(cell.name.clone()));
                 }
             }
         }
@@ -226,16 +291,16 @@ admin_listener:
     port: 3001
 locales:
     us:
-        us1:
-            sentry_url: "http://127.0.0.1:8080"
-            relay_url: "http://127.0.0.1:8090"
-        us2:
-            sentry_url: "http://10.0.0.2:8080"
-            relay_url: "http://10.0.0.2:8090"
+        - name: us1
+          sentry_url: "http://127.0.0.1:8080"
+          relay_url: "http://127.0.0.1:8090"
+        - name: us2
+          sentry_url: "http://10.0.0.2:8080"
+          relay_url: "http://10.0.0.2:8090"
     de:
-        de1:
-            sentry_url: "http://10.0.0.3:8080"
-            relay_url: "http://10.0.0.3:8090"
+        - name: de1
+          sentry_url: "http://10.0.0.3:8080"
+          relay_url: "http://10.0.0.3:8090"
 routes:
     - match:
         host: us.sentry.io
@@ -261,6 +326,8 @@ routes:
         assert_eq!(config.locales.len(), 2);
         assert_eq!(config.locales.get("us").unwrap().len(), 2);
         assert_eq!(config.locales.get("de").unwrap().len(), 1);
+        assert_eq!(config.locales.get("us").unwrap()[0].name, "us1");
+        assert_eq!(config.locales.get("us").unwrap()[1].name, "us2");
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
@@ -285,14 +352,13 @@ routes:
             },
             locales: HashMap::from([(
                 "us".to_string(),
-                HashMap::from([(
-                    "us1".to_string(),
-                    CellConfig {
-                        sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
-                        relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
-                    },
-                )]),
+                vec![CellConfig {
+                    name: "us1".to_string(),
+                    sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
+                    relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
+                }],
             )]),
+            relay_timeouts: RelayTimeouts::default(),
             routes: vec![Route {
                 r#match: Match {
                     path: Some("/api/".to_string()),
@@ -315,16 +381,26 @@ routes:
 
         // Test empty cell name
         let mut config = base_config.clone();
-        config.locales.get_mut("us").unwrap().insert(
-            "".to_string(),
-            CellConfig {
-                sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
-                relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
-            },
-        );
+        config.locales.get_mut("us").unwrap().push(CellConfig {
+            name: "".to_string(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
+        });
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::EmptyUpstreamName
+        ));
+
+        // Test duplicate cell name
+        let mut config = base_config.clone();
+        config.locales.get_mut("us").unwrap().push(CellConfig {
+            name: "us1".to_string(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
+        });
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::DuplicateUpstream(_)
         ));
 
         // Test unknown locale in action
@@ -341,10 +417,34 @@ routes:
         let mut config = base_config.clone();
         config
             .locales
-            .insert("invalid_locale".to_string(), HashMap::new());
+            .insert("invalid_locale".to_string(), Vec::new());
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::LocaleHasNoValidCells(_)
+        ));
+
+        // Test invalid timeouts: task_initial < http
+        let mut config = base_config.clone();
+        config.relay_timeouts = RelayTimeouts {
+            http_timeout_secs: 20,
+            task_initial_timeout_secs: 15, // Less than HTTP timeout
+            task_subsequent_timeout_secs: 5,
+        };
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::InvalidTimeouts(_)
+        ));
+
+        // Test invalid timeouts: task_subsequent = 0
+        let mut config = base_config.clone();
+        config.relay_timeouts = RelayTimeouts {
+            http_timeout_secs: 15,
+            task_initial_timeout_secs: 20,
+            task_subsequent_timeout_secs: 0, // Zero timeout
+        };
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::InvalidTimeouts(_)
         ));
     }
 

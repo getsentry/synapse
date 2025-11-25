@@ -5,7 +5,7 @@ pub mod locale;
 pub mod relay_project_config_handler;
 pub mod router;
 
-use crate::config::{CellConfig, Config, Route};
+use crate::config::{CellConfig, Config, RelayTimeouts, Route};
 use crate::errors::IngestRouterError;
 use crate::relay_project_config_handler::RelayProjectConfigsHandler;
 use crate::router::Router;
@@ -19,7 +19,11 @@ use std::collections::HashMap;
 use std::pin::Pin;
 
 pub async fn run(config: Config) -> Result<(), errors::IngestRouterError> {
-    let router_service = IngestRouterService::new(config.routes.clone(), config.locales.clone());
+    let router_service = IngestRouterService::new(
+        config.routes.clone(),
+        config.locales.clone(),
+        config.relay_timeouts.clone(),
+    );
     let router_task = run_http_service(&config.listener.host, config.listener.port, router_service);
     router_task.await?;
     Ok(())
@@ -31,8 +35,12 @@ struct IngestRouterService {
 }
 
 impl IngestRouterService {
-    fn new(routes: Vec<Route>, locales: HashMap<String, HashMap<String, CellConfig>>) -> Self {
-        let handler = RelayProjectConfigsHandler::new(locales);
+    fn new(
+        routes: Vec<Route>,
+        locales: HashMap<String, Vec<CellConfig>>,
+        relay_timeouts: RelayTimeouts,
+    ) -> Self {
+        let handler = RelayProjectConfigsHandler::new(locales, relay_timeouts);
         Self {
             router: Router::new(routes, handler),
         }

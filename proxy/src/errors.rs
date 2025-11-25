@@ -4,8 +4,8 @@ use std::io;
 pub enum ProxyError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
-    #[error("route configuration error")]
-    InvalidRoute,
+    #[error("route configuration error: {0}")]
+    InvalidRoute(String),
     #[error("upstream configuration error")]
     InvalidUpstream,
     #[error("invalid URI: {0}")]

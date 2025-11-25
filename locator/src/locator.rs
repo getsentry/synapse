@@ -409,7 +409,11 @@ mod tests {
         );
 
         let dir = tempfile::tempdir().unwrap();
-        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        let provider = FilesystemRouteProvider::new(
+            dir.path().to_str().unwrap(),
+            "backup.bin",
+            config::Compression::None,
+        );
         provider.store(&route_data).await.unwrap();
         (dir, Arc::new(provider))
     }

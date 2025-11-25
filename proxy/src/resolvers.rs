@@ -57,8 +57,8 @@ impl Resolvers {
 mod tests {
     use super::*;
     use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
-    use locator::types::RouteData;
     use locator::config::Compression;
+    use locator::types::RouteData;
     use std::sync::Arc;
 
     async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {

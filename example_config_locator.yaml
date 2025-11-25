@@ -5,7 +5,6 @@ locator:
     type: filesystem
     base_dir: target/cache
     filename: backup.bin
-    # none, gzip, zstd1, zstd3
     compression: zstd1
   locality_to_default_cell:
     us: us1

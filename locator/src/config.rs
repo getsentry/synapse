@@ -7,7 +7,7 @@ use std::collections::HashMap;
 #[serde(rename_all = "snake_case")]
 pub enum Compression {
     None,
-    Gip,
+    Gzip,
     Zstd1,
     Zstd3,
 }

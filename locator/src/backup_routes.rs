@@ -55,7 +55,7 @@ impl From<config::Compression> for Compression {
     fn from(value: config::Compression) -> Self {
         match value {
             config::Compression::None => Compression::None,
-            config::Compression::Gip => Compression::Gzip,
+            config::Compression::Gzip => Compression::Gzip,
             config::Compression::Zstd1 => Compression::Zstd(1),
             config::Compression::Zstd3 => Compression::Zstd(3),
         }

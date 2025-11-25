@@ -10,7 +10,8 @@ use tokio::time::{Duration, sleep};
 #[derive(Deserialize)]
 struct ControlPlaneRecord {
     id: String,
-    slug: String,
+    // Slug is present in organization but not project key responses
+    slug: Option<String>,
     cell: CellId,
 }
 
@@ -111,7 +112,9 @@ impl ControlPlane {
 
             for row in json_response.data {
                 org_to_cell.insert(row.id, row.cell.clone());
-                org_to_cell.insert(row.slug, row.cell);
+                if let Some(slug) = row.slug {
+                    org_to_cell.insert(slug, row.cell);
+                }
             }
 
             page_fetches += 1;

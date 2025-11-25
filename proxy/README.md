@@ -59,7 +59,7 @@ Each route is associated with an action, which can be a static or dynamic routin
 2. Call a function to dynamically select an upstream
     ```yaml
     action:
-        resolver: resolve_cell_from_organization  # resolver function defines how a request is mapped to a cell
+        resolver: cell_from_organization  # resolver function defines how a request is mapped to a cell
         default: us1                              # an optional default cell can be provider
         cell_to_upstream:                         # maps the organization's cell to a specific upstream service (e.g. getsentry, conduit, etc)
             us1: getsentry-us1-upstream

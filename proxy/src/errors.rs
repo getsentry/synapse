@@ -10,8 +10,6 @@ pub enum ProxyError {
     InvalidUpstream,
     #[error("invalid URI: {0}")]
     InvalidUri(#[from] http::uri::InvalidUri),
-    #[error("unknown resolver")]
-    InvalidResolver,
     #[error("could not resolve route")]
     ResolverError,
     #[error("locator error")]
@@ -20,4 +18,6 @@ pub enum ProxyError {
     ReqwestError(#[from] reqwest::Error),
     #[error("hyper error: {0}")]
     Hyper(#[from] hyper::Error),
+    #[error("backup route provider error: {0}")]
+    BackupError(#[from] locator::backup_routes::BackupError),
 }

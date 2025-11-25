@@ -58,6 +58,7 @@ mod tests {
     use super::*;
     use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
     use locator::types::RouteData;
+    use locator::config::Compression;
     use std::sync::Arc;
 
     async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
@@ -75,7 +76,7 @@ mod tests {
         let provider = FilesystemRouteProvider::new(
             dir.path().to_str().unwrap(),
             "backup.bin",
-            config::Compression::Zstd1,
+            Compression::Zstd1,
         );
         provider.store(&route_data).await.unwrap();
         (dir, provider)

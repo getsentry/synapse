@@ -117,7 +117,7 @@ impl TryFrom<RouteConfig> for Route {
                                             .to_string(),
                                     ));
                                 }
-                                let is_valid = stripped.chars().all(|ch| ch.is_ascii_lowercase());
+                                let is_valid = stripped.chars().all(|ch| ch.is_ascii_lowercase() || ch == '_' );
                                 if !is_valid {
                                     return Err(ProxyError::InvalidRoute(format!(
                                         "Invalid parameter name: {}",
@@ -356,8 +356,10 @@ mod tests {
                 host: None,
                 path: Some("/api/users/{user_id}".to_string()),
             },
-            action: crate::config::Action::Static {
-                to: "upstream".to_string(),
+            action: crate::config::Action::Dynamic {
+                resolver: crate::config::Resolver::CellFromId,
+                cell_to_upstream: HashMap::new(),
+                default: None,
             },
         };
 

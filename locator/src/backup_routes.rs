@@ -1,6 +1,6 @@
-use crate::config;
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
+use crate::config;
 use crate::cursor::Cursor;
 use crate::types::RouteData;
 use std::fs::File;

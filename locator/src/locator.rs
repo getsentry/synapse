@@ -394,6 +394,7 @@ impl IdToCell {
 mod tests {
     use super::*;
     use crate::backup_routes::FilesystemRouteProvider;
+    use crate::config;
     use crate::testutils::TestControlPlaneServer;
     use std::time::Duration;
 

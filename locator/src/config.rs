@@ -1,12 +1,30 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+// TODO: This configuration is temporary: once these options are tested, we
+// should choose the best one for use globally.
+#[derive(Clone, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Compression {
+    None,
+    Gip,
+    Zstd1,
+    Zstd3,
+}
+
 #[derive(Clone, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
-    Filesystem { base_dir: String, filename: String },
-    Gcs { bucket: String },
+    Filesystem {
+        base_dir: String,
+        filename: String,
+        compression: Compression,
+    },
+    Gcs {
+        bucket: String,
+        compression: Compression,
+    },
 }
 
 #[derive(Clone, Deserialize, Debug, PartialEq)]

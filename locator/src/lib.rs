@@ -32,9 +32,18 @@ pub async fn get_provider(
     store_type: BackupRouteStoreType,
 ) -> Result<Arc<dyn BackupRouteProvider + 'static>, BackupError> {
     match store_type {
-        BackupRouteStoreType::Filesystem { base_dir, filename } => {
-            Ok(Arc::new(FilesystemRouteProvider::new(&base_dir, &filename)))
-        }
-        BackupRouteStoreType::Gcs { bucket } => Ok(Arc::new(GcsRouteProvider::new(bucket).await?)),
+        BackupRouteStoreType::Filesystem {
+            base_dir,
+            filename,
+            compression,
+        } => Ok(Arc::new(FilesystemRouteProvider::new(
+            &base_dir,
+            &filename,
+            compression,
+        ))),
+        BackupRouteStoreType::Gcs {
+            bucket,
+            compression,
+        } => Ok(Arc::new(GcsRouteProvider::new(bucket, compression).await?)),
     }
 }

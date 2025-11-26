@@ -50,7 +50,7 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use locator::config::BackupRouteStoreType;
+    use locator::config::{BackupRouteStoreType, Compression};
     use proxy::config::Listener;
     use std::io::Write;
     use std::path::Path;
@@ -75,6 +75,7 @@ mod tests {
                     type: filesystem
                     base_dir: /var/lib/locator/
                     filename: backup.bin
+                    compression: zstd1
                 data_type: organization
             "#;
         let tmp = write_tmp_file(locator_yaml);
@@ -85,7 +86,8 @@ mod tests {
             locator_config.backup_route_store.r#type,
             BackupRouteStoreType::Filesystem {
                 base_dir: "/var/lib/locator/".into(),
-                filename: "backup.bin".into()
+                filename: "backup.bin".into(),
+                compression: Compression::Zstd1
             }
         );
     }
@@ -110,6 +112,7 @@ mod tests {
                         type: filesystem
                         base_dir: /var/lib/locator/
                         filename: backup.bin
+                        compression: zstd1
 
             "#;
         let tmp = write_tmp_file(proxy_yaml);

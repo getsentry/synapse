@@ -1,5 +1,6 @@
 /// The fallback route provider enables org to cell mappings to be loaded from
 /// a previously stored copy, even when the control plane is unavailable.
+use crate::config;
 use crate::cursor::Cursor;
 use crate::types::RouteData;
 use std::fs::File;
@@ -44,10 +45,21 @@ pub trait BackupRouteProvider: Send + Sync {
 
 #[derive(Clone)]
 enum Compression {
-    #[allow(dead_code)]
     None,
+    Gzip,
     // zstd with compression level
     Zstd(i32),
+}
+
+impl From<config::Compression> for Compression {
+    fn from(value: config::Compression) -> Self {
+        match value {
+            config::Compression::None => Compression::None,
+            config::Compression::Gzip => Compression::Gzip,
+            config::Compression::Zstd1 => Compression::Zstd(1),
+            config::Compression::Zstd3 => Compression::Zstd(3),
+        }
+    }
 }
 
 struct Codec {
@@ -77,6 +89,13 @@ impl Codec {
                 encoder.finish()?;
                 Ok(size)
             }
+            Compression::Gzip => {
+                let mut encoder =
+                    flate2::write::GzEncoder::new(writer, flate2::Compression::default());
+                let size = bincode::encode_into_std_write(data, &mut encoder, self.config)?;
+                encoder.finish()?;
+                Ok(size)
+            }
         }
     }
 
@@ -91,6 +110,11 @@ impl Codec {
                 let decoded: RouteData = bincode::decode_from_std_read(&mut decoder, self.config)?;
                 Ok(decoded)
             }
+            Compression::Gzip => {
+                let mut decoder = flate2::read::GzDecoder::new(reader);
+                let decoded: RouteData = bincode::decode_from_std_read(&mut decoder, self.config)?;
+                Ok(decoded)
+            }
         }
     }
 }
@@ -101,10 +125,10 @@ pub struct FilesystemRouteProvider {
 }
 
 impl FilesystemRouteProvider {
-    pub fn new(base_dir: &str, filename: &str) -> Self {
+    pub fn new(base_dir: &str, filename: &str, compression: config::Compression) -> Self {
         FilesystemRouteProvider {
             path: Path::new(base_dir).join(filename),
-            codec: Codec::new(Compression::Zstd(1)),
+            codec: Codec::new(compression.into()),
         }
     }
 }
@@ -202,7 +226,10 @@ pub struct GcsRouteProvider {
 }
 
 impl GcsRouteProvider {
-    pub async fn new(bucket: String) -> Result<Self, BackupError> {
+    pub async fn new(
+        bucket: String,
+        compression: config::Compression,
+    ) -> Result<Self, BackupError> {
         let object_key = "backup-routes.bin".to_string();
 
         let client = google_cloud_storage::client::Storage::builder()
@@ -217,7 +244,7 @@ impl GcsRouteProvider {
 
         Ok(GcsRouteProvider {
             bucket_name,
-            codec: Codec::new(Compression::Zstd(1)),
+            codec: Codec::new(compression.into()),
             object_key: object_key.clone(),
             client,
             metadata_client,
@@ -338,6 +365,7 @@ mod tests {
             Compression::None,
             Compression::Zstd(1),
             Compression::Zstd(3),
+            Compression::Gzip,
         ] {
             let codec = Codec::new(compression.clone());
             let data = get_route_data();
@@ -354,7 +382,11 @@ mod tests {
     async fn test_filesystem() {
         let dir = tempfile::tempdir().unwrap();
 
-        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        let provider = FilesystemRouteProvider::new(
+            dir.path().to_str().unwrap(),
+            "backup.bin",
+            config::Compression::Zstd1,
+        );
         let data = get_route_data();
 
         provider.store(&data).await.unwrap();
@@ -367,7 +399,9 @@ mod tests {
         let endpoint = "http://localhost:4443";
         let bucket = "test-bucket";
 
-        let mut provider = GcsRouteProvider::new(bucket.into()).await.unwrap();
+        let mut provider = GcsRouteProvider::new(bucket.into(), config::Compression::Zstd1)
+            .await
+            .unwrap();
 
         // Override the clients so we can use the local emulator
         provider.client = google_cloud_storage::client::Storage::builder()

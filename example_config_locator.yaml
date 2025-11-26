@@ -5,6 +5,7 @@ locator:
     type: filesystem
     base_dir: target/cache
     filename: backup.bin
+    compression: zstd1
   locality_to_default_cell:
     us: us1
   # data type must be organization or project_key

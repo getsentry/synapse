@@ -7,6 +7,7 @@ locator:
   backup_route_store:
     type: gcs
     bucket: synapse
+    compression: zstd1
   locality_to_default_cell:
     us: us1
   data_type: organization

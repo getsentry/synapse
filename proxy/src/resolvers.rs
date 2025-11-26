@@ -57,6 +57,7 @@ impl Resolvers {
 mod tests {
     use super::*;
     use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
+    use locator::config::Compression;
     use locator::types::RouteData;
     use std::sync::Arc;
 
@@ -72,7 +73,11 @@ mod tests {
         );
 
         let dir = tempfile::tempdir().unwrap();
-        let provider = FilesystemRouteProvider::new(dir.path().to_str().unwrap(), "backup.bin");
+        let provider = FilesystemRouteProvider::new(
+            dir.path().to_str().unwrap(),
+            "backup.bin",
+            Compression::Zstd1,
+        );
         provider.store(&route_data).await.unwrap();
         (dir, provider)
     }

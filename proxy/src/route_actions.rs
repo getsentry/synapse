@@ -88,40 +88,71 @@ impl Route {
 impl TryFrom<RouteConfig> for Route {
     type Error = ProxyError;
     fn try_from(config: RouteConfig) -> Result<Self, Self::Error> {
-        // TODO: Add route validation
+        let is_static_action = matches!(config.action, Action::Static { .. });
 
-        let path = config.r#match.path.map(|path_str| {
-            // Trim slashes
-            let mut normalized_path = path_str.trim().trim_matches('/');
+        let path = match config.r#match.path {
+            Some(path_str) => {
+                // Trim slashes
+                let mut normalized_path = path_str.trim().trim_matches('/');
 
-            // Handle trailing splat
-            let mut has_trailing_splat = false;
-            if let Some(stripped) = normalized_path.strip_suffix("/*") {
-                has_trailing_splat = true;
-                normalized_path = stripped;
+                // Handle trailing splat
+                let mut has_trailing_splat = false;
+                if let Some(stripped) = normalized_path.strip_suffix("/*") {
+                    has_trailing_splat = true;
+                    normalized_path = stripped;
+                }
+
+                let segments: Vec<PathSegment> = if normalized_path.is_empty() {
+                    vec![]
+                } else {
+                    normalized_path
+                        .split('/')
+                        .map(|s| {
+                            if let Some(stripped) =
+                                s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
+                            {
+                                if is_static_action {
+                                    return Err(ProxyError::InvalidRoute(
+                                        "Dynamic path parameters are not allowed with static actions"
+                                            .to_string(),
+                                    ));
+                                }
+                                let is_valid = stripped.chars().all(|ch| ch.is_ascii_lowercase() || ch == '_' );
+                                if !is_valid {
+                                    return Err(ProxyError::InvalidRoute(format!(
+                                        "Invalid parameter name: {}",
+                                        stripped
+                                    )));
+                                }
+
+                                Ok(PathSegment::Param(stripped.to_string()))
+                            } else {
+                                let is_valid = s.chars().all(|ch| {
+                                    ch.is_ascii_alphanumeric()
+                                        || ch == '-'
+                                        || ch == '_'
+                                        || ch == '.'
+                                });
+
+                                if !is_valid {
+                                    return Err(ProxyError::InvalidRoute(format!(
+                                        "Invalid static segment: {}",
+                                        s
+                                    )));
+                                }
+
+                                Ok(PathSegment::Static(s.to_string()))
+                            }
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                };
+                Some(Path {
+                    segments,
+                    has_trailing_splat,
+                })
             }
-
-            let segments: Vec<PathSegment> = if normalized_path.is_empty() {
-                vec![]
-            } else {
-                normalized_path
-                    .split('/')
-                    .map(|s| {
-                        if let Some(stripped) =
-                            s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
-                        {
-                            PathSegment::Param(stripped.to_string())
-                        } else {
-                            PathSegment::Static(s.to_string())
-                        }
-                    })
-                    .collect()
-            };
-            Path {
-                segments,
-                has_trailing_splat,
-            }
-        });
+            None => None,
+        };
 
         Ok(Self {
             host: config.r#match.host,
@@ -241,9 +272,81 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_illegal_splat_patterns() {
-        unimplemented!("add validation on route creation for illegal patterns");
+        // Splat appears in the midele
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/api/*/test".to_string()),
+            },
+            action: crate::config::Action::Static {
+                to: "upstream".to_string(),
+            },
+        };
+        assert!(
+            Route::try_from(config).is_err(),
+            "splat in the middle should be rejected"
+        );
+
+        // Multiple splats
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/api/*/*".to_string()),
+            },
+            action: crate::config::Action::Static {
+                to: "upstream".to_string(),
+            },
+        };
+        assert!(
+            Route::try_from(config).is_err(),
+            "multiple splats should be rejected"
+        );
+
+        // Splat mixed with text in a segment
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/api/test*/more".to_string()),
+            },
+            action: crate::config::Action::Static {
+                to: "upstream".to_string(),
+            },
+        };
+        assert!(
+            Route::try_from(config).is_err(),
+            "splat mixed with text should be rejected"
+        );
+
+        // Double splat
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/api/**".to_string()),
+            },
+            action: crate::config::Action::Static {
+                to: "upstream".to_string(),
+            },
+        };
+        assert!(
+            Route::try_from(config).is_err(),
+            "double splat should be rejected"
+        );
+
+        // Splat with parameter syntax
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/api/{*splat}".to_string()),
+            },
+            action: crate::config::Action::Static {
+                to: "upstream".to_string(),
+            },
+        };
+        assert!(
+            Route::try_from(config).is_err(),
+            "splat with parameter syntax should be rejected"
+        );
     }
 
     #[test]
@@ -253,8 +356,10 @@ mod tests {
                 host: None,
                 path: Some("/api/users/{user_id}".to_string()),
             },
-            action: crate::config::Action::Static {
-                to: "upstream".to_string(),
+            action: crate::config::Action::Dynamic {
+                resolver: crate::config::Resolver::CellFromId,
+                cell_to_upstream: HashMap::new(),
+                default: None,
             },
         };
 

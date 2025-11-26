@@ -1,4 +1,3 @@
-# TODO: Add actual push to registry on push to main brain. Right now this just validates build works but doesn't push it.
 name: build-docker-image
 permissions:
     contents: read
@@ -26,7 +25,8 @@ jobs:
                     tag_nightly: false
 
             -   name: Docker build - push to registry
-                if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                # Uncomment after testing
+                # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
                 uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
                 with:
                     image_name: synapse

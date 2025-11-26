@@ -25,7 +25,8 @@ jobs:
                     tag_nightly: false
 
             -   name: Docker build - push to registry
-                if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                # testing
+                # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
                 uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
                 with:
                     image_name: synapse

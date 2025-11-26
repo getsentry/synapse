@@ -34,5 +34,6 @@ jobs:
                     google_ar_image_name: us-docker.pkg.dev/sentryio/synapse/image
                     ghcr: false
                     tag_nightly: false
-                    google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
-                    google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+                    # google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+                    # google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+                    publish_on_pr: true

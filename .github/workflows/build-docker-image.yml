@@ -26,8 +26,7 @@ jobs:
                     tag_nightly: false
 
             -   name: Docker build - push to registry
-                # testing
-                # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                if: github.event_name == 'push' && github.ref == 'refs/heads/main'
                 uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
                 with:
                     image_name: synapse
@@ -38,4 +37,3 @@ jobs:
                     tag_nightly: false
                     google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
                     google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
-                    publish_on_pr: true

@@ -186,7 +186,7 @@ impl IdToCell {
         // Id is generally either an org id, org slug or project key
         // Returns `Ok(Cell)` if found, or a default applies.
         // Returns an error if locality is passed and the id/locality pair is not valid.
-        // Or if a locality is passed but no defualt cell is found for that locality
+        // Or if a locality is passed but no default cell is found for that locality
         if !self.ready.load(Ordering::Relaxed) {
             return Err(LocatorError::NotReady);
         }

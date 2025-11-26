@@ -10,9 +10,6 @@ pub struct Resolvers {
 
 impl Resolvers {
     pub fn try_new(locator: Locator) -> Result<Resolvers, ProxyError> {
-        // TODO: add validation for route configurations here to ensure any invalid route definitions
-        // are caught on startup.
-
         Ok(Resolvers { locator })
     }
 

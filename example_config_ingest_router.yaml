@@ -7,14 +7,14 @@ ingest_router:
     port: 3001
   locales:
     us:
-      - name: us1
+      - id: us1
         sentry_url: "http://10.0.0.1:8080"
         relay_url: "http://10.0.0.1:8090"
-      - name: us2
+      - id: us2
         sentry_url: "http://10.0.0.2:8080"
         relay_url: "http://10.0.0.2:8090"
     de:
-      - name: de1
+      - id: de1
         sentry_url: "http://10.0.0.3:8080"
         relay_url: "http://10.0.0.3:8090"
 

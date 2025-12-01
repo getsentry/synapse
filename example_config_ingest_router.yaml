@@ -7,16 +7,25 @@ ingest_router:
     port: 3001
   locales:
     us:
-      us1:
+      - name: us1
         sentry_url: "http://10.0.0.1:8080"
         relay_url: "http://10.0.0.1:8090"
-      us2:
+      - name: us2
         sentry_url: "http://10.0.0.2:8080"
         relay_url: "http://10.0.0.2:8090"
     de:
-      de:
+      - name: de1
         sentry_url: "http://10.0.0.3:8080"
         relay_url: "http://10.0.0.3:8090"
+  # Timeout configuration for relay handlers (optional, defaults shown)
+  # Two-layer timeout strategy:
+  # - HTTP timeout: Per-request timeout for individual HTTP calls (fixed)
+  # - Task timeout: Global cutoff - once first succeeds, ALL remaining tasks have
+  #   task_subsequent_timeout_secs total to complete (prevents slow cells from blocking)
+  # relay_timeouts:
+  #   http_timeout_secs: 15                # HTTP request timeout
+  #   task_initial_timeout_secs: 20        # Wait for first upstream (must be >= http_timeout)
+  #   task_subsequent_timeout_secs: 5      # Global deadline after first success
 
   routes:
     - match:

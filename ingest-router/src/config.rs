@@ -63,6 +63,8 @@ pub struct RelayProjectConfigsArgs {
 /// Note: The cell name is the HashMap key in Config.locales
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CellConfig {
+    /// Name/identifier of the cell
+    pub name: String,
     /// URL of the Sentry upstream server
     pub sentry_url: Url,
     /// URL of the Relay upstream server
@@ -78,12 +80,9 @@ pub struct Config {
     /// Admin listener for administrative endpoints
     #[serde(default)]
     pub admin_listener: AdminListener,
-    /// Maps locale identifiers to their cells (cell name -> cell config)
-    ///
-    /// Note: Uses String keys instead of an enum to allow flexible,
-    /// deployment-specific locale configuration without code changes.
-    /// Different deployments may use different locale identifiers.
-    pub locales: HashMap<String, HashMap<String, CellConfig>>,
+    /// Cells are stored as a Vec to maintain priority order - the first cell
+    /// in the list has highest priority for global config responses.
+    pub locales: HashMap<String, Vec<CellConfig>>,
     /// Request routing rules
     pub routes: Vec<Route>,
 }
@@ -102,10 +101,14 @@ impl Config {
                 return Err(ValidationError::LocaleHasNoValidCells(locale.clone()));
             }
 
-            // Check for empty cell names (HashMap keys)
-            for cell_name in cells.keys() {
-                if cell_name.is_empty() {
+            // Check for empty cell names and collect for duplicate checking
+            let mut seen_names = HashSet::new();
+            for cell in cells {
+                if cell.name.is_empty() {
                     return Err(ValidationError::EmptyUpstreamName);
+                }
+                if !seen_names.insert(&cell.name) {
+                    return Err(ValidationError::DuplicateUpstream(cell.name.clone()));
                 }
             }
         }
@@ -226,16 +229,16 @@ admin_listener:
     port: 3001
 locales:
     us:
-        us1:
-            sentry_url: "http://127.0.0.1:8080"
-            relay_url: "http://127.0.0.1:8090"
-        us2:
-            sentry_url: "http://10.0.0.2:8080"
-            relay_url: "http://10.0.0.2:8090"
+        - name: us1
+          sentry_url: "http://127.0.0.1:8080"
+          relay_url: "http://127.0.0.1:8090"
+        - name: us2
+          sentry_url: "http://10.0.0.2:8080"
+          relay_url: "http://10.0.0.2:8090"
     de:
-        de1:
-            sentry_url: "http://10.0.0.3:8080"
-            relay_url: "http://10.0.0.3:8090"
+        - name: de1:
+          sentry_url: "http://10.0.0.3:8080"
+          relay_url: "http://10.0.0.3:8090"
 routes:
     - match:
         host: us.sentry.io
@@ -261,6 +264,8 @@ routes:
         assert_eq!(config.locales.len(), 2);
         assert_eq!(config.locales.get("us").unwrap().len(), 2);
         assert_eq!(config.locales.get("de").unwrap().len(), 1);
+        assert_eq!(config.locales.get("us").unwrap()[0].name, "us1");
+        assert_eq!(config.locales.get("us").unwrap()[1].name, "us2");
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
@@ -285,13 +290,11 @@ routes:
             },
             locales: HashMap::from([(
                 "us".to_string(),
-                HashMap::from([(
-                    "us1".to_string(),
-                    CellConfig {
-                        sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
-                        relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
-                    },
-                )]),
+                vec![CellConfig {
+                    name: "us1".to_string(),
+                    sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
+                    relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
+                }],
             )]),
             routes: vec![Route {
                 r#match: Match {
@@ -315,16 +318,26 @@ routes:
 
         // Test empty cell name
         let mut config = base_config.clone();
-        config.locales.get_mut("us").unwrap().insert(
-            "".to_string(),
-            CellConfig {
-                sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
-                relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
-            },
-        );
+        config.locales.get_mut("us").unwrap().push(CellConfig {
+            name: "".to_string(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
+        });
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::EmptyUpstreamName
+        ));
+
+        // Test duplicate cell name
+        let mut config = base_config.clone();
+        config.locales.get_mut("us").unwrap().push(CellConfig {
+            name: "us1".to_string(),
+            sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
+            relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
+        });
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::DuplicateUpstream(_)
         ));
 
         // Test unknown locale in action
@@ -341,7 +354,7 @@ routes:
         let mut config = base_config.clone();
         config
             .locales
-            .insert("invalid_locale".to_string(), HashMap::new());
+            .insert("invalid_locale".to_string(), Vec::new());
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::LocaleHasNoValidCells(_)

@@ -98,6 +98,7 @@ mod tests {
 
     fn cell_config(sentry_url: &str, relay_url: &str) -> CellConfig {
         CellConfig {
+            name: "us1".to_string(),
             sentry_url: Url::parse(sentry_url).unwrap(),
             relay_url: Url::parse(relay_url).unwrap(),
         }

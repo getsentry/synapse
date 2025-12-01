@@ -49,17 +49,28 @@ impl From<CellConfig> for Upstream {
 /// Collection of upstreams grouped by cell name
 #[derive(Clone, Debug)]
 pub struct Cells {
+    /// Prioritized list of cell names (first = highest priority)
+    pub cell_list: Vec<String>,
     pub cell_to_upstreams: HashMap<String, Upstream>,
 }
 
 impl Cells {
     /// Build cells from cell configurations
     fn from_config(cell_configs: Vec<CellConfig>) -> Self {
+        let mut cell_list = Vec::new();
+        let mut cell_to_upstreams = HashMap::new();
+
+        for config in cell_configs {
+            let name = config.name.clone();
+            let upstream = Upstream::from(config);
+
+            cell_list.push(name.clone());
+            cell_to_upstreams.insert(name, upstream);
+        }
+
         Self {
-            cell_to_upstreams: cell_configs
-                .into_iter()
-                .map(|config| (config.name.clone(), config.into()))
-                .collect(),
+            cell_list,
+            cell_to_upstreams,
         }
     }
 }
@@ -136,13 +147,19 @@ mod tests {
         // Verify US locale has 2 cells
         let us_cells = locales.get_cells("us").unwrap();
         assert_eq!(us_cells.cell_to_upstreams.len(), 2);
+        assert_eq!(us_cells.cell_list.len(), 2);
         assert!(us_cells.cell_to_upstreams.contains_key("us1"));
         assert!(us_cells.cell_to_upstreams.contains_key("us2"));
+        // Verify priority order
+        assert_eq!(us_cells.cell_list[0], "us1");
+        assert_eq!(us_cells.cell_list[1], "us2");
 
         // Verify DE locale has 1 cell
         let de_cells = locales.get_cells("de").unwrap();
         assert_eq!(de_cells.cell_to_upstreams.len(), 1);
+        assert_eq!(de_cells.cell_list.len(), 1);
         assert!(de_cells.cell_to_upstreams.contains_key("de1"));
+        assert_eq!(de_cells.cell_list[0], "de1");
 
         // Verify unknown locale returns None
         assert!(locales.get_cells("unknown").is_none());

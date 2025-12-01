@@ -54,11 +54,11 @@ pub struct Cells {
 
 impl Cells {
     /// Build cells from cell configurations
-    fn from_config(cell_configs: HashMap<String, CellConfig>) -> Self {
+    fn from_config(cell_configs: Vec<CellConfig>) -> Self {
         Self {
             cell_to_upstreams: cell_configs
                 .into_iter()
-                .map(|(name, config)| (name, config.into()))
+                .map(|config| (config.name.clone(), config.into()))
                 .collect(),
         }
     }
@@ -73,7 +73,7 @@ pub struct Locales {
 
 impl Locales {
     /// Build locale mappings from configuration
-    pub fn new(locales: HashMap<String, HashMap<String, CellConfig>>) -> Self {
+    pub fn new(locales: HashMap<String, Vec<CellConfig>>) -> Self {
         // Build locale -> cells mapping
         let locale_to_cells = locales
             .into_iter()
@@ -96,9 +96,9 @@ impl Locales {
 mod tests {
     use super::*;
 
-    fn cell_config(sentry_url: &str, relay_url: &str) -> CellConfig {
+    fn cell_config(name: &str, sentry_url: &str, relay_url: &str) -> CellConfig {
         CellConfig {
-            name: "us1".to_string(),
+            name: name.to_string(),
             sentry_url: Url::parse(sentry_url).unwrap(),
             relay_url: Url::parse(relay_url).unwrap(),
         }
@@ -109,32 +109,26 @@ mod tests {
         let mut locales_config = HashMap::new();
         locales_config.insert(
             "us".to_string(),
-            HashMap::from([
-                (
-                    "us1".to_string(),
-                    cell_config(
-                        "http://us1-sentry.example.com",
-                        "http://us1-relay.example.com",
-                    ),
+            vec![
+                cell_config(
+                    "us1",
+                    "http://us1-sentry.example.com",
+                    "http://us1-relay.example.com",
                 ),
-                (
-                    "us2".to_string(),
-                    cell_config(
-                        "http://us2-sentry.example.com",
-                        "http://us2-relay.example.com",
-                    ),
+                cell_config(
+                    "us2",
+                    "http://us2-sentry.example.com",
+                    "http://us2-relay.example.com",
                 ),
-            ]),
+            ],
         );
         locales_config.insert(
             "de".to_string(),
-            HashMap::from([(
-                "de".to_string(),
-                cell_config(
-                    "http://de-sentry.example.com",
-                    "http://de-relay.example.com",
-                ),
-            )]),
+            vec![cell_config(
+                "de1",
+                "http://de-sentry.example.com",
+                "http://de-relay.example.com",
+            )],
         );
 
         let locales = Locales::new(locales_config);
@@ -148,7 +142,7 @@ mod tests {
         // Verify DE locale has 1 cell
         let de_cells = locales.get_cells("de").unwrap();
         assert_eq!(de_cells.cell_to_upstreams.len(), 1);
-        assert!(de_cells.cell_to_upstreams.contains_key("de"));
+        assert!(de_cells.cell_to_upstreams.contains_key("de1"));
 
         // Verify unknown locale returns None
         assert!(locales.get_cells("unknown").is_none());

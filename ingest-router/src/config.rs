@@ -236,7 +236,7 @@ locales:
           sentry_url: "http://10.0.0.2:8080"
           relay_url: "http://10.0.0.2:8090"
     de:
-        - name: de1:
+        - name: de1
           sentry_url: "http://10.0.0.3:8080"
           relay_url: "http://10.0.0.3:8090"
 routes:

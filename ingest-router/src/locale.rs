@@ -61,11 +61,11 @@ impl Cells {
         let mut cell_to_upstreams = HashMap::new();
 
         for config in cell_configs {
-            let name = config.name.clone();
+            let id = config.id.clone();
             let upstream = Upstream::from(config);
 
-            cell_list.push(name.clone());
-            cell_to_upstreams.insert(name, upstream);
+            cell_list.push(id.clone());
+            cell_to_upstreams.insert(id, upstream);
         }
 
         Self {
@@ -107,9 +107,9 @@ impl Locales {
 mod tests {
     use super::*;
 
-    fn cell_config(name: &str, sentry_url: &str, relay_url: &str) -> CellConfig {
+    fn cell_config(id: &str, sentry_url: &str, relay_url: &str) -> CellConfig {
         CellConfig {
-            name: name.to_string(),
+            id: id.to_string(),
             sentry_url: Url::parse(sentry_url).unwrap(),
             relay_url: Url::parse(relay_url).unwrap(),
         }

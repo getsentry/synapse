@@ -11,11 +11,11 @@ pub enum ValidationError {
     #[error("Route action references unknown locale: {0}")]
     UnknownLocale(String),
 
-    #[error("Duplicate upstream name: {0}")]
+    #[error("Duplicate upstream id: {0}")]
     DuplicateUpstream(String),
 
-    #[error("Empty upstream name")]
-    EmptyUpstreamName,
+    #[error("Empty upstream id")]
+    EmptyUpstreamId,
 
     #[error("Empty locale in action")]
     EmptyLocale,
@@ -60,11 +60,11 @@ pub struct RelayProjectConfigsArgs {
 }
 
 /// Cell/upstream configuration
-/// Note: The cell name is the HashMap key in Config.locales
+/// Note: The cell id is the HashMap key in Config.locales
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CellConfig {
-    /// Name/identifier of the cell
-    pub name: String,
+    /// Identifier of the cell
+    pub id: String,
     /// URL of the Sentry upstream server
     pub sentry_url: Url,
     /// URL of the Relay upstream server
@@ -101,14 +101,14 @@ impl Config {
                 return Err(ValidationError::LocaleHasNoValidCells(locale.clone()));
             }
 
-            // Check for empty cell names and collect for duplicate checking
-            let mut seen_names = HashSet::new();
+            // Check for empty cell ids and collect for duplicate checking
+            let mut seen_ids = HashSet::new();
             for cell in cells {
-                if cell.name.is_empty() {
-                    return Err(ValidationError::EmptyUpstreamName);
+                if cell.id.is_empty() {
+                    return Err(ValidationError::EmptyUpstreamId);
                 }
-                if !seen_names.insert(&cell.name) {
-                    return Err(ValidationError::DuplicateUpstream(cell.name.clone()));
+                if !seen_ids.insert(&cell.id) {
+                    return Err(ValidationError::DuplicateUpstream(cell.id.clone()));
                 }
             }
         }
@@ -229,14 +229,14 @@ admin_listener:
     port: 3001
 locales:
     us:
-        - name: us1
+        - id: us1
           sentry_url: "http://127.0.0.1:8080"
           relay_url: "http://127.0.0.1:8090"
-        - name: us2
+        - id: us2
           sentry_url: "http://10.0.0.2:8080"
           relay_url: "http://10.0.0.2:8090"
     de:
-        - name: de1
+        - id: de1
           sentry_url: "http://10.0.0.3:8080"
           relay_url: "http://10.0.0.3:8090"
 routes:
@@ -264,8 +264,8 @@ routes:
         assert_eq!(config.locales.len(), 2);
         assert_eq!(config.locales.get("us").unwrap().len(), 2);
         assert_eq!(config.locales.get("de").unwrap().len(), 1);
-        assert_eq!(config.locales.get("us").unwrap()[0].name, "us1");
-        assert_eq!(config.locales.get("us").unwrap()[1].name, "us2");
+        assert_eq!(config.locales.get("us").unwrap()[0].id, "us1");
+        assert_eq!(config.locales.get("us").unwrap()[1].id, "us2");
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
@@ -291,7 +291,7 @@ routes:
             locales: HashMap::from([(
                 "us".to_string(),
                 vec![CellConfig {
-                    name: "us1".to_string(),
+                    id: "us1".to_string(),
                     sentry_url: Url::parse("http://127.0.0.1:8080").unwrap(),
                     relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
                 }],
@@ -316,22 +316,22 @@ routes:
             ValidationError::InvalidPort
         ));
 
-        // Test empty cell name
+        // Test empty cell id
         let mut config = base_config.clone();
         config.locales.get_mut("us").unwrap().push(CellConfig {
-            name: "".to_string(),
+            id: "".to_string(),
             sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
             relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
         });
         assert!(matches!(
             config.validate().unwrap_err(),
-            ValidationError::EmptyUpstreamName
+            ValidationError::EmptyUpstreamId
         ));
 
-        // Test duplicate cell name
+        // Test duplicate cell id
         let mut config = base_config.clone();
         config.locales.get_mut("us").unwrap().push(CellConfig {
-            name: "us1".to_string(),
+            id: "us1".to_string(),
             sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
             relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
         });
@@ -370,7 +370,7 @@ routes:
 listener: {host: "0.0.0.0", port: 3000}
 admin_listener: {host: "127.0.0.1", port: 3001}
 locale_to_cells: {us: [us1]}
-upstreams: [{name: us1, sentry_url: "not-a-url", relay_url: "http://127.0.0.1:8090"}]
+upstreams: [{id: us1, sentry_url: "not-a-url", relay_url: "http://127.0.0.1:8090"}]
 routes: []
 "#
             )

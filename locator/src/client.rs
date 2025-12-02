@@ -142,4 +142,3 @@ impl HttpClient {
 
     fn shutdown(&self) {}
 }
-

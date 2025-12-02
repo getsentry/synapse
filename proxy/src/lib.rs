@@ -1,7 +1,6 @@
 mod admin_service;
 pub mod config;
 mod errors;
-mod locator;
 mod proxy_service;
 mod resolvers;
 mod route_actions;
@@ -9,11 +8,11 @@ mod upstreams;
 mod utils;
 
 use crate::errors::ProxyError;
-use crate::locator::Locator;
+use locator::client::Locator;
 use shared::http::run_http_service;
 
 pub async fn run(config: config::Config) -> Result<(), ProxyError> {
-    let locator = Locator::new_from_config(config.locator.clone()).await?;
+    let locator = Locator::new(config.locator.to_client_config()).await?;
 
     let proxy_service =
         proxy_service::ProxyService::try_new(locator.clone(), config.routes, config.upstreams)?;

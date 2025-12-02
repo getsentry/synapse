@@ -1,4 +1,5 @@
-use locator::config::{BackupRouteStore, ControlPlane};
+use locator::client::{LocatorConfig as ClientLocatorConfig, LocatorType as ClientLocatorType};
+use locator::config::{BackupRouteStore, ControlPlane, LocatorDataType};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -103,4 +104,25 @@ pub enum LocatorType {
 pub struct Locator {
     #[serde(flatten)]
     pub r#type: LocatorType,
+}
+
+impl Locator {
+    /// Convert proxy's locator config to locator client config
+    pub fn to_client_config(self) -> ClientLocatorConfig {
+        ClientLocatorConfig {
+            locator_type: match self.r#type {
+                LocatorType::InProcess {
+                    control_plane,
+                    backup_route_store,
+                    locality_to_default_cell,
+                } => ClientLocatorType::InProcess {
+                    control_plane_url: control_plane.url,
+                    backup_route_store_type: backup_route_store.r#type,
+                    locality_to_default_cell,
+                },
+                LocatorType::Url { url } => ClientLocatorType::Url { url },
+            },
+            data_type: LocatorDataType::Organization,
+        }
+    }
 }

@@ -1,6 +1,6 @@
 use crate::config::Resolver;
 use crate::errors::ProxyError;
-use crate::locator::Locator;
+use locator::client::Locator;
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -39,7 +39,7 @@ impl Resolvers {
             .get("organization")
             .ok_or(ProxyError::ResolverError)?;
 
-        self.locator.lookup(org, None).await
+        Ok(self.locator.lookup(org, None).await?)
     }
 
     async fn cell_from_id(&self, params: HashMap<String, String>) -> Result<String, ProxyError> {
@@ -54,7 +54,8 @@ impl Resolvers {
 mod tests {
     use super::*;
     use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
-    use locator::config::Compression;
+    use locator::config::{Compression, LocatorDataType};
+    use locator::locator::Locator as LocatorService;
     use locator::types::RouteData;
     use std::sync::Arc;
 
@@ -82,11 +83,13 @@ mod tests {
     #[tokio::test]
     async fn test_resolve() {
         let (_dir, provider) = get_mock_provider().await;
-        let locator = Locator::new_in_process(
+        let service = LocatorService::new(
+            LocatorDataType::Organization,
             "http://control-plane-url".to_string(),
             Arc::new(provider),
             None,
         );
+        let locator = Locator::from_in_process_service(service);
 
         // wait for locator to become ready
         for _ in 0..5 {

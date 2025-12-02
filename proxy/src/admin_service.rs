@@ -1,5 +1,5 @@
 use crate::errors::ProxyError;
-use crate::locator::Locator;
+use locator::client::Locator;
 use crate::utils::make_error_response;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};

@@ -1,6 +1,6 @@
 use crate::config;
 use crate::errors::ProxyError;
-use crate::locator::Locator;
+use locator::client::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
@@ -174,6 +174,7 @@ mod tests {
     use super::*;
     use http_body_util::Full;
     use std::process::{Child, Command};
+    use std::time::Duration;
 
     struct TestServer {
         child: Child,
@@ -198,8 +199,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_proxy_service() {
-        use std::time::Duration;
-
         // Start the test echo server
         let _server = TestServer::spawn().expect("Failed to spawn test server");
 
@@ -252,7 +251,7 @@ mod tests {
             },
         };
 
-        let locator = Locator::new_from_config(config.locator.clone())
+        let locator = Locator::new(config.locator.to_client_config())
             .await
             .unwrap();
 

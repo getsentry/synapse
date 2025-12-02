@@ -20,4 +20,6 @@ pub enum ProxyError {
     Hyper(#[from] hyper::Error),
     #[error("backup route provider error: {0}")]
     BackupError(#[from] locator::backup_routes::BackupError),
+    #[error("locator client error: {0}")]
+    LocatorClientError(#[from] locator::client::ClientError),
 }

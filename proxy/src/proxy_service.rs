@@ -1,6 +1,5 @@
 use crate::config;
 use crate::errors::ProxyError;
-use locator::client::Locator;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
@@ -13,6 +12,7 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
+use locator::client::Locator;
 use shared::http::{add_via_header, filter_hop_by_hop};
 use std::future::Future;
 use std::pin::Pin;

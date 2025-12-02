@@ -282,3 +282,4 @@
 //! ```
 
 mod protocol;
+mod splitter;

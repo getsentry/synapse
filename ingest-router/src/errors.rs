@@ -35,4 +35,13 @@ pub enum IngestRouterError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Locator error: {0}")]
+    LocatorError(#[from] locator::locator::LocatorError),
+
+    #[error("Backup route provider error: {0}")]
+    BackupError(#[from] locator::backup_routes::BackupError),
+
+    #[error("Locator client error: {0}")]
+    LocatorClientError(#[from] locator::client::ClientError),
 }

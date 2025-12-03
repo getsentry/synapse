@@ -3,8 +3,7 @@
 //! Uses the locator service to route public keys to their owning cells.
 
 use crate::locale::Cells;
-use locator::client::{ClientError, Locator};
-use locator::locator::LocatorError;
+use locator::client::Locator;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -31,11 +30,11 @@ impl PublicKeySplitter {
     /// couldn't be routed (no cell found, locator errors, or unconfigured cells).
     pub async fn split(
         &self,
-        public_keys: &[PublicKey],
+        public_keys: Vec<PublicKey>,
         cells: &Cells,
     ) -> (HashMap<CellId, Vec<PublicKey>>, Vec<PublicKey>) {
         if cells.cell_list.is_empty() {
-            return (HashMap::new(), public_keys.to_vec());
+            return (HashMap::new(), public_keys);
         }
 
         let mut split: HashMap<CellId, Vec<PublicKey>> = HashMap::new();
@@ -43,11 +42,11 @@ impl PublicKeySplitter {
 
         // Look up each public key to determine its owning cell
         for public_key in public_keys {
-            match self.locator.lookup(public_key, None).await {
+            match self.locator.lookup(&public_key, None).await {
                 Ok(cell_id) => {
                     // Check if this cell is in our configured cells
                     if cells.cell_to_upstreams.contains_key(&cell_id) {
-                        split.entry(cell_id).or_default().push(public_key.clone());
+                        split.entry(cell_id).or_default().push(public_key);
                     } else {
                         // Cell not configured, add to pending
                         tracing::warn!(
@@ -55,33 +54,17 @@ impl PublicKeySplitter {
                             cell_id = %cell_id,
                             "Public key routed to unconfigured cell"
                         );
-                        pending.push(public_key.clone());
+                        pending.push(public_key);
                     }
                 }
-                Err(ClientError::LocatorError(LocatorError::NoCell)) => {
-                    // No cell found for this key, add to pending
-                    tracing::debug!(
-                        public_key = %public_key,
-                        "No cell found for public key"
-                    );
-                    pending.push(public_key.clone());
-                }
-                Err(ClientError::LocatorError(LocatorError::NotReady)) => {
-                    // Locator not ready, add to pending
-                    tracing::warn!(
-                        public_key = %public_key,
-                        "Locator not ready, adding key to pending"
-                    );
-                    pending.push(public_key.clone());
-                }
                 Err(e) => {
-                    // Other errors, add to pending
-                    tracing::error!(
+                    // Locator errors, add to pending
+                    tracing::info!(
                         public_key = %public_key,
                         error = ?e,
-                        "Error looking up public key"
+                        "Failed to route public key"
                     );
-                    pending.push(public_key.clone());
+                    pending.push(public_key);
                 }
             }
         }
@@ -182,7 +165,7 @@ mod tests {
 
         let public_keys = vec!["key1".to_string(), "key2".to_string(), "key3".to_string()];
 
-        let (splits, pending) = splitter.split(&public_keys, cells).await;
+        let (splits, pending) = splitter.split(public_keys, cells).await;
 
         assert_eq!(pending.len(), 0);
         assert_eq!(splits.len(), 2);
@@ -229,7 +212,7 @@ mod tests {
 
         let public_keys = vec!["key1".to_string(), "unknown_key".to_string()];
 
-        let (splits, pending) = splitter.split(&public_keys, cells).await;
+        let (splits, pending) = splitter.split(public_keys, cells).await;
 
         assert_eq!(splits.len(), 1);
         assert!(splits.contains_key("us1"));

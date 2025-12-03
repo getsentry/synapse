@@ -5,6 +5,21 @@ ingest_router:
   admin_listener:
     host: "0.0.0.0"
     port: 3001
+  
+  # Locator service configuration for routing public keys to cells
+  locator:
+    type: in_process
+    control_plane:
+      url: http://127.0.0.1:9000
+    backup_route_store:
+      type: filesystem
+      base_dir: target/cache
+      filename: backup.bin
+      compression: zstd1
+    locality_to_default_cell:
+      us: us1
+      de: de1
+
   locales:
     us:
       - id: us1

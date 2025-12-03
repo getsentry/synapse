@@ -8,6 +8,8 @@ http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+locator = { path = "../locator" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shared = { path = "../shared" }
@@ -17,4 +19,5 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 serde_yaml = { workspace = true }

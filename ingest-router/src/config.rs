@@ -1,3 +1,5 @@
+use locator::client::{LocatorConfig as ClientLocatorConfig, LocatorType as ClientLocatorType};
+use locator::config::{BackupRouteStore, ControlPlane, LocatorDataType};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -71,6 +73,47 @@ pub struct CellConfig {
     pub relay_url: Url,
 }
 
+/// Locator configuration
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum LocatorType {
+    #[serde(rename = "url")]
+    Url { url: String },
+    #[serde(rename = "in_process")]
+    InProcess {
+        control_plane: ControlPlane,
+        backup_route_store: BackupRouteStore,
+        locality_to_default_cell: Option<HashMap<String, String>>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Locator {
+    #[serde(flatten)]
+    pub r#type: LocatorType,
+}
+
+impl Locator {
+    /// Convert ingest-router's locator config to locator client config
+    pub fn to_client_config(self) -> ClientLocatorConfig {
+        ClientLocatorConfig {
+            locator_type: match self.r#type {
+                LocatorType::InProcess {
+                    control_plane,
+                    backup_route_store,
+                    locality_to_default_cell,
+                } => ClientLocatorType::InProcess {
+                    control_plane_url: control_plane.url,
+                    backup_route_store_type: backup_route_store.r#type,
+                    locality_to_default_cell,
+                },
+                LocatorType::Url { url } => ClientLocatorType::Url { url },
+            },
+            data_type: LocatorDataType::ProjectKey,
+        }
+    }
+}
+
 /// Proxy configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
@@ -85,6 +128,8 @@ pub struct Config {
     pub locales: HashMap<String, Vec<CellConfig>>,
     /// Request routing rules
     pub routes: Vec<Route>,
+    /// Locator service configuration
+    pub locator: Locator,
 }
 
 impl Config {
@@ -227,6 +272,9 @@ listener:
 admin_listener:
     host: "127.0.0.1"
     port: 3001
+locator:
+    type: url
+    url: "http://localhost:8000"
 locales:
     us:
         - id: us1
@@ -306,6 +354,11 @@ routes:
                     locale: "us".to_string(),
                 }),
             }],
+            locator: Locator {
+                r#type: LocatorType::Url {
+                    url: "http://locator:3000".to_string(),
+                },
+            },
         };
 
         // Test invalid port

@@ -82,44 +82,28 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         let mut merged = ProjectConfigsResponse::new();
 
         // Add pending keys from split phase
-        if !pending_from_split.is_empty() {
-            merged.pending_keys.extend(pending_from_split);
-        }
+        merged.pending_keys.extend(pending_from_split);
 
         // Results are provided pre-sorted by cell priority (highest first)
         // The executor ensures results are ordered so we can use the first successful response
         // for extra_fields and headers.
         // Failed cells are handled by the executor adding their keys to pending_from_split.
-        let mut found_priority_cell = false;
+        let mut iter = results.into_iter().flatten();
 
-        // Process successful results from each cell (already in priority order)
-        for result in results.into_iter().flatten() {
-            let (_cell_id, response) = result;
+        // Handle first successful result (highest priority)
+        // Gets extra_fields, headers, configs, and pending
+        if let Some((_cell_id, response)) = iter.next() {
+            merged.project_configs.extend(response.project_configs);
+            merged.pending_keys.extend(response.pending_keys);
+            merged.extra_fields.extend(response.extra_fields);
+            merged.http_headers = response.http_headers;
+        }
 
-            if !response.project_configs.is_empty() {
-                merged
-                    .project_configs
-                    .extend(response.project_configs.clone());
-            }
-
-            // Use extra_fields and headers from first successful cell (highest priority)
-            if !found_priority_cell {
-                if !response.extra_fields.is_empty() {
-                    merged.extra_fields.extend(response.extra_fields.clone());
-                }
-
-                // Store headers from highest priority cell
-                if !response.http_headers.is_empty() {
-                    merged.http_headers = response.http_headers.clone();
-                }
-
-                found_priority_cell = true;
-            }
-
-            // Add any pending keys from upstream response
-            if !response.pending_keys.is_empty() {
-                merged.pending_keys.extend(response.pending_keys.clone());
-            }
+        // Handle remaining results
+        // Only get configs and pending (not extra_fields or headers)
+        for (_cell_id, response) in iter {
+            merged.project_configs.extend(response.project_configs);
+            merged.pending_keys.extend(response.pending_keys);
         }
 
         merged

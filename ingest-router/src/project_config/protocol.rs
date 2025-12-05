@@ -216,8 +216,14 @@ mod tests {
         results.project_configs.extend(configs2);
 
         // Add pending keys
-        results.pending_keys.get_or_insert_with(Vec::new).extend(vec!["key3".to_string(), "key4".to_string()]);
-        results.pending_keys.get_or_insert_with(Vec::new).extend(vec!["key5".to_string()]);
+        results
+            .pending_keys
+            .get_or_insert_with(Vec::new)
+            .extend(vec!["key3".to_string(), "key4".to_string()]);
+        results
+            .pending_keys
+            .get_or_insert_with(Vec::new)
+            .extend(vec!["key5".to_string()]);
 
         // Merge extra fields
         let mut extra = HashMap::new();

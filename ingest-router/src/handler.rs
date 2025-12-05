@@ -1,7 +1,7 @@
 use crate::errors::IngestRouterError;
 use crate::locale::Cells;
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 pub type CellId = String;
 
@@ -45,5 +45,3 @@ where
         metadata: Self::SplitMetadata,
     ) -> Res;
 }
-
-

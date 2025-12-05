@@ -1,7 +1,7 @@
 //! Handler implementation for the Relay Project Configs endpoint
 
-use crate::handler::{CellId, Handler};
 use crate::errors::IngestRouterError;
+use crate::handler::{CellId, Handler};
 use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
 use async_trait::async_trait;
@@ -83,7 +83,10 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
 
         // Add pending keys from split phase
         if !pending_from_split.is_empty() {
-            merged.pending_keys.get_or_insert_with(Vec::new).extend(pending_from_split);
+            merged
+                .pending_keys
+                .get_or_insert_with(Vec::new)
+                .extend(pending_from_split);
         }
 
         // Results are provided pre-sorted by cell priority (highest first)
@@ -95,9 +98,11 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         // Process successful results from each cell (already in priority order)
         for result in results.into_iter().flatten() {
             let (_cell_id, response) = result;
-            
+
             if !response.project_configs.is_empty() {
-                merged.project_configs.extend(response.project_configs.clone());
+                merged
+                    .project_configs
+                    .extend(response.project_configs.clone());
             }
 
             // Use extra_fields and headers from first successful cell (highest priority)
@@ -105,18 +110,25 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
                 if !response.extra_fields.is_empty() {
                     merged.extra_fields.extend(response.extra_fields.clone());
                 }
-                
+
                 // Store headers from highest priority cell
                 if !response.http_headers.is_empty() {
                     merged.http_headers = response.http_headers.clone();
                 }
-                
+
                 found_priority_cell = true;
             }
 
             // Add any pending keys from upstream response
-            if let Some(pending_keys) = response.pending_keys.as_ref().filter(|keys| !keys.is_empty()) {
-                merged.pending_keys.get_or_insert_with(Vec::new).extend(pending_keys.clone());
+            if let Some(pending_keys) = response
+                .pending_keys
+                .as_ref()
+                .filter(|keys| !keys.is_empty())
+            {
+                merged
+                    .pending_keys
+                    .get_or_insert_with(Vec::new)
+                    .extend(pending_keys.clone());
             }
         }
 
@@ -211,7 +223,7 @@ mod tests {
 
         let locales_obj = Locales::new(locales);
         let cells = locales_obj.get_cells("us").unwrap();
-        
+
         let handler = ProjectConfigsHandler::new(locator);
 
         let mut extra = HashMap::new();
@@ -277,7 +289,7 @@ mod tests {
 
         let locales_obj = Locales::new(locales);
         let cells = locales_obj.get_cells("us").unwrap();
-        
+
         let handler = ProjectConfigsHandler::new(locator);
 
         let request = ProjectConfigsRequest {
@@ -344,7 +356,7 @@ mod tests {
         // 1. From split phase (routing failures, unknown keys)
         // 2. From upstream response (async computation)
         // 3. From failed cells (added by executor)
-        
+
         // Create response from us1 with successful config and upstream pending
         let response1_json = serde_json::json!({
             "configs": {
@@ -366,7 +378,7 @@ mod tests {
             Ok(("us1".to_string(), response1)),
             Ok(("us2".to_string(), response2)),
         ];
-        
+
         // Pending from split phase (routing failures) and failed cells (executor-added)
         let pending_from_split = vec![
             "key_routing_failed".to_string(),
@@ -377,12 +389,12 @@ mod tests {
         let merged = handler.merge_results(results, pending_from_split);
 
         let json = serde_json::to_value(&merged).unwrap();
-        
+
         // Should have configs from both successful cells
         assert_eq!(json["configs"].as_object().unwrap().len(), 2);
         assert!(json["configs"].get("key1").is_some());
         assert!(json["configs"].get("key2").is_some());
-        
+
         // Should have all pending keys from all three sources
         let pending = json["pending"].as_array().unwrap();
         assert_eq!(pending.len(), 4);
@@ -392,4 +404,3 @@ mod tests {
         assert!(pending.contains(&serde_json::json!("key_upstream_pending")));
     }
 }
-

@@ -108,8 +108,6 @@ impl ProjectConfigsResponse {
     }
 
     /// Builds an HTTP response from the merged results.
-    ///
-    /// Uses headers from the highest priority cell (same cell used for global config).
     /// Filters out hop-by-hop headers and Content-Length (which is recalculated for the new body).
     pub fn into_response(
         mut self,

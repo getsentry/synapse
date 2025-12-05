@@ -281,5 +281,7 @@
 //! }
 //! ```
 
+mod handler;
 mod protocol;
-mod splitter;
+
+pub use handler::ProjectConfigsHandler;

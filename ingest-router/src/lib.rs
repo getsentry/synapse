@@ -1,5 +1,6 @@
 pub mod config;
 pub mod errors;
+pub mod handler;
 pub mod http;
 pub mod locale;
 pub mod project_config;

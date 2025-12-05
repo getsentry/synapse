@@ -75,19 +75,19 @@ impl ProjectConfigsRequest {
 pub struct ProjectConfigsResponse {
     /// Project configs (HashMap merged from all upstreams).
     #[serde(rename = "configs")]
-    project_configs: HashMap<String, JsonValue>,
+    pub project_configs: HashMap<String, JsonValue>,
 
     /// Keys being computed async or from failed upstreams (concatenated).
     #[serde(rename = "pending", skip_serializing_if = "Option::is_none")]
-    pending_keys: Option<Vec<String>>,
+    pub pending_keys: Option<Vec<String>>,
 
     /// Other fields (`global`, `global_status`, future fields).
     #[serde(flatten)]
-    extra_fields: HashMap<String, JsonValue>,
+    pub extra_fields: HashMap<String, JsonValue>,
 
     /// HTTP headers from the highest priority upstream (not serialized).
     #[serde(skip)]
-    http_headers: HeaderMap,
+    pub http_headers: HeaderMap,
 }
 
 #[allow(dead_code)]
@@ -105,27 +105,6 @@ impl ProjectConfigsResponse {
         let mut response: Self = serde_json::from_slice(bytes)?;
         response.http_headers = HeaderMap::new();
         Ok(response)
-    }
-
-    /// Merges configs from a successful upstream response.
-    pub fn merge_project_configs(&mut self, configs: HashMap<String, JsonValue>) {
-        self.project_configs.extend(configs);
-    }
-
-    /// Adds keys to the pending array (for failed upstreams or retry).
-    pub fn add_pending_keys(&mut self, keys: Vec<String>) {
-        let pending = self.pending_keys.get_or_insert_with(Vec::new);
-        pending.extend(keys);
-    }
-
-    /// Merges extra fields (global config, status, etc.) from an upstream response.
-    pub fn merge_extra_fields(&mut self, fields: HashMap<String, JsonValue>) {
-        self.extra_fields.extend(fields);
-    }
-
-    /// Sets HTTP headers from the highest priority upstream.
-    pub fn set_http_headers(&mut self, headers: HeaderMap) {
-        self.http_headers = headers;
     }
 
     /// Builds an HTTP response from the merged results.
@@ -233,12 +212,12 @@ mod tests {
             serde_json::json!({"disabled": false, "slug": "project2"}),
         );
 
-        results.merge_project_configs(configs1);
-        results.merge_project_configs(configs2);
+        results.project_configs.extend(configs1);
+        results.project_configs.extend(configs2);
 
         // Add pending keys
-        results.add_pending_keys(vec!["key3".to_string(), "key4".to_string()]);
-        results.add_pending_keys(vec!["key5".to_string()]);
+        results.pending_keys.get_or_insert_with(Vec::new).extend(vec!["key3".to_string(), "key4".to_string()]);
+        results.pending_keys.get_or_insert_with(Vec::new).extend(vec!["key5".to_string()]);
 
         // Merge extra fields
         let mut extra = HashMap::new();
@@ -247,7 +226,7 @@ mod tests {
             serde_json::json!({"measurements": {"maxCustomMeasurements": 10}}),
         );
         extra.insert("global_status".to_string(), serde_json::json!("ready"));
-        results.merge_extra_fields(extra);
+        results.extra_fields.extend(extra);
 
         let response = results.into_response().unwrap();
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();

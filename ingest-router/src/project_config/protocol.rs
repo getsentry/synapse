@@ -78,8 +78,8 @@ pub struct ProjectConfigsResponse {
     pub project_configs: HashMap<String, JsonValue>,
 
     /// Keys being computed async or from failed upstreams (concatenated).
-    #[serde(rename = "pending", skip_serializing_if = "Option::is_none")]
-    pub pending_keys: Option<Vec<String>>,
+    #[serde(rename = "pending", skip_serializing_if = "Vec::is_empty", default)]
+    pub pending_keys: Vec<String>,
 
     /// Other fields (`global`, `global_status`, future fields).
     #[serde(flatten)]
@@ -95,7 +95,7 @@ impl ProjectConfigsResponse {
     pub fn new() -> Self {
         Self {
             project_configs: HashMap::new(),
-            pending_keys: None,
+            pending_keys: Vec::new(),
             extra_fields: HashMap::new(),
             http_headers: HeaderMap::new(),
         }
@@ -182,7 +182,7 @@ mod tests {
 
         let response = ProjectConfigsResponse {
             project_configs: configs,
-            pending_keys: Some(vec!["key2".to_string()]),
+            pending_keys: vec!["key2".to_string()],
             extra_fields: HashMap::new(),
             http_headers: HeaderMap::new(),
         };
@@ -191,8 +191,7 @@ mod tests {
         let parsed = ProjectConfigsResponse::from_bytes(&bytes).unwrap();
 
         assert_eq!(parsed.project_configs.len(), 1);
-        assert!(parsed.pending_keys.is_some());
-        assert_eq!(parsed.pending_keys.unwrap().len(), 1);
+        assert_eq!(parsed.pending_keys.len(), 1);
     }
 
     #[tokio::test]
@@ -218,12 +217,8 @@ mod tests {
         // Add pending keys
         results
             .pending_keys
-            .get_or_insert_with(Vec::new)
             .extend(vec!["key3".to_string(), "key4".to_string()]);
-        results
-            .pending_keys
-            .get_or_insert_with(Vec::new)
-            .extend(vec!["key5".to_string()]);
+        results.pending_keys.extend(vec!["key5".to_string()]);
 
         // Merge extra fields
         let mut extra = HashMap::new();

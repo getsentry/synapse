@@ -83,10 +83,7 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
 
         // Add pending keys from split phase
         if !pending_from_split.is_empty() {
-            merged
-                .pending_keys
-                .get_or_insert_with(Vec::new)
-                .extend(pending_from_split);
+            merged.pending_keys.extend(pending_from_split);
         }
 
         // Results are provided pre-sorted by cell priority (highest first)
@@ -120,15 +117,8 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
             }
 
             // Add any pending keys from upstream response
-            if let Some(pending_keys) = response
-                .pending_keys
-                .as_ref()
-                .filter(|keys| !keys.is_empty())
-            {
-                merged
-                    .pending_keys
-                    .get_or_insert_with(Vec::new)
-                    .extend(pending_keys.clone());
+            if !response.pending_keys.is_empty() {
+                merged.pending_keys.extend(response.pending_keys.clone());
             }
         }
 

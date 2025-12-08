@@ -79,6 +79,13 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         results: Vec<Result<(CellId, ProjectConfigsResponse), (CellId, IngestRouterError)>>,
         pending_from_split: Vec<String>,
     ) -> ProjectConfigsResponse {
+        // TODO: The current implementation does not handle errors from the results
+        // parameter. The edge case to be handled are if any of the upstreams failed
+        // to return a response for whatever reason. In scenarios like this, the
+        // executor needs to provide all the project config keys which failed to
+        // resolve on the upstream. We would need to add those project keys to the
+        // pending response.
+
         let mut merged = ProjectConfigsResponse::new();
 
         // Add pending keys from split phase

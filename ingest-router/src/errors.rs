@@ -33,6 +33,16 @@ pub enum IngestRouterError {
     #[error("Internal error: {0}")]
     InternalError(String),
 
+    /// Request failed with the original request data for recovery
+    #[error("Request failed: {source}")]
+    RequestFailedWithData {
+        /// The request that failed
+        request_json: serde_json::Value,
+        /// The underlying error
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

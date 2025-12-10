@@ -1,6 +1,6 @@
 //! Handler implementation for the Relay Project Configs endpoint
 
-use crate::errors::IngestRouterError;
+use crate::errors::{IngestRouterError, Result};
 use crate::handler::{CellId, Handler};
 use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
@@ -32,7 +32,7 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         &self,
         request: ProjectConfigsRequest,
         _cells: &Cells,
-    ) -> Result<(Vec<(CellId, ProjectConfigsRequest)>, Vec<String>), IngestRouterError> {
+    ) -> Result<(Vec<(CellId, ProjectConfigsRequest)>, Vec<String>)> {
         let public_keys = request.public_keys;
         let extra_fields = request.extra_fields;
 
@@ -76,15 +76,12 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
 
     fn merge_results(
         &self,
-        results: Vec<Result<(CellId, ProjectConfigsResponse), (CellId, IngestRouterError)>>,
+        successful: Vec<(CellId, ProjectConfigsResponse)>,
+        _failed: Vec<(CellId, IngestRouterError)>,
         pending_from_split: Vec<String>,
     ) -> ProjectConfigsResponse {
-        // TODO: The current implementation does not handle errors from the results
-        // parameter. The edge case to be handled are if any of the upstreams failed
-        // to return a response for whatever reason. In scenarios like this, the
-        // executor needs to provide all the project config keys which failed to
-        // resolve on the upstream. We would need to add those project keys to the
-        // pending response.
+        // TODO: The `failed` parameter will be used in a future PR to extract
+        // public keys from RequestFailedWithData errors and add them to pending_keys.
 
         let mut merged = ProjectConfigsResponse::new();
 
@@ -94,8 +91,7 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         // Results are provided pre-sorted by cell priority (highest first)
         // The executor ensures results are ordered so we can use the first successful response
         // for extra_fields and headers.
-        // Failed cells are handled by the executor adding their keys to pending_from_split.
-        let mut iter = results.into_iter().flatten();
+        let mut iter = successful.into_iter();
 
         // Handle first successful result (highest priority)
         // Gets extra_fields, headers, configs, and pending
@@ -312,12 +308,13 @@ mod tests {
         });
         let response2 = serde_json::from_value(response2_json).unwrap();
 
-        let results = vec![
-            Ok(("us1".to_string(), response1)),
-            Ok(("us2".to_string(), response2)),
+        let successful = vec![
+            ("us1".to_string(), response1),
+            ("us2".to_string(), response2),
         ];
+        let failed = vec![];
 
-        let merged = handler.merge_results(results, vec![]);
+        let merged = handler.merge_results(successful, failed, vec![]);
 
         // Should have configs from both cells
         let json = serde_json::to_value(&merged).unwrap();
@@ -355,10 +352,11 @@ mod tests {
         });
         let response2 = serde_json::from_value(response2_json).unwrap();
 
-        let results = vec![
-            Ok(("us1".to_string(), response1)),
-            Ok(("us2".to_string(), response2)),
+        let successful = vec![
+            ("us1".to_string(), response1),
+            ("us2".to_string(), response2),
         ];
+        let failed = vec![];
 
         // Pending from split phase (routing failures) and failed cells (executor-added)
         let pending_from_split = vec![
@@ -367,7 +365,7 @@ mod tests {
             "key_from_failed_cell2".to_string(),
         ];
 
-        let merged = handler.merge_results(results, pending_from_split);
+        let merged = handler.merge_results(successful, failed, pending_from_split);
 
         let json = serde_json::to_value(&merged).unwrap();
 

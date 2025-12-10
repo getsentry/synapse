@@ -24,6 +24,9 @@ pub enum ValidationError {
 
     #[error("Locale '{0}' has no valid cells (none of its cells match any upstream)")]
     LocaleHasNoValidCells(String),
+
+    #[error("Invalid timeout configuration: {0}")]
+    InvalidTimeouts(String),
 }
 
 /// HTTP methods supported for route matching
@@ -59,6 +62,57 @@ pub enum HandlerAction {
 pub struct RelayProjectConfigsArgs {
     /// Locale identifier to route the request to
     pub locale: String,
+}
+
+// Timeout configuration for relay project configs handler
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct RelayTimeouts {
+    /// HTTP request timeout for individual upstream calls (seconds).
+    /// This is the maximum time a single HTTP request can take.
+    /// Default: 15 seconds
+    pub http_timeout_secs: u16,
+
+    /// Task timeout when waiting for the first upstream to respond (seconds).
+    /// Must be >= http_timeout_secs to allow HTTP requests to complete.
+    /// Default: 20 seconds
+    pub task_initial_timeout_secs: u16,
+
+    /// Deadline for all remaining tasks after first success (seconds).
+    /// Aggressively cuts off slow upstreams once we have good data.
+    /// Default: 5 seconds
+    pub task_subsequent_timeout_secs: u16,
+}
+
+impl Default for RelayTimeouts {
+    fn default() -> Self {
+        Self {
+            http_timeout_secs: 15,
+            task_initial_timeout_secs: 20,
+            task_subsequent_timeout_secs: 5,
+        }
+    }
+}
+
+impl RelayTimeouts {
+    /// Validates the timeout configuration
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        // Initial task timeout must be >= HTTP timeout to allow requests to complete
+        if self.task_initial_timeout_secs < self.http_timeout_secs {
+            return Err(ValidationError::InvalidTimeouts(
+                "task_initial_timeout_secs must be >= http_timeout_secs".to_string(),
+            ));
+        }
+
+        // Subsequent task timeout should be > 0
+        if self.task_subsequent_timeout_secs == 0 {
+            return Err(ValidationError::InvalidTimeouts(
+                "task_subsequent_timeout_secs must be > 0".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// Cell/upstream configuration
@@ -130,6 +184,9 @@ pub struct Config {
     pub routes: Vec<Route>,
     /// Locator service configuration
     pub locator: Locator,
+    /// Timeout configuration for relay handlers
+    #[serde(default)]
+    pub relay_timeouts: RelayTimeouts,
 }
 
 impl Config {
@@ -138,6 +195,8 @@ impl Config {
         // Validate listeners
         self.listener.validate()?;
         self.admin_listener.validate()?;
+
+        self.relay_timeouts.validate()?;
 
         // Validate locales and cells
         for (locale, cells) in &self.locales {
@@ -344,6 +403,7 @@ routes:
                     relay_url: Url::parse("http://127.0.0.1:8090").unwrap(),
                 }],
             )]),
+            relay_timeouts: RelayTimeouts::default(),
             routes: vec![Route {
                 r#match: Match {
                     path: Some("/api/".to_string()),
@@ -411,6 +471,30 @@ routes:
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::LocaleHasNoValidCells(_)
+        ));
+
+        // Test invalid timeouts: task_initial < http
+        let mut config = base_config.clone();
+        config.relay_timeouts = RelayTimeouts {
+            http_timeout_secs: 20,
+            task_initial_timeout_secs: 15, // Less than HTTP timeout
+            task_subsequent_timeout_secs: 5,
+        };
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::InvalidTimeouts(_)
+        ));
+
+        // Test invalid timeouts: task_subsequent = 0
+        let mut config = base_config.clone();
+        config.relay_timeouts = RelayTimeouts {
+            http_timeout_secs: 15,
+            task_initial_timeout_secs: 20,
+            task_subsequent_timeout_secs: 0, // Zero timeout
+        };
+        assert!(matches!(
+            config.validate().unwrap_err(),
+            ValidationError::InvalidTimeouts(_)
         ));
     }
 

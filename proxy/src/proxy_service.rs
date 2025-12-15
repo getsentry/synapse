@@ -3,7 +3,6 @@ use crate::errors::ProxyError;
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
-use crate::utils;
 use http_body_util::BodyExt;
 use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
@@ -13,7 +12,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use locator::client::Locator;
-use shared::http::{add_via_header, filter_hop_by_hop};
+use shared::http::{add_via_header, filter_hop_by_hop, make_error_response};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -114,7 +113,7 @@ where
                         Some(pq) => pq.as_str(),
                         None => {
                             tracing::warn!("Request URI missing path and query");
-                            return Ok(utils::make_error_response(StatusCode::BAD_REQUEST));
+                            return Ok(make_error_response(StatusCode::BAD_REQUEST));
                         }
                     };
 
@@ -127,9 +126,7 @@ where
                         Ok(uri) => uri,
                         Err(e) => {
                             tracing::error!("Failed to build target URI: {e}");
-                            return Ok(utils::make_error_response(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                            ));
+                            return Ok(make_error_response(StatusCode::INTERNAL_SERVER_ERROR));
                         }
                     };
 
@@ -156,13 +153,13 @@ where
                         }
                         Err(e) => {
                             tracing::error!("Upstream request failed: {e}");
-                            Ok(utils::make_error_response(StatusCode::BAD_GATEWAY))
+                            Ok(make_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
                 }
                 None => {
                     // No upstream found, return 404
-                    Ok(utils::make_error_response(StatusCode::NOT_FOUND))
+                    Ok(make_error_response(StatusCode::NOT_FOUND))
                 }
             }
         })

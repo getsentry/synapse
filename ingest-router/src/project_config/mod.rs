@@ -281,7 +281,7 @@
 //! }
 //! ```
 
-mod handler;
+pub mod handler;
 mod protocol;
 
 pub use handler::ProjectConfigsHandler;

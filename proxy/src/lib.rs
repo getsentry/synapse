@@ -5,7 +5,6 @@ mod proxy_service;
 mod resolvers;
 mod route_actions;
 mod upstreams;
-mod utils;
 
 use crate::errors::ProxyError;
 use locator::client::Locator;

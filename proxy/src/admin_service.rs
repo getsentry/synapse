@@ -1,11 +1,11 @@
 use crate::errors::ProxyError;
-use crate::utils::make_error_response;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use locator::client::Locator;
+use shared::http::make_error_response;
 use std::future::Future;
 use std::pin::Pin;
 

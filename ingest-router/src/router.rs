@@ -1,55 +1,44 @@
 use crate::config::{HandlerAction, Route};
-use crate::errors::IngestRouterError;
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::body::Bytes;
-use hyper::{Request, Response, StatusCode};
+use crate::project_config::handler::ProjectConfigsHandler;
+use hyper::Request;
+use locator::client::Locator;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Router that matches incoming requests against configured routes
-#[derive(Clone)]
 pub struct Router {
     routes: Arc<Vec<Route>>,
+    // TODO: Fix type to be generic
+    action_to_handler: HashMap<HandlerAction, ProjectConfigsHandler>,
 }
 
 impl Router {
     /// Creates a new router with the given routes
-    pub fn new(routes: Vec<Route>) -> Self {
+    pub fn new(routes: Vec<Route>, locator: Locator) -> Self {
+        let mut action_to_handler = HashMap::new();
+
+        action_to_handler.insert(
+            HandlerAction::RelayProjectConfigs,
+            ProjectConfigsHandler::new(locator),
+        );
+
         Self {
             routes: Arc::new(routes),
-        }
-    }
-
-    /// Routes an incoming request to the appropriate handler
-    pub async fn route<B>(
-        &self,
-        req: Request<B>,
-    ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError>
-    where
-        B: hyper::body::Body + Send + 'static,
-    {
-        // Find a matching route
-        match self.find_matching_route(&req) {
-            Some(action) => {
-                tracing::debug!(action = ?action, "Matched route");
-                self.handle_action(req, action).await
-            }
-            None => {
-                tracing::warn!(
-                    method = %req.method(),
-                    path = %req.uri().path(),
-                    "No route matched"
-                );
-                self.handle_no_route()
-            }
+            action_to_handler,
         }
     }
 
     /// Finds the first route that matches the incoming request
-    fn find_matching_route<B>(&self, req: &Request<B>) -> Option<&HandlerAction> {
+    pub fn resolve<B>(&self, req: &Request<B>) -> Option<&HandlerAction> {
         self.routes
             .iter()
             .find(|route| self.matches_route(req, route))
             .map(|route| &route.action)
+    }
+
+    // TODO: Fix return type so we can deal with other handler types here as well.
+    pub fn get_handler(&self, action: &HandlerAction) -> Option<&ProjectConfigsHandler> {
+        self.action_to_handler.get(action)
     }
 
     /// Checks if a request matches a route's criteria
@@ -89,61 +78,55 @@ impl Router {
 
         true
     }
-
-    /// Handles a matched action (placeholder for now)
-    async fn handle_action<B>(
-        &self,
-        _req: Request<B>,
-        action: &HandlerAction,
-    ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError>
-    where
-        B: hyper::body::Body + Send + 'static,
-    {
-        // TODO: Implement actual handler logic
-        // This will need to be passed to a separate Handler interface that has access to
-        // locale_to_cells mapping and upstreams
-
-        // For now, just return a debug response showing which handler would be called
-        let response_body = match action {
-            HandlerAction::RelayProjectConfigs => "Route matched!\nHandler: RelayProjectConfigs\n",
-        };
-
-        Response::builder()
-            .status(StatusCode::OK)
-            .body(
-                Full::new(response_body.into())
-                    .map_err(|e| match e {})
-                    .boxed(),
-            )
-            .map_err(|e| IngestRouterError::InternalError(format!("Failed to build response: {e}")))
-    }
-
-    /// Handles an unmatched request
-    fn handle_no_route(
-        &self,
-    ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError> {
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(
-                Full::new("No route matched\n".into())
-                    .map_err(|e| match e {})
-                    .boxed(),
-            )
-            .map_err(|e| IngestRouterError::InternalError(format!("Failed to build response: {e}")))
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{HttpMethod, Match, Route};
+    use crate::testutils::get_mock_provider;
     use http_body_util::Empty;
+    use http_body_util::{BodyExt, combinators::BoxBody};
     use hyper::body::Bytes;
     use hyper::header::HOST;
     use hyper::{Method, Request};
+    use locator::config::LocatorDataType;
+    use locator::locator::Locator as LocatorService;
 
-    fn test_router(routes: Vec<Route>) -> Router {
-        Router::new(routes)
+    async fn test_router(routes: Option<Vec<Route>>) -> Router {
+        let default_routes = vec![
+            Route {
+                r#match: Match {
+                    host: Some("api.example.com".into()),
+                    path: Some("/api/test".into()),
+                    method: Some(HttpMethod::Post),
+                },
+                action: HandlerAction::RelayProjectConfigs,
+                locale: "us".to_string(),
+            },
+            Route {
+                r#match: Match {
+                    host: None,
+                    path: Some("/health".to_string()),
+                    method: Some(HttpMethod::Get),
+                },
+                action: HandlerAction::Health,
+                locale: "us".to_string(),
+            },
+        ];
+
+        let routes = routes.unwrap_or(default_routes);
+
+        let (_dir, provider) = get_mock_provider().await;
+        let locator_service = LocatorService::new(
+            LocatorDataType::ProjectKey,
+            "http://control-plane-url".to_string(),
+            Arc::new(provider),
+            None,
+        );
+        let locator = Locator::from_in_process_service(locator_service);
+
+        Router::new(routes, locator)
     }
 
     fn test_request(
@@ -164,88 +147,73 @@ mod tests {
             .unwrap()
     }
 
-    fn test_route(
-        host: Option<String>,
-        path: Option<String>,
-        method: Option<HttpMethod>,
-        locale: &str,
-    ) -> Route {
-        Route {
-            r#match: Match { host, path, method },
-            action: HandlerAction::RelayProjectConfigs,
-            locale: locale.to_string(),
-        }
-    }
-
     #[tokio::test]
     async fn test_route_matching() {
-        let router = test_router(vec![
-            test_route(
-                Some("api.example.com".to_string()),
-                Some("/api/test".to_string()),
-                Some(HttpMethod::Post),
-                "us",
-            ),
-            test_route(None, Some("/health".to_string()), None, "local"),
-        ]);
+        let router = test_router(None).await;
 
         // Should match first route
         let req = test_request(Method::POST, "/api/test", Some("api.example.com"));
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            router.resolve(&req),
+            Some(&HandlerAction::RelayProjectConfigs)
+        );
 
         // Should match second route
         let req = test_request(Method::GET, "/health", None);
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(router.resolve(&req), Some(&HandlerAction::Health));
     }
 
     #[tokio::test]
     async fn test_no_route_matched() {
-        let router = test_router(vec![test_route(
-            None,
-            Some("/api/test".to_string()),
-            None,
-            "us",
-        )]);
+        let router = test_router(None).await;
 
         let req = test_request(Method::GET, "/different", None);
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(router.resolve(&req), None);
     }
 
     #[tokio::test]
     async fn test_host_matching_with_port() {
-        let router = test_router(vec![test_route(
-            Some("api.example.com".to_string()),
-            None,
-            None,
-            "us",
-        )]);
+        let routes = vec![
+            Route {
+                r#match: Match {
+                    host: Some("api.example.com".to_string()),
+                    path: None,
+                    method: None,
+                },
+                action: HandlerAction::RelayProjectConfigs,
+                locale: "us".to_string(),
+            }
+        ];
+
+        let router = test_router(Some(routes)).await;
 
         // Should strip port and match
         let req = test_request(Method::GET, "/test", Some("api.example.com:8080"));
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(router.resolve(&req), Some(&HandlerAction::RelayProjectConfigs));
     }
 
     #[tokio::test]
     async fn test_method_matching() {
-        let router = test_router(vec![test_route(
-            None,
-            Some("/api/test".to_string()),
-            Some(HttpMethod::Post),
-            "us",
-        )]);
+        let routes = vec![
+            Route {
+                r#match: Match {
+                    host: None,
+                    path: Some("/api/test".to_string()),
+                    method: Some(HttpMethod::Post),
+                },
+                action: HandlerAction::RelayProjectConfigs,
+                locale: "us".to_string(),
+            }
+        ];
+
+        let router = test_router(Some(routes)).await;
 
         // POST should match
         let req = test_request(Method::POST, "/api/test", None);
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(router.resolve(&req), Some(&HandlerAction::RelayProjectConfigs));
 
         // GET should not match
         let req = test_request(Method::GET, "/api/test", None);
-        let response = router.route(req).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(router.resolve(&req), None);
     }
 }

@@ -105,12 +105,7 @@ impl Router {
 
         // For now, just return a debug response showing which handler would be called
         let response_body = match action {
-            HandlerAction::RelayProjectConfigs(args) => {
-                format!(
-                    "Route matched!\nHandler: RelayProjectConfigs\nLocale: {}\n",
-                    args.locale
-                )
-            }
+            HandlerAction::RelayProjectConfigs => "Route matched!\nHandler: RelayProjectConfigs\n",
         };
 
         Response::builder()
@@ -141,7 +136,7 @@ impl Router {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{HttpMethod, Match, RelayProjectConfigsArgs, Route};
+    use crate::config::{HttpMethod, Match, Route};
     use http_body_util::Empty;
     use hyper::body::Bytes;
     use hyper::header::HOST;
@@ -177,9 +172,8 @@ mod tests {
     ) -> Route {
         Route {
             r#match: Match { host, path, method },
-            action: HandlerAction::RelayProjectConfigs(RelayProjectConfigsArgs {
-                locale: locale.to_string(),
-            }),
+            action: HandlerAction::RelayProjectConfigs,
+            locale: locale.to_string(),
         }
     }
 

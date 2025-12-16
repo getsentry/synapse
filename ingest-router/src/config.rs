@@ -51,17 +51,10 @@ impl PartialEq<hyper::Method> for HttpMethod {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(tag = "handler", content = "args", rename_all = "snake_case")]
+#[serde(tag = "handler", rename_all = "snake_case")]
 pub enum HandlerAction {
     /// Merges project configs from multiple relay instances
-    RelayProjectConfigs(RelayProjectConfigsArgs),
-}
-
-/// Arguments for the relay_project_configs handler
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct RelayProjectConfigsArgs {
-    /// Locale identifier to route the request to
-    pub locale: String,
+    RelayProjectConfigs,
 }
 
 // Timeout configuration for relay project configs handler
@@ -220,9 +213,11 @@ impl Config {
         // Collect valid locales
         let valid_locales: HashSet<&String> = self.locales.keys().collect();
 
-        // Validate route actions
-        for route in &self.routes {
-            route.action.validate(&valid_locales)?;
+        for r in &self.routes {
+            // Validate that action locale exists
+            if valid_locales.is_empty() || !valid_locales.contains(&r.locale) {
+                return Err(ValidationError::UnknownLocale(r.locale.clone()));
+            }
         }
 
         Ok(())
@@ -291,6 +286,8 @@ pub struct Route {
     pub r#match: Match,
     /// Action to take when the match conditions are met
     pub action: HandlerAction,
+    // Locale that the route applies to
+    pub locale: String,
 }
 
 /// Request matching criteria
@@ -302,20 +299,6 @@ pub struct Match {
     pub path: Option<String>,
     /// Optional HTTP method to match
     pub method: Option<HttpMethod>,
-}
-
-impl HandlerAction {
-    /// Validates the handler action configuration
-    pub fn validate(&self, valid_locales: &HashSet<&String>) -> Result<(), ValidationError> {
-        match self {
-            HandlerAction::RelayProjectConfigs(args) => {
-                if !valid_locales.contains(&args.locale) {
-                    return Err(ValidationError::UnknownLocale(args.locale.clone()));
-                }
-                Ok(())
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -353,14 +336,12 @@ routes:
         method: POST
       action:
         handler: relay_project_configs
-        args:
-          locale: us
+      locale: us
     - match:
         path: /api/healthcheck
       action:
         handler: relay_project_configs
-        args:
-          locale: us
+      locale: us
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
@@ -376,12 +357,6 @@ routes:
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
-        // Verify the handler action structure
-        match &config.routes[1].action {
-            HandlerAction::RelayProjectConfigs(args) => {
-                assert_eq!(args.locale, "us");
-            }
-        }
     }
 
     #[test]
@@ -410,9 +385,8 @@ routes:
                     host: None,
                     method: None,
                 },
-                action: HandlerAction::RelayProjectConfigs(RelayProjectConfigsArgs {
-                    locale: "us".to_string(),
-                }),
+                action: HandlerAction::RelayProjectConfigs,
+                locale: "us".to_string(),
             }],
             locator: Locator {
                 r#type: LocatorType::Url {
@@ -455,9 +429,7 @@ routes:
 
         // Test unknown locale in action
         let mut config = base_config.clone();
-        config.routes[0].action = HandlerAction::RelayProjectConfigs(RelayProjectConfigsArgs {
-            locale: "unknown".to_string(),
-        });
+        config.routes[0].locale = "invalid".to_string();
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::UnknownLocale(_)
@@ -539,11 +511,6 @@ listener: {host: "0.0.0.0"}
 
         // Invalid handler type
         assert!(serde_yaml::from_str::<HandlerAction>(r#"handler: invalid_handler"#).is_err());
-
-        // Missing required args field
-        assert!(
-            serde_yaml::from_str::<HandlerAction>(r#"handler: relay_project_configs"#).is_err()
-        );
     }
 
     #[test]
@@ -570,15 +537,9 @@ listener: {host: "0.0.0.0"}
         let action: HandlerAction = serde_yaml::from_str(
             r#"
 handler: relay_project_configs
-args:
-  locale: us
 "#,
         )
         .unwrap();
-        match action {
-            HandlerAction::RelayProjectConfigs(args) => {
-                assert_eq!(args.locale, "us");
-            }
-        }
+        assert_eq!(action, HandlerAction::RelayProjectConfigs);
     }
 }

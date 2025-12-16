@@ -40,16 +40,14 @@ ingest_router:
         method: POST
       action:
         handler: relay_project_configs
-        args:
-          locale: us
+      locale: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
         handler: relay_project_configs
-        args:
-          locale: de
+      locale: de
 
 # logging:
 #   sentry_dsn: "your_sentry_dsn_here"

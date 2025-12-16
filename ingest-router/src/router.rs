@@ -173,44 +173,46 @@ mod tests {
 
     #[tokio::test]
     async fn test_host_matching_with_port() {
-        let routes = vec![
-            Route {
-                r#match: Match {
-                    host: Some("api.example.com".to_string()),
-                    path: None,
-                    method: None,
-                },
-                action: HandlerAction::RelayProjectConfigs,
-                locale: "us".to_string(),
-            }
-        ];
+        let routes = vec![Route {
+            r#match: Match {
+                host: Some("api.example.com".to_string()),
+                path: None,
+                method: None,
+            },
+            action: HandlerAction::RelayProjectConfigs,
+            locale: "us".to_string(),
+        }];
 
         let router = test_router(Some(routes)).await;
 
         // Should strip port and match
         let req = test_request(Method::GET, "/test", Some("api.example.com:8080"));
-        assert_eq!(router.resolve(&req), Some(&HandlerAction::RelayProjectConfigs));
+        assert_eq!(
+            router.resolve(&req),
+            Some(&HandlerAction::RelayProjectConfigs)
+        );
     }
 
     #[tokio::test]
     async fn test_method_matching() {
-        let routes = vec![
-            Route {
-                r#match: Match {
-                    host: None,
-                    path: Some("/api/test".to_string()),
-                    method: Some(HttpMethod::Post),
-                },
-                action: HandlerAction::RelayProjectConfigs,
-                locale: "us".to_string(),
-            }
-        ];
+        let routes = vec![Route {
+            r#match: Match {
+                host: None,
+                path: Some("/api/test".to_string()),
+                method: Some(HttpMethod::Post),
+            },
+            action: HandlerAction::RelayProjectConfigs,
+            locale: "us".to_string(),
+        }];
 
         let router = test_router(Some(routes)).await;
 
         // POST should match
         let req = test_request(Method::POST, "/api/test", None);
-        assert_eq!(router.resolve(&req), Some(&HandlerAction::RelayProjectConfigs));
+        assert_eq!(
+            router.resolve(&req),
+            Some(&HandlerAction::RelayProjectConfigs)
+        );
 
         // GET should not match
         let req = test_request(Method::GET, "/api/test", None);

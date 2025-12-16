@@ -1,5 +1,8 @@
 use thiserror::Error;
 
+/// Result type alias for ingest-router operations
+pub type Result<T, E = IngestRouterError> = std::result::Result<T, E>;
+
 /// Errors that can occur during ingest-router operations
 #[derive(Error, Debug)]
 pub enum IngestRouterError {
@@ -34,13 +37,10 @@ pub enum IngestRouterError {
     InternalError(String),
 
     /// Request failed with the original request data for recovery
-    #[error("Request failed: {source}")]
+    #[error("Request failed")]
     RequestFailedWithData {
         /// The request that failed
         request_json: serde_json::Value,
-        /// The underlying error
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
     },
 
     #[error("IO error: {0}")]

@@ -6,7 +6,7 @@ use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
 use async_trait::async_trait;
 use locator::client::Locator;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Handler for the Relay Project Configs endpoint
 ///
@@ -31,10 +31,12 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
     async fn split_requests(
         &self,
         request: ProjectConfigsRequest,
-        _cells: &Cells,
+        cells: &Cells,
     ) -> Result<(Vec<(CellId, ProjectConfigsRequest)>, Vec<String>), IngestRouterError> {
         let public_keys = request.public_keys;
         let extra_fields = request.extra_fields;
+
+        let cell_ids: HashSet<&String> = cells.cell_list.iter().collect();
 
         // Route each public key to its owning cell using the locator service
         let mut split: HashMap<CellId, Vec<String>> = HashMap::new();
@@ -43,6 +45,16 @@ impl Handler<ProjectConfigsRequest, ProjectConfigsResponse> for ProjectConfigsHa
         for public_key in public_keys {
             match self.locator.lookup(&public_key, None).await {
                 Ok(cell_id) => {
+                    if !cell_ids.contains(&cell_id) {
+                        tracing::warn!(
+                            public_key = %public_key,
+                            cell_id = %cell_id,
+                            "Located cell is not in the current locality's configured cells, adding to pending"
+                        );
+                        pending.push(public_key);
+                        continue;
+                    }
+
                     split.entry(cell_id).or_default().push(public_key);
                 }
                 Err(e) => {

@@ -50,11 +50,13 @@ impl PartialEq<hyper::Method> for HttpMethod {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "handler", rename_all = "snake_case")]
 pub enum HandlerAction {
     /// Merges project configs from multiple relay instances
     RelayProjectConfigs,
+    /// Healthcheck endpoint
+    Health,
 }
 
 // Timeout configuration for relay project configs handler

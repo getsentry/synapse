@@ -12,8 +12,6 @@ pub enum ProxyError {
     InvalidUri(#[from] http::uri::InvalidUri),
     #[error("could not resolve route")]
     ResolverError,
-    #[error("locator error")]
-    LocatorError(#[from] locator::locator::LocatorError),
     #[error("locator reqwest error: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("hyper error: {0}")]

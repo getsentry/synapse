@@ -6,13 +6,7 @@ use hyper::{Request, Response};
 
 /// This endpoint returns success if any one upstream is available.
 /// Synapse should continue to operate even if one cell is down.
-pub struct HealthHandler;
-
-impl HealthHandler {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+pub struct HealthHandler {}
 
 #[async_trait]
 impl Handler for HealthHandler {

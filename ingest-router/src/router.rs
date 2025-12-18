@@ -28,7 +28,7 @@ impl Router {
                 HandlerAction::RelayProjectConfigs,
                 Arc::new(ProjectConfigsHandler::new(locator)) as Arc<dyn Handler>,
             ),
-            (HandlerAction::Health, Arc::new(HealthHandler::new())),
+            (HandlerAction::Health, Arc::new(HealthHandler {})),
         ]);
 
         Self {

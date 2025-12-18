@@ -1,5 +1,8 @@
-use crate::config::{HandlerAction, Route};
-use crate::project_config::handler::ProjectConfigsHandler;
+use crate::api::health::HealthHandler;
+use crate::config::{CellConfig, HandlerAction, Route};
+use crate::handler::Handler;
+use crate::locale::{Cells, Locales};
+use crate::project_config::ProjectConfigsHandler;
 use hyper::Request;
 use locator::client::Locator;
 use std::collections::HashMap;
@@ -8,37 +11,43 @@ use std::sync::Arc;
 /// Router that matches incoming requests against configured routes
 pub struct Router {
     routes: Arc<Vec<Route>>,
-    // TODO: Fix type to be generic
-    action_to_handler: HashMap<HandlerAction, ProjectConfigsHandler>,
+    action_to_handler: HashMap<HandlerAction, Arc<dyn Handler>>,
+    #[allow(dead_code)]
+    locales_to_cells: Locales,
 }
 
 impl Router {
     /// Creates a new router with the given routes
-    pub fn new(routes: Vec<Route>, locator: Locator) -> Self {
-        let mut action_to_handler = HashMap::new();
-
-        action_to_handler.insert(
-            HandlerAction::RelayProjectConfigs,
-            ProjectConfigsHandler::new(locator),
-        );
+    pub fn new(
+        routes: Vec<Route>,
+        locales: HashMap<String, Vec<CellConfig>>,
+        locator: Locator,
+    ) -> Self {
+        let action_to_handler = HashMap::from([
+            (
+                HandlerAction::RelayProjectConfigs,
+                Arc::new(ProjectConfigsHandler::new(locator)) as Arc<dyn Handler>,
+            ),
+            (HandlerAction::Health, Arc::new(HealthHandler::new())),
+        ]);
 
         Self {
             routes: Arc::new(routes),
             action_to_handler,
+            locales_to_cells: Locales::new(locales),
         }
     }
 
     /// Finds the first route that matches the incoming request
-    pub fn resolve<B>(&self, req: &Request<B>) -> Option<&HandlerAction> {
+    pub fn resolve<B>(&self, req: &Request<B>) -> Option<(Arc<dyn Handler>, Arc<Cells>)> {
         self.routes
             .iter()
             .find(|route| self.matches_route(req, route))
-            .map(|route| &route.action)
-    }
-
-    // TODO: Fix return type so we can deal with other handler types here as well.
-    pub fn get_handler(&self, action: &HandlerAction) -> Option<&ProjectConfigsHandler> {
-        self.action_to_handler.get(action)
+            .and_then(|route| {
+                let cells = self.locales_to_cells.get_cells(&route.locale)?;
+                let handler = self.action_to_handler.get(&route.action)?.clone();
+                Some((handler, cells))
+            })
     }
 
     /// Checks if a request matches a route's criteria
@@ -92,6 +101,7 @@ mod tests {
     use hyper::{Method, Request};
     use locator::config::LocatorDataType;
     use locator::locator::Locator as LocatorService;
+    use url::Url;
 
     async fn test_router(routes: Option<Vec<Route>>) -> Router {
         let default_routes = vec![
@@ -117,6 +127,15 @@ mod tests {
 
         let routes = routes.unwrap_or(default_routes);
 
+        let locales = HashMap::from([(
+            "us".to_string(),
+            vec![CellConfig {
+                id: "us1".to_string(),
+                sentry_url: Url::parse("https://sentry.io/us1").unwrap(),
+                relay_url: Url::parse("https://relay.io/us1").unwrap(),
+            }],
+        )]);
+
         let (_dir, provider) = get_mock_provider().await;
         let locator_service = LocatorService::new(
             LocatorDataType::ProjectKey,
@@ -126,7 +145,7 @@ mod tests {
         );
         let locator = Locator::from_in_process_service(locator_service);
 
-        Router::new(routes, locator)
+        Router::new(routes, locales, locator)
     }
 
     fn test_request(
@@ -153,14 +172,13 @@ mod tests {
 
         // Should match first route
         let req = test_request(Method::POST, "/api/test", Some("api.example.com"));
-        assert_eq!(
-            router.resolve(&req),
-            Some(&HandlerAction::RelayProjectConfigs)
-        );
+        let (handler, _cells) = router.resolve(&req).unwrap();
+        assert!(handler.type_name().contains("ProjectConfigsHandler"));
 
         // Should match second route
         let req = test_request(Method::GET, "/health", None);
-        assert_eq!(router.resolve(&req), Some(&HandlerAction::Health));
+        let (handler, _cells) = router.resolve(&req).unwrap();
+        assert!(handler.type_name().contains("HealthHandler"));
     }
 
     #[tokio::test]
@@ -168,7 +186,7 @@ mod tests {
         let router = test_router(None).await;
 
         let req = test_request(Method::GET, "/different", None);
-        assert_eq!(router.resolve(&req), None);
+        assert!(router.resolve(&req).is_none());
     }
 
     #[tokio::test]
@@ -187,10 +205,8 @@ mod tests {
 
         // Should strip port and match
         let req = test_request(Method::GET, "/test", Some("api.example.com:8080"));
-        assert_eq!(
-            router.resolve(&req),
-            Some(&HandlerAction::RelayProjectConfigs)
-        );
+        let (handler, _cells) = router.resolve(&req).unwrap();
+        assert!(handler.type_name().contains("ProjectConfigsHandler"));
     }
 
     #[tokio::test]
@@ -209,13 +225,11 @@ mod tests {
 
         // POST should match
         let req = test_request(Method::POST, "/api/test", None);
-        assert_eq!(
-            router.resolve(&req),
-            Some(&HandlerAction::RelayProjectConfigs)
-        );
+        let (handler, _cells) = router.resolve(&req).unwrap();
+        assert!(handler.type_name().contains("ProjectConfigsHandler"));
 
         // GET should not match
         let req = test_request(Method::GET, "/api/test", None);
-        assert_eq!(router.resolve(&req), None);
+        assert!(router.resolve(&req).is_none());
     }
 }

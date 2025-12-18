@@ -25,7 +25,6 @@ use std::collections::HashMap;
 ///   "global": true
 /// }
 /// ```
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfigsRequest {
     /// DSN public keys to fetch configs for.
@@ -38,7 +37,6 @@ pub struct ProjectConfigsRequest {
     pub extra_fields: HashMap<String, JsonValue>,
 }
 
-#[allow(dead_code)]
 impl ProjectConfigsRequest {
     pub fn from_bytes(bytes: &Bytes) -> Result<Self, serde_json::Error> {
         serde_json::from_slice(bytes)
@@ -131,12 +129,6 @@ impl ProjectConfigsResponse {
                     .boxed(),
             )
             .map_err(|e| IngestRouterError::HyperError(e.to_string()))
-    }
-}
-
-impl Default for ProjectConfigsResponse {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

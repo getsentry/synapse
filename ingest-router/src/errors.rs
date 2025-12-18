@@ -48,4 +48,7 @@ pub enum IngestRouterError {
 
     #[error("Locator client error: {0}")]
     LocatorClientError(#[from] locator::client::ClientError),
+
+    #[error("Serde error: {0}")]
+    SerdeError(#[from] serde_json::Error),
 }

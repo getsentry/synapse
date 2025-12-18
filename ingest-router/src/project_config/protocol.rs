@@ -37,17 +37,6 @@ pub struct ProjectConfigsRequest {
     pub extra_fields: HashMap<String, JsonValue>,
 }
 
-impl ProjectConfigsRequest {
-    pub fn from_bytes(bytes: &Bytes) -> Result<Self, serde_json::Error> {
-        serde_json::from_slice(bytes)
-    }
-
-    pub fn to_bytes(&self) -> Result<Bytes, serde_json::Error> {
-        let json = serde_json::to_vec(self)?;
-        Ok(Bytes::from(json))
-    }
-}
-
 /// Response format for the relay project configs endpoint.
 ///
 /// # Example

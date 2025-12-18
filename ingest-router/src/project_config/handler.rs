@@ -1,5 +1,6 @@
 //! Handler implementation for the Relay Project Configs endpoint
 
+use crate::api::utils::{deserialize_body, normalize_headers, serialize_to_body};
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, Handler, HandlerBody, SplitMetadata};
 use crate::locale::Cells;
@@ -7,10 +8,8 @@ use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsRespo
 use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
-use hyper::header::{CONTENT_LENGTH, TRANSFER_ENCODING};
 use hyper::{Request, Response};
 use locator::client::Locator;
-use shared::http::filter_hop_by_hop;
 use std::collections::{HashMap, HashSet};
 
 /// Pending public keys that couldn't be routed to any cell
@@ -38,17 +37,12 @@ impl Handler for ProjectConfigsHandler {
         request: Request<HandlerBody>,
         cells: &Cells,
     ) -> Result<(Vec<(CellId, Request<HandlerBody>)>, SplitMetadata), IngestRouterError> {
-        // Split request into parts first, then collect body
         let (mut parts, body) = request.into_parts();
-        let bytes = body
-            .collect()
-            .await
-            .map_err(|e| IngestRouterError::RequestBodyError(e.to_string()))?
-            .to_bytes();
+        let parsed: ProjectConfigsRequest = deserialize_body(body).await?;
+        normalize_headers(&mut parts.headers, parts.version);
 
-        let parsed_request = ProjectConfigsRequest::from_bytes(&bytes)?;
-        let public_keys = parsed_request.public_keys;
-        let extra_fields = parsed_request.extra_fields;
+        let public_keys = parsed.public_keys;
+        let extra_fields = parsed.extra_fields;
 
         let cell_ids: HashSet<&String> = cells.cell_list.iter().collect();
 
@@ -60,6 +54,7 @@ impl Handler for ProjectConfigsHandler {
             match self.locator.lookup(&public_key, None).await {
                 Ok(cell_id) => {
                     if !cell_ids.contains(&cell_id) {
+                        // Locator errors, add to pending
                         tracing::warn!(
                             public_key = %public_key,
                             cell_id = %cell_id,
@@ -82,11 +77,6 @@ impl Handler for ProjectConfigsHandler {
             }
         }
 
-        // Prepare headers for per-cell requests
-        filter_hop_by_hop(&mut parts.headers, parts.version);
-        parts.headers.remove(CONTENT_LENGTH);
-        parts.headers.remove(TRANSFER_ENCODING);
-
         // Build per-cell requests
         let cell_requests = split
             .into_iter()
@@ -95,13 +85,12 @@ impl Handler for ProjectConfigsHandler {
                     public_keys: keys,
                     extra_fields: extra_fields.clone(),
                 };
-                let body: HandlerBody = Full::new(cell_request.to_bytes().unwrap())
-                    .map_err(|e| match e {})
-                    .boxed();
+
+                let body = serialize_to_body(&cell_request)?;
                 let req = Request::from_parts(parts.clone(), body);
-                (cell_id, req)
+                Ok((cell_id, req))
             })
-            .collect();
+            .collect::<Result<_, IngestRouterError>>()?;
 
         let metadata = Box::new(pending);
         Ok((cell_requests, metadata))

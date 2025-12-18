@@ -19,7 +19,7 @@ pub async fn deserialize_body<T: DeserializeOwned>(
     serde_json::from_slice(&bytes).map_err(|e| IngestRouterError::RequestBodyError(e.to_string()))
 }
 
-/// Serializes a value to a JSON response body.
+/// Serializes a value to a JSON body.
 pub fn serialize_to_body<T: Serialize>(value: &T) -> Result<HandlerBody, IngestRouterError> {
     let bytes = serde_json::to_vec(value).map(Bytes::from)?;
     Ok(Full::new(bytes).map_err(|e| match e {}).boxed())

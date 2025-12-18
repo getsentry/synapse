@@ -12,7 +12,6 @@ use std::sync::Arc;
 pub struct Router {
     routes: Arc<Vec<Route>>,
     action_to_handler: HashMap<HandlerAction, Arc<dyn Handler>>,
-    #[allow(dead_code)]
     locales_to_cells: Locales,
 }
 

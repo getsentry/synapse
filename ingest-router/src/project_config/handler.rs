@@ -77,16 +77,15 @@ impl Handler for ProjectConfigsHandler {
             }
         }
 
-        // Build per-cell requests
         let cell_requests = split
             .into_iter()
             .map(|(cell_id, keys)| {
-                let cell_request = ProjectConfigsRequest {
+                let project_configs_request = ProjectConfigsRequest {
                     public_keys: keys,
                     extra_fields: extra_fields.clone(),
                 };
 
-                let body = serialize_to_body(&cell_request)?;
+                let body = serialize_to_body(&project_configs_request)?;
                 let req = Request::from_parts(parts.clone(), body);
                 Ok((cell_id, req))
             })
@@ -114,7 +113,6 @@ impl Handler for ProjectConfigsHandler {
         if let Ok(project_metadata) = metadata.downcast::<ProjectConfigsMetadata>() {
             merged.pending_keys.extend(*project_metadata);
         }
-
         // Filter to successful responses only
         let mut iter = responses
             .into_iter()

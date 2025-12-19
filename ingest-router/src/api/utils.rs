@@ -25,6 +25,7 @@ pub fn serialize_to_body<T: Serialize>(value: &T) -> Result<HandlerBody, IngestR
     Ok(Full::new(bytes).map_err(|e| match e {}).boxed())
 }
 
+/// Common header normalization for all requests and responses.
 pub fn normalize_headers(headers: &mut HeaderMap, version: Version) -> &mut HeaderMap {
     filter_hop_by_hop(headers, version);
     headers.remove(CONTENT_LENGTH);

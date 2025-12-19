@@ -66,7 +66,7 @@ where
                 // TODO: Placeholder response
                 Box::pin(async move {
                     let (split, _metadata) =
-                        handler.split_request(handler_req, &cells).await.unwrap();
+                        handler.split_request(handler_req, &cells).await?;
 
                     for (cell_id, req) in split {
                         println!("Cell: {}, URI: {}", cell_id, req.uri());

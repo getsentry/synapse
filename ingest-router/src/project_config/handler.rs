@@ -121,38 +121,26 @@ impl Handler for ProjectConfigsHandler {
         let mut parts: Option<Parts> = None;
 
         for (cell_id, result) in responses {
-            match result {
-                Ok(response) => {
-                    if response.status().is_success() {
-                        let (p, body) = response.into_parts();
-                        if parts.is_none() {
-                            parts = Some(p);
-                        }
+            // Only process successful responses with success status codes
+            let successful_response = result.ok().filter(|r| r.status().is_success());
 
-                        if let Ok(parsed) = deserialize_body::<ProjectConfigsResponse>(body).await {
-                            merged.project_configs.extend(parsed.project_configs);
-                            merged.extra_fields.extend(parsed.extra_fields);
-                            merged.pending_keys.extend(parsed.pending_keys);
-                        }
-                    } else {
-                        // Non-success status codes add their keys to pending
-                        tracing::error!(
-                            status = %response.status(),
-                            cell_id = %cell_id,
-                            "Upstream response returned non-success status"
-                        );
-                        if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
-                            pending.extend(keys.clone());
-                        }
-                    }
+            let Some(response) = successful_response else {
+                // Any failure adds the cell's keys to pending
+                if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
+                    pending.extend(keys.clone());
                 }
-                Err(e) => {
-                    // If any request failed, add its keys to pending
-                    tracing::error!(error = ?e, "Failed to build merged response");
-                    if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
-                        pending.extend(keys.clone());
-                    }
-                }
+                continue;
+            };
+
+            let (p, body) = response.into_parts();
+            if parts.is_none() {
+                parts = Some(p);
+            }
+
+            if let Ok(parsed) = deserialize_body::<ProjectConfigsResponse>(body).await {
+                merged.project_configs.extend(parsed.project_configs);
+                merged.extra_fields.extend(parsed.extra_fields);
+                merged.pending_keys.extend(parsed.pending_keys);
             }
         }
 

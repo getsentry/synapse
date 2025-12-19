@@ -76,7 +76,6 @@ pub struct ProjectConfigsResponse {
     pub http_headers: HeaderMap,
 }
 
-#[allow(dead_code)]
 impl ProjectConfigsResponse {
     pub fn new() -> Self {
         Self {
@@ -85,12 +84,6 @@ impl ProjectConfigsResponse {
             extra_fields: HashMap::new(),
             http_headers: HeaderMap::new(),
         }
-    }
-
-    pub fn from_bytes(bytes: &Bytes) -> Result<Self, serde_json::Error> {
-        let mut response: Self = serde_json::from_slice(bytes)?;
-        response.http_headers = HeaderMap::new();
-        Ok(response)
     }
 
     /// Builds an HTTP response from the merged results.

@@ -6,14 +6,20 @@ use crate::handler::{CellId, Handler, HandlerBody, SplitMetadata};
 use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
 use async_trait::async_trait;
+use http::response::Parts;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::{Request, Response};
 use locator::client::Locator;
 use std::collections::{HashMap, HashSet};
 
-/// Pending public keys that couldn't be routed to any cell
-type ProjectConfigsMetadata = Vec<String>;
+#[derive(Default)]
+struct ProjectConfigsMetadata {
+    // keys that are assigned to a cell
+    cell_to_keys: HashMap<CellId, Vec<String>>,
+    // keys that couldn't be assigned to any cell
+    unassigned_keys: Vec<String>,
+}
 
 /// Handler for the Relay Project Configs endpoint
 ///
@@ -47,7 +53,7 @@ impl Handler for ProjectConfigsHandler {
         let cell_ids: HashSet<&String> = cells.cell_list.iter().collect();
 
         // Route each public key to its owning cell using the locator service
-        let mut split: HashMap<CellId, Vec<String>> = HashMap::new();
+        let mut cell_to_keys: HashMap<CellId, Vec<String>> = HashMap::new();
         let mut pending: Vec<String> = Vec::new();
 
         for public_key in public_keys {
@@ -63,7 +69,7 @@ impl Handler for ProjectConfigsHandler {
                         continue;
                     }
 
-                    split.entry(cell_id).or_default().push(public_key);
+                    cell_to_keys.entry(cell_id).or_default().push(public_key);
                 }
                 Err(e) => {
                     // Locator errors, add to pending
@@ -77,54 +83,77 @@ impl Handler for ProjectConfigsHandler {
             }
         }
 
-        let cell_requests = split
-            .into_iter()
+        let cell_requests = cell_to_keys
+            .iter()
             .map(|(cell_id, keys)| {
                 let project_configs_request = ProjectConfigsRequest {
-                    public_keys: keys,
+                    public_keys: keys.clone(),
                     extra_fields: extra_fields.clone(),
                 };
 
                 let body = serialize_to_body(&project_configs_request)?;
                 let req = Request::from_parts(parts.clone(), body);
-                Ok((cell_id, req))
+                Ok((cell_id.into(), req))
             })
             .collect::<Result<_, IngestRouterError>>()?;
 
-        let metadata = Box::new(pending);
+        let metadata = Box::new(ProjectConfigsMetadata {
+            cell_to_keys,
+            unassigned_keys: pending,
+        });
         Ok((cell_requests, metadata))
     }
 
-    fn merge_responses(
+    async fn merge_responses(
         &self,
         responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
         metadata: SplitMetadata,
     ) -> Response<HandlerBody> {
-        // TODO: The current implementation does not handle errors from the results
-        // parameter. The edge case to be handled are if any of the upstreams failed
-        // to return a response for whatever reason. In scenarios like this, the
-        // executor needs to provide all the project config keys which failed to
-        // resolve on the upstream. We would need to add those project keys to the
-        // pending response.
+        let meta = metadata
+            .downcast::<ProjectConfigsMetadata>()
+            .unwrap_or(Box::new(ProjectConfigsMetadata::default()));
 
         let mut merged = ProjectConfigsResponse::new();
+        let mut pending = meta.unassigned_keys;
 
-        // Downcast metadata to our specific type
-        if let Ok(project_metadata) = metadata.downcast::<ProjectConfigsMetadata>() {
-            merged.pending_keys.extend(*project_metadata);
-        }
-        // Filter to successful responses only
-        let mut iter = responses
-            .into_iter()
-            .filter_map(|(cell_id, result)| result.ok().map(|r| (cell_id, r)));
+        // Parts is populated from the first response. The responses are previously
+        // sorted so successful responses (if they exist) come first.
+        let mut parts: Option<Parts> = None;
 
-        // Handle first successful result (highest priority)
-        // Gets extra_fields, headers, configs, and pending
-        // TODO: Actually parse the response body (requires async, so we'd need to
-        // restructure or parse bodies before calling merge_responses)
-        if let Some((_cell_id, _response)) = iter.next() {
-            // For now, we can't parse the body here since this isn't async
-            // The executor should parse response bodies before passing to merge
+        for (cell_id, result) in responses {
+            match result {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        let (p, body) = response.into_parts();
+                        if parts.is_none() {
+                            parts = Some(p);
+                        }
+
+                        if let Ok(parsed) = deserialize_body::<ProjectConfigsResponse>(body).await {
+                            merged.project_configs.extend(parsed.project_configs);
+                            merged.extra_fields.extend(parsed.extra_fields);
+                            merged.pending_keys.extend(parsed.pending_keys);
+                        }
+                    } else {
+                        // Non-success status codes add their keys to pending
+                        tracing::error!(
+                            status = %response.status(),
+                            cell_id = %cell_id,
+                            "Upstream response returned non-success status"
+                        );
+                        if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
+                            pending.extend(keys.clone());
+                        }
+                    }
+                }
+                Err(e) => {
+                    // If any request failed, add its keys to pending
+                    tracing::error!(error = ?e, "Failed to build merged response");
+                    if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
+                        pending.extend(keys.clone());
+                    }
+                }
+            }
         }
 
         // Build the final response using into_response which handles serialization

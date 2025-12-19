@@ -36,7 +36,7 @@ pub trait Handler: Send + Sync {
     ///
     /// This method combines responses from successful cells, handles failures,
     /// and incorporates metadata from the split phase.
-    fn merge_responses(
+    async fn merge_responses(
         &self,
         responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
         metadata: SplitMetadata,

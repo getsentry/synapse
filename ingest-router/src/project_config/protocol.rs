@@ -57,7 +57,6 @@ pub struct ProjectConfigsRequest {
 ///   "global_status": "ready"
 /// }
 /// ```
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfigsResponse {
     /// Project configs (HashMap merged from all upstreams).

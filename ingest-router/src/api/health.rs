@@ -18,7 +18,7 @@ impl Handler for HealthHandler {
         unimplemented!();
     }
 
-    fn merge_responses(
+    async fn merge_responses(
         &self,
         _responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
         _metadata: SplitMetadata,

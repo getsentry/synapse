@@ -54,7 +54,6 @@ impl Handler for ProjectConfigsHandler {
             match self.locator.lookup(&public_key, None).await {
                 Ok(cell_id) => {
                     if !cell_ids.contains(&cell_id) {
-                        // Locator errors, add to pending
                         tracing::warn!(
                             public_key = %public_key,
                             cell_id = %cell_id,
@@ -67,6 +66,7 @@ impl Handler for ProjectConfigsHandler {
                     split.entry(cell_id).or_default().push(public_key);
                 }
                 Err(e) => {
+                    // Locator errors, add to pending
                     tracing::error!(
                         public_key = %public_key,
                         error = ?e,

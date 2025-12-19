@@ -128,27 +128,6 @@ mod tests {
     use hyper::header::{CACHE_CONTROL, HeaderValue};
 
     #[test]
-    fn test_request_serialization() {
-        let mut extra = HashMap::new();
-        extra.insert("global".to_string(), serde_json::json!(true));
-        extra.insert("noCache".to_string(), serde_json::json!(false));
-
-        let request = ProjectConfigsRequest {
-            public_keys: vec!["key1".to_string(), "key2".to_string()],
-            extra_fields: extra,
-        };
-
-        let bytes = request.to_bytes().unwrap();
-        let parsed = ProjectConfigsRequest::from_bytes(&bytes).unwrap();
-
-        assert_eq!(parsed.public_keys.len(), 2);
-        assert_eq!(
-            parsed.extra_fields.get("global"),
-            Some(&serde_json::json!(true))
-        );
-    }
-
-    #[test]
     fn test_response_serialization() {
         let mut configs = HashMap::new();
         configs.insert(

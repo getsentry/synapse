@@ -5,14 +5,8 @@
 //!
 //! See the module-level documentation in `mod.rs` for complete protocol details.
 
-use crate::errors::IngestRouterError;
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
-use hyper::body::Bytes;
-use hyper::header::{CONTENT_LENGTH, CONTENT_TYPE, HeaderMap};
-use hyper::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use shared::http::filter_hop_by_hop;
 use std::collections::HashMap;
 
 /// Request format for the relay project configs endpoint.
@@ -70,10 +64,6 @@ pub struct ProjectConfigsResponse {
     /// Other fields (`global`, `global_status`, future fields).
     #[serde(flatten)]
     pub extra_fields: HashMap<String, JsonValue>,
-
-    /// HTTP headers from the highest priority upstream (not serialized).
-    #[serde(skip)]
-    pub http_headers: HeaderMap,
 }
 
 impl ProjectConfigsResponse {
@@ -82,34 +72,7 @@ impl ProjectConfigsResponse {
             project_configs: HashMap::new(),
             pending_keys: Vec::new(),
             extra_fields: HashMap::new(),
-            http_headers: HeaderMap::new(),
         }
-    }
-
-    /// Builds an HTTP response from the merged results.
-    /// Filters out hop-by-hop headers and Content-Length (which is recalculated for the new body).
-    pub fn into_response(
-        mut self,
-    ) -> Result<Response<BoxBody<Bytes, IngestRouterError>>, IngestRouterError> {
-        let merged_json = serde_json::to_vec(&self)
-            .map_err(|e| IngestRouterError::ResponseSerializationError(e.to_string()))?;
-
-        filter_hop_by_hop(&mut self.http_headers, hyper::Version::HTTP_11);
-        self.http_headers.remove(CONTENT_LENGTH);
-
-        let mut builder = Response::builder().status(StatusCode::OK);
-        for (name, value) in self.http_headers.iter() {
-            builder = builder.header(name, value);
-        }
-
-        builder = builder.header(CONTENT_TYPE, "application/json");
-        builder
-            .body(
-                Full::new(Bytes::from(merged_json))
-                    .map_err(|e| match e {})
-                    .boxed(),
-            )
-            .map_err(|e| IngestRouterError::HyperError(e.to_string()))
     }
 }
 

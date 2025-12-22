@@ -6,11 +6,12 @@ use crate::handler::{CellId, Handler, HandlerBody, SplitMetadata};
 use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
 use async_trait::async_trait;
+use http::StatusCode;
 use http::response::Parts;
-use http_body_util::{BodyExt, Full};
-use hyper::body::Bytes;
+use hyper::header::{CONTENT_TYPE, HeaderValue};
 use hyper::{Request, Response};
 use locator::client::Locator;
+use shared::http::make_error_response;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
@@ -121,7 +122,6 @@ impl Handler for ProjectConfigsHandler {
         let mut parts: Option<Parts> = None;
 
         for (cell_id, result) in responses {
-            // Only process successful responses with success status codes
             let successful_response = result.ok().filter(|r| r.status().is_success());
 
             let Some(response) = successful_response else {
@@ -144,16 +144,16 @@ impl Handler for ProjectConfigsHandler {
             }
         }
 
-        // Build the final response using into_response which handles serialization
-        match merged.into_response() {
-            Ok(response) => response,
-            Err(e) => {
-                tracing::error!(error = ?e, "Failed to build merged response");
-                Response::builder()
-                    .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Full::new(Bytes::from("{}")).map_err(|e| match e {}).boxed())
-                    .unwrap()
-            }
+        let serialized_body = serialize_to_body(&merged);
+
+        if let (Some(mut p), Ok(body)) = (parts, serialized_body) {
+            normalize_headers(&mut p.headers, p.version);
+            p.headers
+                .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+            Response::from_parts(p, body)
+        } else {
+            make_error_response(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

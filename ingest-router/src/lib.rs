@@ -146,6 +146,8 @@ mod tests {
 
         let response = service.call(request).await.unwrap();
 
+        // TODO: call the scripts/mock_relay_api.py server and validate the response
+
         assert_eq!(response.status(), 200);
     }
 }

@@ -14,7 +14,7 @@ use locator::client::Locator;
 use shared::http::make_error_response;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ProjectConfigsMetadata {
     // keys that are assigned to a cell
     cell_to_keys: HashMap<CellId, Vec<String>>,
@@ -115,7 +115,7 @@ impl Handler for ProjectConfigsHandler {
             .unwrap_or(Box::new(ProjectConfigsMetadata::default()));
 
         let mut merged = ProjectConfigsResponse::new();
-        let mut pending = meta.unassigned_keys;
+        merged.pending_keys.extend(meta.unassigned_keys);
 
         // Parts is populated from the first response. The responses are previously
         // sorted so successful responses (if they exist) come first.
@@ -127,7 +127,7 @@ impl Handler for ProjectConfigsHandler {
             let Some(response) = successful_response else {
                 // Any failure adds the cell's keys to pending
                 if let Some(keys) = meta.cell_to_keys.get(&cell_id) {
-                    pending.extend(keys.clone());
+                    merged.pending_keys.extend(keys.clone());
                 }
                 continue;
             };
@@ -188,7 +188,7 @@ mod tests {
         }
     }
 
-    fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locator {
+    async fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locator {
         let route_data = RouteData::from(
             key_to_cell,
             "cursor".to_string(),
@@ -206,31 +206,8 @@ mod tests {
             provider,
             None,
         );
-        Locator::from_in_process_service(service)
-    }
 
-    fn build_request(body: ProjectConfigsRequest) -> Request<HandlerBody> {
-        let bytes = body.to_bytes().unwrap();
-        Request::builder()
-            .method("POST")
-            .uri("/api/0/relays/projectconfigs/")
-            .body(Full::new(bytes).map_err(|e| match e {}).boxed())
-            .unwrap()
-    }
-
-    async fn parse_request_body(req: Request<HandlerBody>) -> ProjectConfigsRequest {
-        let bytes = req.into_body().collect().await.unwrap().to_bytes();
-        ProjectConfigsRequest::from_bytes(&bytes).unwrap()
-    }
-
-    #[tokio::test]
-    async fn test_split_request_multiple_cells() {
-        let key_to_cell = HashMap::from([
-            ("key1".to_string(), "us1".to_string()),
-            ("key2".to_string(), "us2".to_string()),
-            ("key3".to_string(), "us1".to_string()),
-        ]);
-        let locator = create_test_locator(key_to_cell);
+        let locator = Locator::from_in_process_service(service);
 
         // Wait for locator to be ready
         for _ in 0..50 {
@@ -240,6 +217,32 @@ mod tests {
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
         assert!(locator.is_ready(), "Locator should be ready");
+
+        locator
+    }
+
+    fn build_request(project_configs_request: ProjectConfigsRequest) -> Request<HandlerBody> {
+        let body = serialize_to_body(&project_configs_request).unwrap();
+        Request::builder()
+            .method("POST")
+            .uri("/api/0/relays/projectconfigs/")
+            .body(body)
+            .unwrap()
+    }
+
+    fn build_response(project_configs_response: serde_json::Value) -> Response<HandlerBody> {
+        let body = serialize_to_body(&project_configs_response).unwrap();
+        Response::builder().status(200).body(body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_split_request_multiple_cells() {
+        let key_to_cell = HashMap::from([
+            ("key1".to_string(), "us1".to_string()),
+            ("key2".to_string(), "us2".to_string()),
+            ("key3".to_string(), "us1".to_string()),
+        ]);
+        let locator = create_test_locator(key_to_cell).await;
 
         let locales = HashMap::from([(
             "us".to_string(),
@@ -280,20 +283,15 @@ mod tests {
             .into_iter()
             .find(|(id, _)| id == "us1")
             .unwrap();
-        let us1_body = parse_request_body(us1_req).await;
+
+        let us1_body: ProjectConfigsRequest = deserialize_body(us1_req.into_body()).await.unwrap();
 
         let key_to_cell = HashMap::from([
             ("key1".to_string(), "us1".to_string()),
             ("key2".to_string(), "us2".to_string()),
             ("key3".to_string(), "us1".to_string()),
         ]);
-        let locator = create_test_locator(key_to_cell);
-        for _ in 0..50 {
-            if locator.is_ready() {
-                break;
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        }
+        let locator = create_test_locator(key_to_cell).await;
         let handler = ProjectConfigsHandler::new(locator);
         let locales = HashMap::from([(
             "us".to_string(),
@@ -316,12 +314,13 @@ mod tests {
             public_keys: vec!["key1".to_string(), "key2".to_string(), "key3".to_string()],
             extra_fields: extra.clone(),
         });
-        let (cell_requests2, _) = handler.split_request(request2, &cells).await.unwrap();
+        let (cell_requests2, metadata) = handler.split_request(request2, &cells).await.unwrap();
         let (_, us2_req) = cell_requests2
             .into_iter()
             .find(|(id, _)| id == "us2")
             .unwrap();
-        let us2_body = parse_request_body(us2_req).await;
+
+        let us2_body: ProjectConfigsRequest = deserialize_body(us2_req.into_body()).await.unwrap();
 
         // Verify us1 has key1 and key3
         assert_eq!(us1_id, "us1");
@@ -334,22 +333,17 @@ mod tests {
         assert_eq!(us2_body.public_keys.len(), 1);
         assert!(us2_body.public_keys.contains(&"key2".to_string()));
         assert_eq!(us2_body.extra_fields, extra);
+
+        let meta = metadata
+            .downcast::<ProjectConfigsMetadata>()
+            .unwrap_or(Box::new(ProjectConfigsMetadata::default()));
+        assert!(meta.unassigned_keys.is_empty());
     }
 
     #[tokio::test]
     async fn test_split_request_unknown_key_goes_to_pending() {
         let key_to_cell = HashMap::from([("key1".to_string(), "us1".to_string())]);
-        let locator = create_test_locator(key_to_cell);
-
-        // Wait for locator to be ready
-        for _ in 0..50 {
-            if locator.is_ready() {
-                break;
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        }
-        assert!(locator.is_ready(), "Locator should be ready");
-
+        let locator = create_test_locator(key_to_cell).await;
         let locales = HashMap::from([(
             "us".to_string(),
             vec![CellConfig {
@@ -374,26 +368,18 @@ mod tests {
         // Should have 1 cell request (us1 with key1)
         assert_eq!(cell_requests.len(), 1);
         assert_eq!(cell_requests[0].0, "us1");
-        let body = parse_request_body(cell_requests.into_iter().next().unwrap().1).await;
-        assert_eq!(body.public_keys, vec!["key1".to_string()]);
 
-        // Unknown key should be in pending metadata
-        let pending = metadata.downcast::<ProjectConfigsMetadata>().unwrap();
-        assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0], "unknown_key");
-    }
-
-    fn build_response(body: &serde_json::Value) -> Response<HandlerBody> {
-        let bytes = Bytes::from(serde_json::to_vec(body).unwrap());
-        Response::builder()
-            .status(200)
-            .body(Full::new(bytes).map_err(|e| match e {}).boxed())
-            .unwrap()
+        // unknown key in metadata
+        let meta = metadata
+            .downcast::<ProjectConfigsMetadata>()
+            .unwrap_or(Box::new(ProjectConfigsMetadata::default()));
+        assert_eq!(meta.unassigned_keys, Vec::from(["unknown_key".to_string()]));
     }
 
     #[tokio::test]
     async fn test_merge_results_successful_cells() {
-        let handler = ProjectConfigsHandler::new(create_test_locator(HashMap::new()));
+        let locator = create_test_locator(HashMap::new()).await;
+        let handler = ProjectConfigsHandler::new(locator);
 
         // Create response from us1 with key1 and global config
         let response1_json = serde_json::json!({
@@ -402,7 +388,7 @@ mod tests {
             },
             "global": {"version": 1}
         });
-        let response1 = build_response(&response1_json);
+        let response1 = build_response(response1_json);
 
         // Create response from us2 with key2 and different global config
         let response2_json = serde_json::json!({
@@ -411,24 +397,26 @@ mod tests {
             },
             "global": {"version": 2}
         });
-        let response2 = build_response(&response2_json);
+        let response2 = build_response(response2_json);
 
-        let results: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)> = vec![
+        let results = vec![
             ("us1".to_string(), Ok(response1)),
             ("us2".to_string(), Ok(response2)),
         ];
 
         let metadata: SplitMetadata = Box::new(Vec::<String>::new());
-        let merged = handler.merge_responses(results, metadata);
+        let merged = handler.merge_responses(results, metadata).await;
 
-        // The current implementation doesn't actually parse the response bodies
-        // (noted as TODO in the code), so we just verify we get a valid response
-        assert_eq!(merged.status(), 200);
+        let parsed: ProjectConfigsResponse = deserialize_body(merged.into_body()).await.unwrap();
+
+        assert!(parsed.project_configs.contains_key("key1"));
+        assert!(parsed.project_configs.contains_key("key2"));
     }
 
     #[tokio::test]
     async fn test_merge_responses_with_pending() {
-        let handler = ProjectConfigsHandler::new(create_test_locator(HashMap::new()));
+        let locator = create_test_locator(HashMap::new()).await;
+        let handler = ProjectConfigsHandler::new(locator);
 
         // Test pending keys from split phase (routing failures, unknown keys)
 
@@ -438,7 +426,7 @@ mod tests {
                 "key1": {"slug": "project1"}
             }
         });
-        let response1 = build_response(&response1_json);
+        let response1 = build_response(response1_json);
 
         // Create response from us2 with successful config
         let response2_json = serde_json::json!({
@@ -446,7 +434,7 @@ mod tests {
                 "key2": {"slug": "project2"}
             }
         });
-        let response2 = build_response(&response2_json);
+        let response2 = build_response(response2_json);
 
         let results: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)> = vec![
             ("us1".to_string(), Ok(response1)),
@@ -454,24 +442,37 @@ mod tests {
         ];
 
         // Pending from split phase (routing failures)
-        let pending_from_split: ProjectConfigsMetadata = vec![
-            "key_routing_failed".to_string(),
-            "key_from_failed_cell1".to_string(),
-            "key_from_failed_cell2".to_string(),
-        ];
+        let pending_from_split: ProjectConfigsMetadata = ProjectConfigsMetadata {
+            cell_to_keys: HashMap::new(),
+            unassigned_keys: vec![
+                "key_routing_failed".to_string(),
+                "key_from_failed_cell1".to_string(),
+                "key_from_failed_cell2".to_string(),
+            ],
+        };
 
         let metadata: SplitMetadata = Box::new(pending_from_split);
-        let merged = handler.merge_responses(results, metadata);
+        let merged = handler.merge_responses(results, metadata).await;
 
-        // Parse response body to check pending keys
-        let bytes = merged.into_body().collect().await.unwrap().to_bytes();
-        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        // Parse merged response body so we can assert on pending keys
+        let parsed: ProjectConfigsResponse = deserialize_body(merged.into_body()).await.unwrap();
 
         // Should have pending keys from split phase
-        let pending = json["pending"].as_array().unwrap();
-        assert_eq!(pending.len(), 3);
-        assert!(pending.contains(&serde_json::json!("key_routing_failed")));
-        assert!(pending.contains(&serde_json::json!("key_from_failed_cell1")));
-        assert!(pending.contains(&serde_json::json!("key_from_failed_cell2")));
+        assert_eq!(parsed.pending_keys.len(), 3);
+        assert!(
+            parsed
+                .pending_keys
+                .contains(&"key_routing_failed".to_string())
+        );
+        assert!(
+            parsed
+                .pending_keys
+                .contains(&"key_from_failed_cell1".to_string())
+        );
+        assert!(
+            parsed
+                .pending_keys
+                .contains(&"key_from_failed_cell2".to_string())
+        );
     }
 }

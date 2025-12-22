@@ -110,6 +110,7 @@ impl Handler for ProjectConfigsHandler {
         responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
         metadata: SplitMetadata,
     ) -> Response<HandlerBody> {
+        // TODO: Consider refactoring to avoid runtime downcast
         let meta = metadata
             .downcast::<ProjectConfigsMetadata>()
             .unwrap_or(Box::new(ProjectConfigsMetadata::default()));

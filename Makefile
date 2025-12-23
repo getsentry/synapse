@@ -106,6 +106,10 @@ run-mock-control-api:
 	python scripts/mock_control_api.py
 .PHONY: run-mock-control-api
 
+run-mock-relay-api:
+	python scripts/mock_relay_api.py
+.PHONY: run-mock-relay-api
+
 # CI-like checks (what runs in GitHub Actions)
 ci: fmt-check lint test build
 	@echo "All CI checks passed!"

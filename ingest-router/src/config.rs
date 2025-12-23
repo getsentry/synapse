@@ -66,17 +66,17 @@ pub struct RelayTimeouts {
     /// HTTP request timeout for individual upstream calls (seconds).
     /// This is the maximum time a single HTTP request can take.
     /// Default: 15 seconds
-    pub http_timeout_secs: u16,
+    pub http_timeout_secs: u64,
 
     /// Task timeout when waiting for the first upstream to respond (seconds).
     /// Must be >= http_timeout_secs to allow HTTP requests to complete.
     /// Default: 20 seconds
-    pub task_initial_timeout_secs: u16,
+    pub task_initial_timeout_secs: u64,
 
     /// Deadline for all remaining tasks after first success (seconds).
     /// Aggressively cuts off slow upstreams once we have good data.
     /// Default: 5 seconds
-    pub task_subsequent_timeout_secs: u16,
+    pub task_subsequent_timeout_secs: u64,
 }
 
 impl Default for RelayTimeouts {

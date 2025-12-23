@@ -38,7 +38,7 @@ impl Router {
     }
 
     /// Finds the first route that matches the incoming request
-    pub fn resolve<B>(&self, req: &Request<B>) -> Option<(Arc<dyn Handler>, Arc<Cells>)> {
+    pub fn resolve<B>(&self, req: &Request<B>) -> Option<(Arc<dyn Handler>, Cells)> {
         self.routes
             .iter()
             .find(|route| self.matches_route(req, route))

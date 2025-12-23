@@ -51,13 +51,14 @@ impl Handler for ProjectConfigsHandler {
         let public_keys = parsed.public_keys;
         let extra_fields = parsed.extra_fields;
 
-        let cell_ids: HashSet<&String> = cells.cell_list.iter().collect();
+        let cell_ids: HashSet<&String> = cells.cell_list().iter().collect();
 
         // Route each public key to its owning cell using the locator service
         let mut cell_to_keys: HashMap<CellId, Vec<String>> = HashMap::new();
         let mut pending: Vec<String> = Vec::new();
 
         for public_key in public_keys {
+            // TODO: Enforce locality here?
             match self.locator.lookup(&public_key, None).await {
                 Ok(cell_id) => {
                     if !cell_ids.contains(&cell_id) {
@@ -169,63 +170,9 @@ mod tests {
     use super::*;
     use crate::config::CellConfig;
     use crate::locale::Locales;
-    use locator::backup_routes::BackupRouteProvider;
-    use locator::types::RouteData;
+    use crate::testutils::create_test_locator;
     use std::collections::HashMap;
-    use std::sync::Arc;
     use url::Url;
-
-    // Mock backup provider for testing
-    struct MockBackupProvider {
-        data: RouteData,
-    }
-
-    #[async_trait::async_trait]
-    impl BackupRouteProvider for MockBackupProvider {
-        async fn load(&self) -> Result<RouteData, locator::backup_routes::BackupError> {
-            Ok(self.data.clone())
-        }
-
-        async fn store(
-            &self,
-            _data: &RouteData,
-        ) -> Result<(), locator::backup_routes::BackupError> {
-            Ok(())
-        }
-    }
-
-    async fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locator {
-        let route_data = RouteData::from(
-            key_to_cell,
-            "cursor".to_string(),
-            HashMap::from([
-                ("us1".to_string(), "us".to_string()),
-                ("us2".to_string(), "us".to_string()),
-            ]),
-        );
-
-        let provider = Arc::new(MockBackupProvider { data: route_data });
-
-        let service = locator::locator::Locator::new(
-            locator::config::LocatorDataType::ProjectKey,
-            "http://invalid-control-plane:9000".to_string(),
-            provider,
-            None,
-        );
-
-        let locator = Locator::from_in_process_service(service);
-
-        // Wait for locator to be ready
-        for _ in 0..50 {
-            if locator.is_ready() {
-                break;
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        }
-        assert!(locator.is_ready(), "Locator should be ready");
-
-        locator
-    }
 
     fn build_request(project_configs_request: ProjectConfigsRequest) -> Request<HandlerBody> {
         let body = serialize_to_body(&project_configs_request).unwrap();

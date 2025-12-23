@@ -235,11 +235,11 @@ mod tests {
             ],
             listener: config::Listener {
                 host: "127.0.0.1".to_string(),
-                port: 8010,
+                port: 8080,
             },
             admin_listener: config::AdminListener {
                 host: "127.0.0.1".to_string(),
-                port: 8011,
+                port: 8081,
             },
             locator: config::Locator {
                 r#type: config::LocatorType::Url {

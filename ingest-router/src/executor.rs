@@ -74,10 +74,12 @@ impl Executor {
 
         loop {
             tokio::select! {
+                // TODO: add missing cells to results if we hit timeout before they returned
                 _ = &mut timeout => break,
                 join_result = join_set.join_next() => {
                     match join_result {
                         Some(Ok(result)) => results.push(result),
+                        // TODO: panicked task should be added to the results vec as error
                         Some(Err(e)) => tracing::error!("Task panicked: {}", e),
                         None => break,
                     }

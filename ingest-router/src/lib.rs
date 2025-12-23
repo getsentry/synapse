@@ -184,7 +184,5 @@ mod tests {
         assert_eq!(parsed.project_configs.len(), 1);
         assert_eq!(parsed.pending_keys.len(), 0);
         assert_eq!(parsed.extra_fields.len(), 2);
-
-        println!("Extra fields: {:?}", parsed.extra_fields);
     }
 }

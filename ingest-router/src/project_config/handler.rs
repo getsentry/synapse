@@ -142,6 +142,11 @@ impl Handler for ProjectConfigsHandler {
                 merged.project_configs.extend(parsed.project_configs);
                 merged.extra_fields.extend(parsed.extra_fields);
                 merged.pending_keys.extend(parsed.pending_keys);
+            } else {
+                tracing::error!(
+                    cell_id = %cell_id,
+                    "Failed to deserialize project configs response from cell"
+                );
             }
         }
 

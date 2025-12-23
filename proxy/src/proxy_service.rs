@@ -206,7 +206,7 @@ mod tests {
             upstreams: vec![
                 config::UpstreamConfig {
                     name: "upstream".to_string(),
-                    url: "http://127.0.0.1:7000".to_string(),
+                    url: "http://127.0.0.1:9000".to_string(),
                 },
                 config::UpstreamConfig {
                     name: "invalid_upstream".to_string(),
@@ -235,11 +235,11 @@ mod tests {
             ],
             listener: config::Listener {
                 host: "127.0.0.1".to_string(),
-                port: 8080,
+                port: 8010,
             },
             admin_listener: config::AdminListener {
                 host: "127.0.0.1".to_string(),
-                port: 8081,
+                port: 8011,
             },
             locator: config::Locator {
                 r#type: config::LocatorType::Url {

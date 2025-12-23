@@ -1,6 +1,7 @@
 pub mod api;
 pub mod config;
 pub mod errors;
+mod executor;
 pub mod handler;
 pub mod http;
 pub mod locale;
@@ -11,7 +12,7 @@ pub mod router;
 mod testutils;
 
 use crate::errors::IngestRouterError;
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper::StatusCode;
 use hyper::body::Bytes;
 use hyper::service::Service;
@@ -24,9 +25,11 @@ use std::pin::Pin;
 pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
     let locator = Locator::new(config.locator.to_client_config()).await?;
 
-    let ingest_router_service = IngestRouterService {
-        router: router::Router::new(config.routes, config.locales, locator),
-    };
+    let ingest_router_service = IngestRouterService::new(
+        router::Router::new(config.routes, config.locales, locator),
+        config.relay_timeouts,
+    );
+
     let router_task = run_http_service(
         &config.listener.host,
         config.listener.port,
@@ -38,6 +41,14 @@ pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
 
 struct IngestRouterService {
     router: router::Router,
+    executor: executor::Executor,
+}
+
+impl IngestRouterService {
+    pub fn new(router: router::Router, timeouts: config::RelayTimeouts) -> Self {
+        let executor = executor::Executor::new(timeouts);
+        Self { router, executor }
+    }
 }
 
 impl<B> Service<Request<B>> for IngestRouterService
@@ -63,18 +74,9 @@ where
                     .boxed();
                 let handler_req = Request::from_parts(parts, handler_body);
 
-                // TODO: Placeholder response
-                Box::pin(async move {
-                    let (split, _metadata) = handler.split_request(handler_req, &cells).await?;
+                let executor = self.executor.clone();
 
-                    for (cell_id, req) in split {
-                        println!("Cell: {}, URI: {}", cell_id, req.uri());
-                    }
-
-                    Ok(Response::new(
-                        Full::new("ok\n".into()).map_err(|e| match e {}).boxed(),
-                    ))
-                })
+                Box::pin(async move { Ok(executor.execute(handler, handler_req, cells).await) })
             }
             None => Box::pin(async move { Ok(make_error_response(StatusCode::BAD_REQUEST)) }),
         }
@@ -84,22 +86,46 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::utils::deserialize_body;
     use crate::config::{HandlerAction, HttpMethod, Match, Route};
     use hyper::Method;
     use hyper::body::Bytes;
     use hyper::header::HOST;
 
     use crate::config::CellConfig;
-    use locator::config::LocatorDataType;
-    use locator::locator::Locator as LocatorService;
     use std::collections::HashMap;
+    use std::process::{Child, Command};
     use url::Url;
 
-    use crate::testutils::get_mock_provider;
-    use std::sync::Arc;
+    use crate::project_config::protocol::ProjectConfigsResponse;
+    use crate::testutils::create_test_locator;
+    use http_body_util::{BodyExt, Full};
+
+    struct TestServer {
+        child: Child,
+    }
+
+    impl TestServer {
+        fn spawn() -> std::io::Result<Self> {
+            let child = Command::new("python")
+                .arg("../scripts/mock_relay_api.py")
+                .spawn()?;
+
+            Ok(Self { child })
+        }
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
 
     #[tokio::test]
     async fn test_ingest_router() {
+        let _relay_server = TestServer::spawn().expect("Failed to spawn test server");
+
         let routes_config = vec![Route {
             r#match: Match {
                 host: Some("us.sentry.io".to_string()),
@@ -115,22 +141,24 @@ mod tests {
             vec![CellConfig {
                 id: "us1".to_string(),
                 sentry_url: Url::parse("https://sentry.io/us1").unwrap(),
-                relay_url: Url::parse("https://relay.io/us1").unwrap(),
+                relay_url: Url::parse("http://localhost:8000").unwrap(),
             }],
         )]);
 
-        let (_dir, provider) = get_mock_provider().await;
-        let locator_service = LocatorService::new(
-            LocatorDataType::ProjectKey,
-            "http://control-plane-url".to_string(),
-            Arc::new(provider),
-            None,
-        );
-        let locator = Locator::from_in_process_service(locator_service);
+        let locator = create_test_locator(HashMap::from([(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            "us1".to_string(),
+        )]))
+        .await;
 
-        let service = IngestRouterService {
-            router: router::Router::new(routes_config, locales, locator),
-        };
+        let service = IngestRouterService::new(
+            router::Router::new(routes_config, locales, locator),
+            config::RelayTimeouts {
+                http_timeout_secs: 5000,
+                task_initial_timeout_secs: 10000,
+                task_subsequent_timeout_secs: 10000,
+            },
+        );
 
         // Project configs request
         let request = Request::builder()
@@ -138,16 +166,25 @@ mod tests {
             .uri("/api/0/relays/projectconfigs/")
             .header(HOST, "us.sentry.io")
             .body(
-                Full::new(Bytes::from(r#"{"publicKeys": ["test-key"]}"#))
-                    .map_err(|e| match e {})
-                    .boxed(),
+                Full::new(Bytes::from(
+                    r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#,
+                ))
+                .map_err(|e| match e {})
+                .boxed(),
             )
             .unwrap();
 
         let response = service.call(request).await.unwrap();
 
-        // TODO: call the scripts/mock_relay_api.py server and validate the response
+        let (parts, body) = response.into_parts();
 
-        assert_eq!(response.status(), 200);
+        assert_eq!(parts.status, 200);
+
+        let parsed: ProjectConfigsResponse = deserialize_body(body).await.unwrap();
+        assert_eq!(parsed.project_configs.len(), 1);
+        assert_eq!(parsed.pending_keys.len(), 0);
+        assert_eq!(parsed.extra_fields.len(), 2);
+
+        println!("Extra fields: {:?}", parsed.extra_fields);
     }
 }

@@ -206,7 +206,7 @@ mod tests {
             upstreams: vec![
                 config::UpstreamConfig {
                     name: "upstream".to_string(),
-                    url: "http://127.0.0.1:9000".to_string(),
+                    url: "http://127.0.0.1:8000".to_string(),
                 },
                 config::UpstreamConfig {
                     name: "invalid_upstream".to_string(),

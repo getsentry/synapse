@@ -48,11 +48,16 @@ impl From<CellConfig> for Upstream {
 }
 
 /// Collection of upstreams grouped by cell name
+#[derive(Debug)]
+struct CellsInner {
+    /// Prioritized list of cell names (first = highest priority)
+    cell_list: Vec<String>,
+    cell_to_upstreams: HashMap<String, Upstream>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Cells {
-    /// Prioritized list of cell names (first = highest priority)
-    pub cell_list: Vec<String>,
-    pub cell_to_upstreams: HashMap<String, Upstream>,
+    inner: Arc<CellsInner>,
 }
 
 impl Cells {
@@ -70,17 +75,26 @@ impl Cells {
         }
 
         Self {
-            cell_list,
-            cell_to_upstreams,
+            inner: Arc::new(CellsInner {
+                cell_list,
+                cell_to_upstreams,
+            }),
         }
+    }
+
+    pub fn cell_list(&self) -> &[String] {
+        &self.inner.cell_list
+    }
+
+    pub fn cell_to_upstreams(&self) -> &HashMap<String, Upstream> {
+        &self.inner.cell_to_upstreams
     }
 }
 
 /// Maps locales to their cells (which map to upstreams)
-#[derive(Clone, Debug)]
 pub struct Locales {
     /// Mapping from locale to cells
-    locale_to_cells: HashMap<String, Arc<Cells>>,
+    locale_to_cells: HashMap<String, Cells>,
 }
 
 impl Locales {
@@ -90,7 +104,7 @@ impl Locales {
         let locale_to_cells = locales
             .into_iter()
             .map(|(locale, cells)| {
-                let cells = Arc::new(Cells::from_config(cells));
+                let cells = Cells::from_config(cells);
                 (locale, cells)
             })
             .collect();
@@ -99,7 +113,7 @@ impl Locales {
     }
 
     /// Get the cells for a specific locale
-    pub fn get_cells(&self, locale: &str) -> Option<Arc<Cells>> {
+    pub fn get_cells(&self, locale: &str) -> Option<Cells> {
         self.locale_to_cells.get(locale).cloned()
     }
 }
@@ -147,20 +161,20 @@ mod tests {
 
         // Verify US locale has 2 cells
         let us_cells = locales.get_cells("us").unwrap();
-        assert_eq!(us_cells.cell_to_upstreams.len(), 2);
-        assert_eq!(us_cells.cell_list.len(), 2);
-        assert!(us_cells.cell_to_upstreams.contains_key("us1"));
-        assert!(us_cells.cell_to_upstreams.contains_key("us2"));
+        assert_eq!(us_cells.cell_to_upstreams().len(), 2);
+        assert_eq!(us_cells.cell_list().len(), 2);
+        assert!(us_cells.cell_to_upstreams().contains_key("us1"));
+        assert!(us_cells.cell_to_upstreams().contains_key("us2"));
         // Verify priority order
-        assert_eq!(us_cells.cell_list[0], "us1");
-        assert_eq!(us_cells.cell_list[1], "us2");
+        assert_eq!(us_cells.cell_list()[0], "us1");
+        assert_eq!(us_cells.cell_list()[1], "us2");
 
         // Verify DE locale has 1 cell
         let de_cells = locales.get_cells("de").unwrap();
-        assert_eq!(de_cells.cell_to_upstreams.len(), 1);
-        assert_eq!(de_cells.cell_list.len(), 1);
-        assert!(de_cells.cell_to_upstreams.contains_key("de1"));
-        assert_eq!(de_cells.cell_list[0], "de1");
+        assert_eq!(de_cells.cell_to_upstreams().len(), 1);
+        assert_eq!(de_cells.cell_list().len(), 1);
+        assert!(de_cells.cell_to_upstreams().contains_key("de1"));
+        assert_eq!(de_cells.cell_list()[0], "de1");
 
         // Verify unknown locale returns None
         assert!(locales.get_cells("unknown").is_none());

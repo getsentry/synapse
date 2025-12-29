@@ -68,12 +68,36 @@ impl Executor {
             });
         }
 
-        // Collect results with timeout
         let mut results = Vec::new();
 
-        // TODO: Use task_initial_timeout_secs for first result, then task_subsequent_timeout_secs
-        // for remaining results. Currently using http_timeout_secs for the entire collection.
-        let timeout = sleep(Duration::from_secs(self.timeouts.http_timeout_secs));
+        // Use the longer initial timeout for the first result
+        let initial_timeout = sleep(Duration::from_secs(self.timeouts.task_initial_timeout_secs));
+
+        tokio::select! {
+            _ = initial_timeout => {
+                // Add timeout errors for cells that didn't respond
+                for cell_id in pending_cells.drain() {
+                    results.push((cell_id.clone(), Err(IngestRouterError::UpstreamTimeout(cell_id))));
+                }
+
+            }
+            join_result = join_set.join_next() => {
+                match join_result {
+                    Some(Ok((cell_id, result))) => {
+                        pending_cells.remove(&cell_id);
+                        results.push((cell_id, result));
+                    }
+                    Some(Err(e)) => tracing::error!("Task panicked: {}", e),
+                    // The join set is empty -- this should never happen
+                    None => return results,
+                }
+            }
+        }
+
+        // Use the shorter subsequent timeout for any remaining results
+        let timeout = sleep(Duration::from_secs(
+            self.timeouts.task_subsequent_timeout_secs,
+        ));
         tokio::pin!(timeout);
 
         loop {
@@ -93,6 +117,7 @@ impl Executor {
                         },
                         // TODO: panicked task should be added to the results vec as error
                         Some(Err(e)) => tracing::error!("Task panicked: {}", e),
+                        // No more tasks
                         None => break,
                     }
                 }

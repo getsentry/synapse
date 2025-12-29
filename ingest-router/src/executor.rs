@@ -74,13 +74,7 @@ impl Executor {
         let initial_timeout = sleep(Duration::from_secs(self.timeouts.task_initial_timeout_secs));
 
         tokio::select! {
-            _ = initial_timeout => {
-                // Add timeout errors for cells that didn't respond
-                for cell_id in pending_cells.drain() {
-                    results.push((cell_id.clone(), Err(IngestRouterError::UpstreamTimeout(cell_id))));
-                }
-
-            }
+            _ = initial_timeout => {},
             join_result = join_set.join_next() => {
                 match join_result {
                     Some(Ok((cell_id, result))) => {
@@ -103,10 +97,6 @@ impl Executor {
         loop {
             tokio::select! {
                 _ = &mut timeout => {
-                    // Add timeout errors for cells that didn't respond
-                    for cell_id in pending_cells.drain() {
-                        results.push((cell_id.clone(), Err(IngestRouterError::UpstreamTimeout(cell_id))));
-                    }
                     break;
                 },
                 join_result = join_set.join_next() => {
@@ -115,13 +105,20 @@ impl Executor {
                             pending_cells.remove(&cell_id);
                             results.push((cell_id, result));
                         },
-                        // TODO: panicked task should be added to the results vec as error
                         Some(Err(e)) => tracing::error!("Task panicked: {}", e),
                         // No more tasks
                         None => break,
                     }
                 }
             }
+        }
+
+        // Add all remaining pending cells to results
+        for cell_id in pending_cells.drain() {
+            results.push((
+                cell_id.clone(),
+                Err(IngestRouterError::UpstreamTimeout(cell_id)),
+            ));
         }
 
         results

@@ -11,6 +11,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use shared::http::make_error_response;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tokio::time::{Duration, sleep};
@@ -52,12 +53,15 @@ impl Executor {
     ) -> Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)> {
         let mut join_set = JoinSet::new();
 
+        let mut pending_cells = HashSet::new();
+
         // Spawn requests for each cell
         for (cell_id, request) in requests {
             let cells = cells.clone();
             let client = self.client.clone();
             let timeout_secs = self.timeouts.http_timeout_secs;
 
+            pending_cells.insert(cell_id.clone());
             join_set.spawn(async move {
                 let result = send_to_cell(&client, &cell_id, request, &cells, timeout_secs).await;
                 (cell_id, result)
@@ -74,11 +78,19 @@ impl Executor {
 
         loop {
             tokio::select! {
-                // TODO: add missing cells to results if we hit timeout before they returned
-                _ = &mut timeout => break,
+                _ = &mut timeout => {
+                    // Add timeout errors for cells that didn't respond
+                    for cell_id in pending_cells.drain() {
+                        results.push((cell_id.clone(), Err(IngestRouterError::UpstreamTimeout(cell_id))));
+                    }
+                    break;
+                },
                 join_result = join_set.join_next() => {
                     match join_result {
-                        Some(Ok(result)) => results.push(result),
+                        Some(Ok((cell_id, result))) => {
+                            pending_cells.remove(&cell_id);
+                            results.push((cell_id, result));
+                        },
                         // TODO: panicked task should be added to the results vec as error
                         Some(Err(e)) => tracing::error!("Task panicked: {}", e),
                         None => break,

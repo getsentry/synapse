@@ -12,6 +12,7 @@ use hyper::body::Bytes;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use hyper::{Request, Response};
 use locator::client::Locator;
+use shared::http::make_error_response;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Debug)]
@@ -160,10 +161,7 @@ impl Handler for ProjectConfigsHandler {
 
             Response::from_parts(p, body)
         } else {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Bytes::new())
-                .unwrap()
+            make_error_response(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

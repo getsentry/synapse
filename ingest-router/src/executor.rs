@@ -1,10 +1,10 @@
 use crate::config::RelayTimeouts;
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler, HandlerBody};
+use crate::handler::{CellId, Handler};
 use crate::http::send_to_upstream;
 use crate::locale::Cells;
 use http::StatusCode;
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Request, Response};
 use hyper_util::client::legacy::Client;
@@ -32,9 +32,9 @@ impl Executor {
     pub async fn execute(
         &self,
         handler: Arc<dyn Handler>,
-        request: Request<HandlerBody>,
+        request: Request<Bytes>,
         cells: Cells,
-    ) -> Response<HandlerBody> {
+    ) -> Response<Bytes> {
         let (split_requests, metadata) = match handler.split_request(request, &cells).await {
             Ok(result) => result,
             Err(_e) => return make_error_response(StatusCode::INTERNAL_SERVER_ERROR),
@@ -48,9 +48,9 @@ impl Executor {
     /// Execute split requests in parallel against their cell upstreams
     async fn execute_parallel(
         &self,
-        requests: Vec<(CellId, Request<HandlerBody>)>,
+        requests: Vec<(CellId, Request<Bytes>)>,
         cells: Cells,
-    ) -> Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)> {
+    ) -> Vec<(CellId, Result<Response<Bytes>, IngestRouterError>)> {
         let mut join_set = JoinSet::new();
 
         let mut pending_cells = HashSet::new();
@@ -125,38 +125,24 @@ impl Executor {
     }
 }
 
-/// Send a request to a specific cell's upstream
-/// TODO: simplify body types so these conversions are not needed - consider converting to
-/// Bytes at the boundary and using bytes only throughout the handlers.
+/// Send a request to a specific cell's upstream.
 async fn send_to_cell(
     client: &Client<HttpConnector, Full<Bytes>>,
     cell_id: &str,
-    request: Request<HandlerBody>,
+    request: Request<Bytes>,
     cells: &Cells,
     timeout_secs: u64,
-) -> Result<Response<HandlerBody>, IngestRouterError> {
+) -> Result<Response<Bytes>, IngestRouterError> {
     // Look up the upstream for this cell
     let upstream = cells
         .cell_to_upstreams()
         .get(cell_id)
         .ok_or_else(|| IngestRouterError::InternalError(format!("Unknown cell: {}", cell_id)))?;
 
-    // Convert HandlerBody to Full<Bytes> for the HTTP client
+    // Wrap Bytes in Full for the HTTP client
     let (parts, body) = request.into_parts();
-    let body_bytes = body
-        .collect()
-        .await
-        .map_err(|e| IngestRouterError::RequestBodyError(e.to_string()))?
-        .to_bytes();
+    let request = Request::from_parts(parts, Full::new(body));
 
-    let request = Request::from_parts(parts, Full::new(body_bytes));
-
-    // Send to upstream (using relay_url)
-    let response = send_to_upstream(client, &upstream.relay_url, request, timeout_secs).await?;
-
-    // Convert Response<Bytes> back to Response<HandlerBody>
-    let (parts, body_bytes) = response.into_parts();
-    let handler_body: HandlerBody = Full::new(body_bytes).map_err(|e| match e {}).boxed();
-
-    Ok(Response::from_parts(parts, handler_body))
+    // Send to upstream (using relay_url) - returns Response<Bytes>
+    send_to_upstream(client, &upstream.relay_url, request, timeout_secs).await
 }

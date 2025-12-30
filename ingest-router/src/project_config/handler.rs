@@ -120,11 +120,26 @@ impl Handler for ProjectConfigsHandler {
         let mut merged = ProjectConfigsResponse::new();
         merged.pending_keys.extend(meta.unassigned_keys);
 
-        // Parts is populated from the first response. The responses are previously
-        // sorted so successful responses (if they exist) come first.
+        // Order the responses so successful ones come first
+        let sorted_responses = {
+            let mut sorted = responses;
+            sorted.sort_by_key(|(_, result)| match result {
+                Ok(r) if r.status().is_success() => 0,
+                Ok(_) => 1,
+                Err(_) => 2,
+            });
+            sorted
+        };
+
+        // True if at least one response is ok
+        let has_successful_response = sorted_responses
+            .first()
+            .is_some_and(|(_, r)| r.as_ref().ok().is_some_and(|r| r.status().is_success()));
+
+        // Parts is populated from the first response.
         let mut parts: Option<Parts> = None;
 
-        for (cell_id, result) in responses {
+        for (cell_id, result) in sorted_responses {
             let successful_response = result.ok().filter(|r| r.status().is_success());
 
             let Some(response) = successful_response else {
@@ -154,14 +169,15 @@ impl Handler for ProjectConfigsHandler {
 
         let serialized_body = serialize_to_body(&merged);
 
-        if let (Some(mut p), Ok(body)) = (parts, serialized_body) {
-            normalize_headers(&mut p.headers, p.version);
-            p.headers
-                .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-
-            Response::from_parts(p, body)
-        } else {
-            make_error_response(StatusCode::INTERNAL_SERVER_ERROR)
+        match (has_successful_response, parts, serialized_body) {
+            (true, Some(mut p), Ok(body)) => {
+                normalize_headers(&mut p.headers, p.version);
+                p.headers
+                    .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                return Response::from_parts(p, body);
+            }
+            (_, Some(p), _) => make_error_response(p.status),
+            (_, _, _) => make_error_response(StatusCode::BAD_GATEWAY),
         }
     }
 }

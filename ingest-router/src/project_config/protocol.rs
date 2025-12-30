@@ -75,3 +75,9 @@ impl ProjectConfigsResponse {
         }
     }
 }
+
+impl Default for ProjectConfigsResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}

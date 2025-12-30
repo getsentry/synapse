@@ -17,6 +17,7 @@ from urllib.parse import urlparse, parse_qs
 DEFAULT_MOCK_DATA = {
     "valid_keys": {
         "abc123def456": {"project_id": 100, "project_slug": "test-project", "org_id": 1},
+        "a" * 32: {"project_id": 100, "project_slug": "test-project", "org_id": 1},
         "xyz789uvw012": {"project_id": 200, "project_slug": "another-project", "org_id": 2},
     },
     "inactive_keys": {
@@ -113,11 +114,12 @@ def process_relay_request(public_keys: List[str], mock_data: MockRelayData) -> D
 
     return configs
 
+
 class MockRelayHandler(BaseHTTPRequestHandler):
     """HTTP request handler for mock relay endpoint"""
     
     # Class variable to hold mock data (can be set before creating server)
-    mock_data: MockRelayData = None
+    mock_data: Optional[MockRelayData] = None
     
     def _read_json_body(self) -> dict:
         """Read and parse JSON body from request"""
@@ -145,7 +147,7 @@ class MockRelayHandler(BaseHTTPRequestHandler):
             try:
                 request_data = self._read_json_body()
                 query_params = parse_qs(parsed_path.query)
-                version = query_params.get("version", ["2"])[0]
+                version = query_params.get("version", ["3"])[0]
                 public_keys = request_data.get("publicKeys", [])
                 
                 # Process the request

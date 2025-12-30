@@ -1,7 +1,8 @@
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler, HandlerBody, SplitMetadata};
+use crate::handler::{CellId, Handler, SplitMetadata};
 use crate::locale::Cells;
 use async_trait::async_trait;
+use hyper::body::Bytes;
 use hyper::{Request, Response};
 
 /// This endpoint returns success if any one upstream is available.
@@ -12,17 +13,17 @@ pub struct HealthHandler {}
 impl Handler for HealthHandler {
     async fn split_request(
         &self,
-        _request: Request<HandlerBody>,
+        _request: Request<Bytes>,
         _cells: &Cells,
-    ) -> Result<(Vec<(CellId, Request<HandlerBody>)>, SplitMetadata), IngestRouterError> {
+    ) -> Result<(Vec<(CellId, Request<Bytes>)>, SplitMetadata), IngestRouterError> {
         unimplemented!();
     }
 
     async fn merge_responses(
         &self,
-        _responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
+        _responses: Vec<(CellId, Result<Response<Bytes>, IngestRouterError>)>,
         _metadata: SplitMetadata,
-    ) -> Response<HandlerBody> {
+    ) -> Response<Bytes> {
         unimplemented!();
     }
 }

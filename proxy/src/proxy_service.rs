@@ -12,7 +12,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use locator::client::Locator;
-use shared::http::{add_via_header, filter_hop_by_hop, make_error_response};
+use shared::http::{add_via_header, filter_hop_by_hop, make_boxed_error_response};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -113,7 +113,7 @@ where
                         Some(pq) => pq.as_str(),
                         None => {
                             tracing::warn!("Request URI missing path and query");
-                            return Ok(make_error_response(StatusCode::BAD_REQUEST));
+                            return Ok(make_boxed_error_response(StatusCode::BAD_REQUEST));
                         }
                     };
 
@@ -126,7 +126,9 @@ where
                         Ok(uri) => uri,
                         Err(e) => {
                             tracing::error!("Failed to build target URI: {e}");
-                            return Ok(make_error_response(StatusCode::INTERNAL_SERVER_ERROR));
+                            return Ok(make_boxed_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            ));
                         }
                     };
 
@@ -153,13 +155,13 @@ where
                         }
                         Err(e) => {
                             tracing::error!("Upstream request failed: {e}");
-                            Ok(make_error_response(StatusCode::BAD_GATEWAY))
+                            Ok(make_boxed_error_response(StatusCode::BAD_GATEWAY))
                         }
                     }
                 }
                 None => {
                     // No upstream found, return 404
-                    Ok(make_error_response(StatusCode::NOT_FOUND))
+                    Ok(make_boxed_error_response(StatusCode::NOT_FOUND))
                 }
             }
         })

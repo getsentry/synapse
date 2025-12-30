@@ -12,14 +12,13 @@ pub mod router;
 mod testutils;
 
 use crate::errors::IngestRouterError;
-use http_body_util::{BodyExt, combinators::BoxBody};
+use http_body_util::{BodyExt, Full};
 use hyper::StatusCode;
 use hyper::body::Bytes;
 use hyper::service::Service;
 use hyper::{Request, Response};
 use locator::client::Locator;
-use shared::http::make_error_response;
-use shared::http::run_http_service;
+use shared::http::{make_error_response, run_http_service};
 use std::pin::Pin;
 
 pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
@@ -57,7 +56,7 @@ where
     B::Error: std::error::Error + Send + Sync + 'static,
     B: Unpin,
 {
-    type Response = Response<BoxBody<Bytes, Self::Error>>;
+    type Response = Response<Full<Bytes>>;
     type Error = IngestRouterError;
     type Future =
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
@@ -67,18 +66,26 @@ where
 
         match maybe_handler {
             Some((handler, cells)) => {
-                // Convert Request<B> to Request<HandlerBody>
                 let (parts, body) = req.into_parts();
-                let handler_body = body
-                    .map_err(|e| IngestRouterError::RequestBodyError(e.to_string()))
-                    .boxed();
-                let handler_req = Request::from_parts(parts, handler_body);
-
                 let executor = self.executor.clone();
 
-                Box::pin(async move { Ok(executor.execute(handler, handler_req, cells).await) })
+                Box::pin(async move {
+                    let body_bytes = match body.collect().await {
+                        Ok(c) => c.to_bytes(),
+                        Err(_) => {
+                            return Ok(make_error_response(StatusCode::BAD_REQUEST).map(Full::new));
+                        }
+                    };
+                    let request = Request::from_parts(parts, body_bytes);
+                    let response = executor.execute(handler, request, cells).await;
+                    Ok(response.map(Full::new))
+                })
             }
-            None => Box::pin(async move { Ok(make_error_response(StatusCode::BAD_REQUEST)) }),
+            None => {
+                Box::pin(
+                    async move { Ok(make_error_response(StatusCode::BAD_REQUEST).map(Full::new)) },
+                )
+            }
         }
     }
 }
@@ -87,19 +94,14 @@ where
 mod tests {
     use super::*;
     use crate::api::utils::deserialize_body;
-    use crate::config::{HandlerAction, HttpMethod, Match, Route};
+    use crate::config::{CellConfig, HandlerAction, HttpMethod, Match, Route};
+    use crate::project_config::protocol::ProjectConfigsResponse;
+    use crate::testutils::create_test_locator;
     use hyper::Method;
-    use hyper::body::Bytes;
     use hyper::header::HOST;
-
-    use crate::config::CellConfig;
     use std::collections::HashMap;
     use std::process::{Child, Command};
     use url::Url;
-
-    use crate::project_config::protocol::ProjectConfigsResponse;
-    use crate::testutils::create_test_locator;
-    use http_body_util::{BodyExt, Full};
 
     struct TestServer {
         child: Child,
@@ -165,13 +167,9 @@ mod tests {
             .method(Method::POST)
             .uri("/api/0/relays/projectconfigs/")
             .header(HOST, "us.sentry.io")
-            .body(
-                Full::new(Bytes::from(
-                    r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#,
-                ))
-                .map_err(|e| match e {})
-                .boxed(),
-            )
+            .body(Full::new(Bytes::from(
+                r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#,
+            )))
             .unwrap();
 
         let response = service.call(request).await.unwrap();
@@ -180,7 +178,9 @@ mod tests {
 
         assert_eq!(parts.status, 200);
 
-        let parsed: ProjectConfigsResponse = deserialize_body(body).await.unwrap();
+        // Convert BoxBody to Bytes for deserialize_body
+        let body_bytes = body.collect().await.unwrap().to_bytes();
+        let parsed: ProjectConfigsResponse = deserialize_body(body_bytes).unwrap();
         assert_eq!(parsed.project_configs.len(), 1);
         assert_eq!(parsed.pending_keys.len(), 0);
         assert_eq!(parsed.extra_fields.len(), 2);

@@ -5,7 +5,7 @@ use hyper::body::{Bytes, Incoming};
 use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use locator::client::Locator;
-use shared::http::make_error_response;
+use shared::http::make_boxed_error_response;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -35,9 +35,9 @@ impl Service<Request<Incoming>> for AdminService {
                 }
                 "/ready" => match is_ready {
                     true => Response::new(Full::new("ok\n".into()).map_err(|e| match e {}).boxed()),
-                    false => make_error_response(StatusCode::SERVICE_UNAVAILABLE),
+                    false => make_boxed_error_response(StatusCode::SERVICE_UNAVAILABLE),
                 },
-                _ => make_error_response(StatusCode::NOT_FOUND),
+                _ => make_boxed_error_response(StatusCode::NOT_FOUND),
             };
             Ok(res)
         })

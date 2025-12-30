@@ -6,6 +6,7 @@ use http::header::{
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::StatusCode;
+use hyper::body::Body;
 use hyper::body::{Bytes, Incoming};
 use hyper::service::Service;
 use hyper::{Request, Response};
@@ -15,13 +16,12 @@ use hyper_util::server::conn::auto::Builder;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-pub async fn run_http_service<S, E>(host: &str, port: u16, service: S) -> Result<(), E>
+pub async fn run_http_service<S, B, E>(host: &str, port: u16, service: S) -> Result<(), E>
 where
-    S: Service<Request<Incoming>, Response = Response<BoxBody<Bytes, E>>, Error = E>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<Request<Incoming>, Response = Response<B>, Error = E> + Send + Sync + 'static,
     S::Future: Send + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: std::error::Error + Send + Sync,
     E: From<std::io::Error> + std::error::Error + Send + Sync + 'static,
 {
     let listener = TcpListener::bind(format!("{host}:{port}")).await?;
@@ -164,15 +164,23 @@ mod tests {
     }
 }
 
-pub fn make_error_response<E>(status_code: StatusCode) -> Response<BoxBody<Bytes, E>>
-where
-    E: std::error::Error + 'static,
-{
+/// Creates an error response with the status message as body.
+pub fn make_error_response(status_code: StatusCode) -> Response<Bytes> {
     let message = status_code
         .canonical_reason()
         .unwrap_or("an error occurred");
 
-    let mut response = Response::new(Full::new(message.into()).map_err(|e| match e {}).boxed());
+    let mut response = Response::new(Bytes::from(message));
     *response.status_mut() = status_code;
     response
+}
+
+/// Boxed version for services that need BoxBody (e.g., streaming proxies)
+pub fn make_boxed_error_response<E>(status_code: StatusCode) -> Response<BoxBody<Bytes, E>>
+where
+    E: 'static,
+{
+    make_error_response(status_code)
+        .map(Full::new)
+        .map(|body| body.map_err(|e| match e {}).boxed())
 }

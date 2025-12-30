@@ -1,13 +1,11 @@
 use crate::errors::IngestRouterError;
 use crate::locale::Cells;
 use async_trait::async_trait;
-use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use hyper::{Request, Response};
 use std::any::Any;
 
 pub type CellId = String;
-pub type HandlerBody = BoxBody<Bytes, IngestRouterError>;
 pub type SplitMetadata = Box<dyn Any + Send>;
 
 /// Handler for endpoints that split requests across cells and merge results
@@ -28,9 +26,9 @@ pub trait Handler: Send + Sync {
     /// per-cell requests that will be sent to upstreams.
     async fn split_request(
         &self,
-        request: Request<HandlerBody>,
+        request: Request<Bytes>,
         cells: &Cells,
-    ) -> Result<(Vec<(CellId, Request<HandlerBody>)>, SplitMetadata), IngestRouterError>;
+    ) -> Result<(Vec<(CellId, Request<Bytes>)>, SplitMetadata), IngestRouterError>;
 
     /// Merge results from multiple cells into a single response
     ///
@@ -38,7 +36,7 @@ pub trait Handler: Send + Sync {
     /// and incorporates metadata from the split phase.
     async fn merge_responses(
         &self,
-        responses: Vec<(CellId, Result<Response<HandlerBody>, IngestRouterError>)>,
+        responses: Vec<(CellId, Result<Response<Bytes>, IngestRouterError>)>,
         metadata: SplitMetadata,
-    ) -> Response<HandlerBody>;
+    ) -> Response<Bytes>;
 }

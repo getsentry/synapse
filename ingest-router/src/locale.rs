@@ -24,6 +24,7 @@
 //! during request processing.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use url::Url;
 
 use crate::config::CellConfig;
@@ -79,7 +80,7 @@ impl Cells {
 #[derive(Clone, Debug)]
 pub struct Locales {
     /// Mapping from locale to cells
-    locale_to_cells: HashMap<String, Cells>,
+    locale_to_cells: HashMap<String, Arc<Cells>>,
 }
 
 impl Locales {
@@ -89,7 +90,7 @@ impl Locales {
         let locale_to_cells = locales
             .into_iter()
             .map(|(locale, cells)| {
-                let cells = Cells::from_config(cells);
+                let cells = Arc::new(Cells::from_config(cells));
                 (locale, cells)
             })
             .collect();
@@ -98,8 +99,8 @@ impl Locales {
     }
 
     /// Get the cells for a specific locale
-    pub fn get_cells(&self, locale: &str) -> Option<&Cells> {
-        self.locale_to_cells.get(locale)
+    pub fn get_cells(&self, locale: &str) -> Option<Arc<Cells>> {
+        self.locale_to_cells.get(locale).cloned()
     }
 }
 

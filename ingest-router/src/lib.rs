@@ -70,12 +70,12 @@ where
                 let executor = self.executor.clone();
 
                 Box::pin(async move {
-                    let body_bytes = body
-                        .collect()
-                        .await
-                        .map(|c| c.to_bytes())
-                        .unwrap_or_else(|_| Bytes::new());
-
+                    let body_bytes = match body.collect().await {
+                        Ok(c) => c.to_bytes(),
+                        Err(_) => {
+                            return Ok(make_error_response(StatusCode::BAD_REQUEST).map(Full::new));
+                        }
+                    };
                     let request = Request::from_parts(parts, body_bytes);
                     let response = executor.execute(handler, request, cells).await;
                     Ok(response.map(Full::new))

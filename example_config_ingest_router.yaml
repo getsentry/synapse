@@ -48,6 +48,48 @@ ingest_router:
       action:
         handler: relay_project_configs
       locale: de
+    - match:
+        host: us.sentry.io
+        path: /api/0/relays/live/
+        method: GET
+      action:
+        handler: health
+      locale: us
+    - match:
+        host: de.sentry.io
+        path: /api/0/relays/live/
+        method: GET
+      action:
+        handler: health
+      locale: de
+    - match:
+        host: us.sentry.io
+        path: /api/0/0/relays/register/challenge/
+        method: POST
+      action:
+        handler: register_challenge
+      locale: us
+    - match:
+        host: de.sentry.io
+        path: /api/0/0/relays/register/challenge/
+        method: POST
+      action:
+        handler: register_challenge
+      locale: de
+    - match:
+        host: us.sentry.io
+        path: /api/0/0/relays/register/response/
+        method: POST
+      action:
+        handler: register_response
+      locale: us
+    - match:
+        host: de.sentry.io
+        path: /api/0/0/relays/register/response/
+        method: POST
+      action:
+        handler: register_response
+      locale: de
 
 # logging:
 #   sentry_dsn: "your_sentry_dsn_here"

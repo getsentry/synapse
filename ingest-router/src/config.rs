@@ -57,6 +57,8 @@ pub enum HandlerAction {
     RelayProjectConfigs,
     /// Healthcheck endpoint
     Health,
+    RegisterChallenge,
+    RegisterResponse,
 }
 
 // Timeout configuration for relay project configs handler

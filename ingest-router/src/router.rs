@@ -1,4 +1,6 @@
 use crate::api::health::HealthHandler;
+use crate::api::register_challenge::RegisterChallenge;
+use crate::api::register_response::RegisterResponse;
 use crate::config::{CellConfig, HandlerAction, Route};
 use crate::handler::Handler;
 use crate::locale::{Cells, Locales};
@@ -28,6 +30,8 @@ impl Router {
                 Arc::new(ProjectConfigsHandler::new(locator)) as Arc<dyn Handler>,
             ),
             (HandlerAction::Health, Arc::new(HealthHandler {})),
+            (HandlerAction::RegisterChallenge, Arc::new(RegisterChallenge {})),
+            (HandlerAction::RegisterResponse, Arc::new(RegisterResponse {})),
         ]);
 
         Self {

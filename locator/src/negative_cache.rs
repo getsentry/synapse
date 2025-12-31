@@ -2,6 +2,8 @@
 // prevent repeated lookups for missing keys.
 use moka::sync::Cache;
 use std::time::Duration;
+use crate::metrics_defs::{NEGATIVE_CACHE_HIT, NEGATIVE_CACHE_MISS};
+use shared::counter;
 
 const SIZE: u64 = 1000;
 const TTL_SECS: u64 = 5;
@@ -25,12 +27,12 @@ impl NegativeCache {
 
     pub fn contains(&self, key: &str) -> bool {
         let cache_hit = self.cache.contains_key(key);
-        let metric_name = if cache_hit {
-            "negative_cache.hit"
+        let metric_def = if cache_hit {
+            NEGATIVE_CACHE_HIT
         } else {
-            "negative_cache.miss"
+            NEGATIVE_CACHE_MISS
         };
-        metrics::counter!(metric_name).increment(1);
+        counter!(metric_def).increment(1);
         cache_hit
     }
 }

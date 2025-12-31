@@ -12,6 +12,7 @@ metrics-exporter-statsd = { workspace = true }
 proxy = { path = "../proxy" }
 sentry = { workspace = true }
 serde = { workspace = true }
+shared = { path = "../shared" }
 serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

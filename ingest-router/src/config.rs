@@ -340,9 +340,9 @@ routes:
         handler: relay_project_configs
       locale: us
     - match:
-        path: /api/healthcheck
+        path: /api/0/relays/live/
       action:
-        handler: relay_project_configs
+        handler: health
       locale: us
 "#;
 

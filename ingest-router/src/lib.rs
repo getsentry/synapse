@@ -198,7 +198,7 @@ mod tests {
 
         // Healthcheck
         let request = Request::builder()
-            .method(Method::POST)
+            .method(Method::GET)
             .uri("/api/0/relays/live/")
             .header(HOST, "us.sentry.io")
             .body(Full::new(Bytes::new()))

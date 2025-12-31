@@ -5,6 +5,10 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::{Request, Response};
 
+/// Handler for the `/api/0/relays/register/challenge/` endpoint.
+///
+/// This request can be routed to any cell. Sentry will use outboxes
+/// to forward the request to the appropriate cell.
 pub struct RegisterChallenge;
 
 #[async_trait]

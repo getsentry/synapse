@@ -5,8 +5,10 @@ use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::{Request, Response};
 
-/// This endpoint returns success if any one upstream is available.
-/// Synapse should continue to operate even if one cell is down.
+/// Handler for the `/api/0/relays/register/response/` endpoint.
+///
+/// This request can be routed to any cell. Sentry will use outboxes
+/// to forward the request to the appropriate cell.
 pub struct RegisterResponse;
 
 #[async_trait]

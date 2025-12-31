@@ -82,7 +82,10 @@ fn cli() -> Result<(), CliError> {
             Ok(())
         }
         CliCommand::ShowMetrics => {
-            println!("{}", generate_metrics_table(locator::metrics_defs::ALL_METRICS));
+            println!(
+                "{}",
+                generate_metrics_table(locator::metrics_defs::ALL_METRICS)
+            );
             Ok(())
         }
         CliCommand::SyncMetrics => {

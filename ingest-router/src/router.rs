@@ -30,8 +30,14 @@ impl Router {
                 Arc::new(ProjectConfigsHandler::new(locator)) as Arc<dyn Handler>,
             ),
             (HandlerAction::Health, Arc::new(HealthHandler {})),
-            (HandlerAction::RegisterChallenge, Arc::new(RegisterChallenge {})),
-            (HandlerAction::RegisterResponse, Arc::new(RegisterResponse {})),
+            (
+                HandlerAction::RegisterChallenge,
+                Arc::new(RegisterChallenge {}),
+            ),
+            (
+                HandlerAction::RegisterResponse,
+                Arc::new(RegisterResponse {}),
+            ),
         ]);
 
         Self {

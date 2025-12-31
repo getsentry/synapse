@@ -13,3 +13,7 @@ Synapse consists of 3 main components:
 
 - **Ingest Router**: A stateless, fan-out router that sits between relay-pop and relay, which embeds cellular information inside the project config object, enabling POPs to route ingestion traffic to the correct upstream Relay for each project. See the [ingest-router docs](ingest-router/README.md).
 
+
+### Metrics
+
+Metrics emitted by Synapse are described [here](METRICS.md).

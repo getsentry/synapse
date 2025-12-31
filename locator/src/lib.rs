@@ -5,6 +5,7 @@ pub mod config;
 mod control_plane;
 mod cursor;
 pub mod locator;
+pub mod metrics_defs;
 mod negative_cache;
 pub mod types;
 use std::sync::Arc;

@@ -1865,6 +1865,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shared",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -3163,6 +3164,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "metrics",
  "tokio",
  "tracing",
 ]
@@ -3288,6 +3290,7 @@ dependencies = [
  "sentry",
  "serde",
  "serde_yaml",
+ "shared",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

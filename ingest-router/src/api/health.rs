@@ -111,7 +111,7 @@ mod tests {
         let (cell_requests, _metadata) = handler.split_request(request, &cells).await.unwrap();
 
         assert_eq!(cell_requests.len(), 2);
-        let cell_ids = cell_requests.iter().map(|(id, _)| id.as_str()).collect();
+        let cell_ids: Vec<_> = cell_requests.iter().map(|(id, _)| id.as_str()).collect();
         assert!(cell_ids.contains(&"us1"));
         assert!(cell_ids.contains(&"us2"));
     }

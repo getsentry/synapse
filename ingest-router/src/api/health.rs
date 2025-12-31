@@ -46,7 +46,9 @@ impl Handler for HealthHandler {
         for (cell_id, result) in responses {
             match result {
                 Ok(response) if response.status().is_success() => {
-                    return response;
+                    let (mut parts, body) = response.into_parts();
+                    normalize_headers(&mut parts.headers, parts.version);
+                    return Response::from_parts(parts, body);
                 }
                 Ok(response) => {
                     tracing::warn!(

@@ -1,6 +1,6 @@
 use crate::config::RelayTimeouts;
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler};
+use crate::handler::{CellId, ExecutionMode, Handler};
 use crate::http::send_to_upstream;
 use crate::locale::Cells;
 use http::StatusCode;
@@ -40,7 +40,10 @@ impl Executor {
             Err(_e) => return make_error_response(StatusCode::INTERNAL_SERVER_ERROR),
         };
 
-        let results = self.execute_parallel(split_requests, cells).await;
+        let results = match handler.execution_mode() {
+            ExecutionMode::Parallel => self.execute_parallel(split_requests, cells).await,
+            ExecutionMode::Failover => self.execute_failover(split_requests, cells).await,
+        };
 
         handler.merge_responses(results, metadata).await
     }
@@ -122,6 +125,51 @@ impl Executor {
         }
 
         results
+    }
+
+    /// Execute requests sequentially in priority order, stopping on first success
+    /// If no success, returns all failures
+    async fn execute_failover(
+        &self,
+        requests: Vec<(CellId, Request<Bytes>)>,
+        cells: Cells,
+    ) -> Vec<(CellId, Result<Response<Bytes>, IngestRouterError>)> {
+        let mut failures = Vec::new();
+
+        for (cell_id, request) in requests {
+            let result = send_to_cell(
+                &self.client,
+                &cell_id,
+                request,
+                &cells,
+                self.timeouts.http_timeout_secs,
+            )
+            .await;
+
+            match &result {
+                Ok(response) if response.status().is_success() => {
+                    return vec![(cell_id, result)];
+                }
+                Ok(response) => {
+                    tracing::warn!(
+                        cell_id = %cell_id,
+                        status = %response.status(),
+                        "Failover: non-success status, trying next cell"
+                    );
+                    failures.push((cell_id, result));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        cell_id = %cell_id,
+                        error = %e,
+                        "Failover: request failed, trying next cell"
+                    );
+                    failures.push((cell_id, result));
+                }
+            }
+        }
+
+        failures
     }
 }
 

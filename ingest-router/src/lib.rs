@@ -102,6 +102,8 @@ mod tests {
     use std::collections::HashMap;
     use std::process::{Child, Command};
     use url::Url;
+    use std::net::TcpStream;
+    use std::time::Duration;
 
     struct TestServer {
         child: Child,
@@ -112,6 +114,15 @@ mod tests {
             let child = Command::new("python")
                 .arg("../scripts/mock_relay_api.py")
                 .spawn()?;
+
+            // Wait for tcp
+            for _ in 0..10 {
+                if TcpStream::connect("127.0.0.1:8000").is_err() {
+                    std::thread::sleep(Duration::from_millis(100));
+                } else {
+                    return Ok(Self { child });
+                }
+            }
 
             Ok(Self { child })
         }

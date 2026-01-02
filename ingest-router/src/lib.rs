@@ -100,10 +100,10 @@ mod tests {
     use hyper::Method;
     use hyper::header::HOST;
     use std::collections::HashMap;
-    use std::process::{Child, Command};
-    use url::Url;
     use std::net::TcpStream;
+    use std::process::{Child, Command};
     use std::time::Duration;
+    use url::Url;
 
     struct TestServer {
         child: Child,

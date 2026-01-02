@@ -1,5 +1,5 @@
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler, SplitMetadata};
+use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};
 use crate::locale::Cells;
 use async_trait::async_trait;
 use hyper::body::Bytes;
@@ -13,6 +13,10 @@ pub struct RegisterChallenge;
 
 #[async_trait]
 impl Handler for RegisterChallenge {
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Failover
+    }
+
     async fn split_request(
         &self,
         _request: Request<Bytes>,

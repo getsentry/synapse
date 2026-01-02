@@ -8,6 +8,14 @@ use std::any::Any;
 pub type CellId = String;
 pub type SplitMetadata = Box<dyn Any + Send>;
 
+pub enum ExecutionMode {
+    // Requests are fanned out and executed in parallel across cells
+    Parallel,
+    // Requests are executed sequentially across cells in priority order
+    // Subsequent requests are skipped if an earlier request succeeds
+    Failover,
+}
+
 /// Handler for endpoints that split requests across cells and merge results
 ///
 /// The handler implements endpoint-specific logic:
@@ -19,6 +27,8 @@ pub trait Handler: Send + Sync {
     fn type_name(&self) -> &'static str {
         std::any::type_name::<Self>()
     }
+
+    fn execution_mode(&self) -> ExecutionMode;
 
     /// Split one request into multiple per-cell requests
     ///

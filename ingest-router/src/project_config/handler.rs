@@ -2,7 +2,7 @@
 
 use crate::api::utils::{deserialize_body, normalize_headers, serialize_to_body};
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler, SplitMetadata};
+use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};
 use crate::locale::Cells;
 use crate::project_config::protocol::{ProjectConfigsRequest, ProjectConfigsResponse};
 use async_trait::async_trait;
@@ -40,6 +40,9 @@ impl ProjectConfigsHandler {
 
 #[async_trait]
 impl Handler for ProjectConfigsHandler {
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Parallel
+    }
     async fn split_request(
         &self,
         request: Request<Bytes>,

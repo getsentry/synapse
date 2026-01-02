@@ -1,6 +1,6 @@
 use crate::api::utils::normalize_headers;
 use crate::errors::IngestRouterError;
-use crate::handler::{CellId, Handler, SplitMetadata};
+use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};
 use crate::locale::Cells;
 use async_trait::async_trait;
 use http::StatusCode;
@@ -16,6 +16,10 @@ pub struct HealthHandler;
 
 #[async_trait]
 impl Handler for HealthHandler {
+    fn execution_mode(&self) -> ExecutionMode {
+        ExecutionMode::Failover
+    }
+
     async fn split_request(
         &self,
         request: Request<Bytes>,

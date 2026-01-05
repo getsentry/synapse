@@ -82,10 +82,13 @@ fn cli() -> Result<(), CliError> {
             Ok(())
         }
         CliCommand::ShowMetrics => {
+            println!("## Locator Metrics\n");
             println!(
                 "{}",
                 generate_metrics_table(locator::metrics_defs::ALL_METRICS)
             );
+            println!("\n## Proxy Metrics\n");
+            println!("{}", generate_metrics_table(proxy::metrics_defs::ALL_METRICS));
             Ok(())
         }
         CliCommand::SyncMetrics => {
@@ -96,6 +99,12 @@ fn cli() -> Result<(), CliError> {
                 &content,
                 "LOCATOR_METRICS",
                 &generate_metrics_table(locator::metrics_defs::ALL_METRICS),
+            );
+
+            content = sync_section(
+                &content,
+                "PROXY_METRICS",
+                &generate_metrics_table(proxy::metrics_defs::ALL_METRICS),
             );
 
             std::fs::write(path, content).expect("Failed to write METRICS.md");

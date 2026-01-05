@@ -2392,6 +2392,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "locator",
+ "metrics",
  "reqwest",
  "serde",
  "shared",

@@ -1,5 +1,6 @@
 use crate::config;
 use crate::errors::ProxyError;
+use crate::metrics_defs::{REQUEST_DURATION, REQUESTS_INFLIGHT};
 use crate::resolvers::Resolvers;
 use crate::route_actions::{RouteActions, RouteMatch};
 use crate::upstreams::Upstreams;
@@ -16,6 +17,14 @@ use shared::http::{add_via_header, filter_hop_by_hop, make_boxed_error_response}
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+
+// Counter for 1% metric sampling.
+static REQUEST_COUNT: AtomicU64 = AtomicU64::new(0);
+
+// Gauge for number of requests currently being processed.
+static INFLIGHT: AtomicU64 = AtomicU64::new(0);
 
 pub struct ProxyService<B>
 where
@@ -72,6 +81,9 @@ where
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, request: Request<B>) -> Self::Future {
+        let start = Instant::now();
+        INFLIGHT.fetch_add(1, Ordering::Relaxed);
+
         let route = self.route_actions.resolve(&request);
 
         tracing::debug!("Resolved route: {route:?}");
@@ -103,67 +115,81 @@ where
 
             tracing::debug!("Resolved upstream: {:?}", upstream);
 
-            match upstream {
+            let response = match upstream {
                 Some(u) => {
                     // Build target URI: keep path+query, swap scheme+authority to upstream_base
                     let (mut parts, body) = request.into_parts();
 
                     // Compose new URI: {scheme}://{authority}{path_and_query}
-                    let path_and_query = match parts.uri.path_and_query() {
-                        Some(pq) => pq.as_str(),
-                        None => {
-                            tracing::warn!("Request URI missing path and query");
-                            return Ok(make_boxed_error_response(StatusCode::BAD_REQUEST));
+                    let path_and_query = parts.uri.path_and_query().map(|pq| pq.as_str());
+
+                    if let Some(pq) = path_and_query {
+                        match http::Uri::builder()
+                            .scheme(u.scheme.clone())
+                            .authority(u.authority.clone())
+                            .path_and_query(pq)
+                            .build()
+                        {
+                            Ok(new_uri) => {
+                                parts.uri = new_uri;
+
+                                // Filter hop-by-hop headers and add via header to request
+                                let request_version = parts.version;
+                                filter_hop_by_hop(&mut parts.headers, request_version);
+                                add_via_header(&mut parts.headers, request_version);
+
+                                let outbound_request = Request::from_parts(parts, body);
+
+                                match client.request(outbound_request).await {
+                                    Ok(mut response) => {
+                                        // Filter hop-by-hop and add via to response from upstream
+                                        let version = response.version();
+                                        filter_hop_by_hop(response.headers_mut(), version);
+                                        add_via_header(response.headers_mut(), version);
+
+                                        // Convert the response body to BoxBody
+                                        let (parts, body) = response.into_parts();
+                                        let boxed_body = body.map_err(Into::into).boxed();
+                                        Response::from_parts(parts, boxed_body)
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("Upstream request failed: {e}");
+                                        make_boxed_error_response(StatusCode::BAD_GATEWAY)
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to build target URI: {e}");
+                                make_boxed_error_response(StatusCode::INTERNAL_SERVER_ERROR)
+                            }
                         }
-                    };
-
-                    let new_uri = match http::Uri::builder()
-                        .scheme(u.scheme.clone())
-                        .authority(u.authority.clone())
-                        .path_and_query(path_and_query)
-                        .build()
-                    {
-                        Ok(uri) => uri,
-                        Err(e) => {
-                            tracing::error!("Failed to build target URI: {e}");
-                            return Ok(make_boxed_error_response(
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                            ));
-                        }
-                    };
-
-                    parts.uri = new_uri;
-
-                    // Filter hop-by-hop headers and and add via header to request
-                    let request_version = parts.version;
-                    filter_hop_by_hop(&mut parts.headers, request_version);
-                    add_via_header(&mut parts.headers, request_version);
-
-                    let outbound_request = Request::from_parts(parts, body);
-
-                    match client.request(outbound_request).await {
-                        Ok(mut response) => {
-                            // Filter hop-by-hop and add via to response from upstream
-                            let version = response.version();
-                            filter_hop_by_hop(response.headers_mut(), version);
-                            add_via_header(response.headers_mut(), version);
-
-                            // Convert the response body to BoxBody
-                            let (parts, body) = response.into_parts();
-                            let boxed_body = body.map_err(Into::into).boxed();
-                            Ok(Response::from_parts(parts, boxed_body))
-                        }
-                        Err(e) => {
-                            tracing::error!("Upstream request failed: {e}");
-                            Ok(make_boxed_error_response(StatusCode::BAD_GATEWAY))
-                        }
+                    } else {
+                        tracing::warn!("Request URI missing path and query");
+                        make_boxed_error_response(StatusCode::BAD_REQUEST)
                     }
                 }
                 None => {
                     // No upstream found, return 404
-                    Ok(make_boxed_error_response(StatusCode::NOT_FOUND))
+                    make_boxed_error_response(StatusCode::NOT_FOUND)
                 }
+            };
+
+            // Record request metric (1% sample)
+            if REQUEST_COUNT.fetch_add(1, Ordering::Relaxed) % 100 == 0 {
+                metrics::histogram!(
+                    REQUEST_DURATION.name,
+                    "status" => response.status().as_u16().to_string(),
+                    "upstream" => upstream_name.unwrap_or_else(|| "none".to_string()),
+                )
+                .record(start.elapsed().as_secs_f64());
+
+                let inflight = INFLIGHT.load(Ordering::Relaxed);
+                metrics::gauge!(REQUESTS_INFLIGHT.name).set(inflight as f64);
             }
+
+            INFLIGHT.fetch_sub(1, Ordering::Relaxed);
+
+            Ok(response)
         })
     }
 }

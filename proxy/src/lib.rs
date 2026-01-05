@@ -1,6 +1,7 @@
 mod admin_service;
 pub mod config;
 mod errors;
+pub mod metrics_defs;
 mod proxy_service;
 mod resolvers;
 mod route_actions;

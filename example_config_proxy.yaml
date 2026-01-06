@@ -55,7 +55,6 @@ proxy:
         to: de-getsentry
     - match:
         host: conduit.us.sentry.io
-        path: /organizations/{organization}/*
       action:
         resolver: cell_from_organization
         cell_to_upstream:
@@ -63,7 +62,6 @@ proxy:
           us2: us2-conduit
     - match:
         host: conduit.de.sentry.io
-        path: /organizations/{organization}/*
       action:
         to: de-conduit
 

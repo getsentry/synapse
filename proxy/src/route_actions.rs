@@ -112,10 +112,9 @@ impl TryFrom<RouteConfig> for Route {
                                 s.strip_prefix('{').and_then(|s| s.strip_suffix('}'))
                             {
                                 if is_static_action {
-                                    return Err(ProxyError::InvalidRoute(
-                                        "Dynamic path parameters are not allowed with static actions"
-                                            .to_string(),
-                                    ));
+                                    return Err(ProxyError::InvalidRoute(format!(
+                                        "Dynamic path parameters are not allowed with static actions in route: {path_str}"
+                                    )));
                                 }
                                 let is_valid = stripped.chars().all(|ch| ch.is_ascii_lowercase() || ch == '_' );
                                 if !is_valid {
@@ -136,8 +135,7 @@ impl TryFrom<RouteConfig> for Route {
 
                                 if !is_valid {
                                     return Err(ProxyError::InvalidRoute(format!(
-                                        "Invalid static segment: {}",
-                                        s
+                                        "Invalid static segment: {s} in route: {path_str}"
                                     )));
                                 }
 

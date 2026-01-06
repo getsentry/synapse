@@ -8,14 +8,36 @@ use hyper::body::Bytes;
 use hyper::{Request, Response};
 use shared::http::make_error_response;
 
-/// Health check handler for the `/api/0/relays/live/` endpoint.
+/// Handler for endpoints that can be routed to any cell.
 ///
-/// This endpoint returns success if any one upstream is available.
-/// Synapse should continue to operate even if one cell is down.
-pub struct HealthHandler;
+/// This handler clones the request to all cells and returns the first
+/// successful response (failover mode). It's suitable for endpoints where:
+/// - Any cell can handle the request
+/// - The Sentry upstream handles cross-cell coordination via outboxes
+/// - Success from one cell is sufficient -- synapse operates even if one cell is down
+///
+///
+/// # Used for:
+///
+/// - `GET /api/0/relays/live/` - Health check
+/// - `POST /api/0/relays/register/challenge/` - Relay registration challenge
+/// - `POST /api/0/relays/register/response/` - Relay registration response
+pub struct AnyCellHandler {
+    name: &'static str,
+}
+
+impl AnyCellHandler {
+    pub fn new(name: &'static str) -> Self {
+        Self { name }
+    }
+}
 
 #[async_trait]
-impl Handler for HealthHandler {
+impl Handler for AnyCellHandler {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
     fn execution_mode(&self) -> ExecutionMode {
         ExecutionMode::Failover
     }
@@ -28,7 +50,7 @@ impl Handler for HealthHandler {
         let (mut parts, body) = request.into_parts();
         normalize_headers(&mut parts.headers, parts.version);
 
-        // Send the health check request to all cells
+        // Send the request to all cells
         let cell_requests = cells
             .cell_list()
             .iter()
@@ -58,14 +80,16 @@ impl Handler for HealthHandler {
                     tracing::warn!(
                         cell_id = %cell_id,
                         status = %response.status(),
-                        "Health check failed with non-success status"
+                        "{} failed with non-success status",
+                        self.name
                     );
                 }
                 Err(e) => {
                     tracing::warn!(
                         cell_id = %cell_id,
                         error = %e,
-                        "Health check request failed"
+                        "{} request failed",
+                        self.name
                     );
                 }
             }
@@ -105,7 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_split_request_sends_to_all_cells() {
-        let handler = HealthHandler;
+        let handler = AnyCellHandler::new("HealthCheck");
         let cells = create_test_cells();
 
         let request = Request::builder()
@@ -124,7 +148,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_merge_responses_one_success() {
-        let handler = HealthHandler;
+        let handler = AnyCellHandler::new("HealthCheck");
 
         let success_response = Response::builder()
             .status(StatusCode::OK)
@@ -146,7 +170,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_merge_responses_all_failed() {
-        let handler = HealthHandler;
+        let handler = AnyCellHandler::new("HealthCheck");
 
         let responses = vec![
             (

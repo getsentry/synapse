@@ -1,10 +1,12 @@
 const BASE_DELAY: u64 = 500;
 
 use crate::config::LocatorDataType;
+use crate::metrics_defs::{CONTROL_PLANE_SYNC_DURATION, CONTROL_PLANE_SYNC_ROWS};
 use crate::types::{CellId, RouteData};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Instant;
 use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]
@@ -62,6 +64,32 @@ impl ControlPlane {
 
     // A cursor is passed for incremental loading. No cursor means the full snapshot will be loaded.
     pub async fn load_mappings(
+        &self,
+        cursor: Option<&str>,
+    ) -> Result<RouteData, ControlPlaneError> {
+        let start = Instant::now();
+        let sync_type = if cursor.is_some() {
+            "incremental"
+        } else {
+            "snapshot"
+        };
+
+        let result = self.load_mappings_inner(cursor).await;
+
+        let status = if result.is_ok() { "success" } else { "failure" };
+
+        metrics::histogram!(CONTROL_PLANE_SYNC_DURATION.name, "type" => sync_type, "status" => status)
+            .record(start.elapsed().as_secs_f64());
+
+        if let Ok(ref data) = result {
+            metrics::histogram!(CONTROL_PLANE_SYNC_ROWS.name, "type" => sync_type)
+                .record(data.id_to_cell.len() as f64);
+        }
+
+        result
+    }
+
+    async fn load_mappings_inner(
         &self,
         cursor: Option<&str>,
     ) -> Result<RouteData, ControlPlaneError> {

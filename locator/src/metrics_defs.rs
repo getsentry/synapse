@@ -17,7 +17,7 @@ pub const NEGATIVE_CACHE_MISS: MetricDef = MetricDef {
 pub const CONTROL_PLANE_SYNC_DURATION: MetricDef = MetricDef {
     name: "control_plane.sync.duration",
     metric_type: MetricType::Histogram,
-    description: "Time to complete  acontrol plane sync in seconds",
+    description: "Time to complete a control plane sync in seconds",
 };
 
 pub const CONTROL_PLANE_SYNC_ROWS: MetricDef = MetricDef {

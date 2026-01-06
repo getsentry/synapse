@@ -21,7 +21,7 @@ metrics:
 |--------|------|-------------|
 | `negative_cache.hit` | Counter | Number of lookups that hit the negative cache |
 | `negative_cache.miss` | Counter | Number of lookups that missed the negative cache |
-| `control_plane.sync.duration` | Histogram | Time to complete  acontrol plane sync in seconds |
+| `control_plane.sync.duration` | Histogram | Time to complete a control plane sync in seconds |
 | `control_plane.sync.rows` | Histogram | Number of mappings returned from control plane sync |
 <!-- LOCATOR_METRICS:END -->
 

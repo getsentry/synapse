@@ -17,6 +17,7 @@ moka = { version = "0.12.11", features = ["sync"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
+shared = { path = "../shared" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

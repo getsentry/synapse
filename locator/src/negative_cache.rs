@@ -1,5 +1,6 @@
 // Lightweight negative cache which temporarily stores not found results in order to
 // prevent repeated lookups for missing keys.
+use crate::metrics_defs::{NEGATIVE_CACHE_HIT, NEGATIVE_CACHE_MISS};
 use moka::sync::Cache;
 use std::time::Duration;
 
@@ -25,12 +26,12 @@ impl NegativeCache {
 
     pub fn contains(&self, key: &str) -> bool {
         let cache_hit = self.cache.contains_key(key);
-        let metric_name = if cache_hit {
-            "negative_cache.hit"
+        let metric_def = if cache_hit {
+            NEGATIVE_CACHE_HIT
         } else {
-            "negative_cache.miss"
+            NEGATIVE_CACHE_MISS
         };
-        metrics::counter!(metric_name).increment(1);
+        metrics::counter!(metric_def.name).increment(1);
         cache_hit
     }
 }

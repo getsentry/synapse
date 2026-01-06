@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use crate::api::utils::deserialize_body;
     use crate::config::{CellConfig, HandlerAction, HttpMethod, Match, Route};
-    use crate::project_config::protocol::ProjectConfigsResponse;
+    use crate::api::project_config::ProjectConfigsResponse;
     use crate::testutils::create_test_locator;
     use hyper::Method;
     use hyper::header::HOST;

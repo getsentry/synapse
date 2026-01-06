@@ -139,15 +139,26 @@ mod tests {
     async fn test_ingest_router() {
         let _relay_server = TestServer::spawn().expect("Failed to spawn test server");
 
-        let routes_config = vec![Route {
-            r#match: Match {
-                host: Some("us.sentry.io".to_string()),
-                path: Some("/api/0/relays/projectconfigs/".to_string()),
-                method: Some(HttpMethod::Post),
+        let routes_config = vec![
+            Route {
+                r#match: Match {
+                    host: Some("us.sentry.io".to_string()),
+                    path: Some("/api/0/relays/projectconfigs/".to_string()),
+                    method: Some(HttpMethod::Post),
+                },
+                action: HandlerAction::RelayProjectConfigs,
+                locale: "us".to_string(),
             },
-            action: HandlerAction::RelayProjectConfigs,
-            locale: "us".to_string(),
-        }];
+            Route {
+                r#match: Match {
+                    host: Some("us.sentry.io".to_string()),
+                    path: Some("/api/0/relays/live/".to_string()),
+                    method: Some(HttpMethod::Get),
+                },
+                action: HandlerAction::Health,
+                locale: "us".to_string(),
+            },
+        ];
 
         let locales = HashMap::from([(
             "us".to_string(),
@@ -195,5 +206,16 @@ mod tests {
         assert_eq!(parsed.project_configs.len(), 1);
         assert_eq!(parsed.pending_keys.len(), 0);
         assert_eq!(parsed.extra_fields.len(), 2);
+
+        // Healthcheck
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/api/0/relays/live/")
+            .header(HOST, "us.sentry.io")
+            .body(Full::new(Bytes::new()))
+            .unwrap();
+
+        let response = service.call(request).await.unwrap();
+        assert_eq!(response.status(), 200);
     }
 }

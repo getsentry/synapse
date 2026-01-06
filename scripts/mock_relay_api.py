@@ -177,7 +177,13 @@ class MockRelayHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Handle GET requests"""
-        self._send_error_response(404, "Not Found")
+        parsed_path = urlparse(self.path)
+
+        # Relay health check endpoint
+        if parsed_path.path == "/api/0/relays/live/":
+            self._send_json_response(200, {"is_healthy": True})
+        else:
+            self._send_error_response(404, "Not Found")
     
     def log_message(self, format, *args):
         """Override to customize logging"""

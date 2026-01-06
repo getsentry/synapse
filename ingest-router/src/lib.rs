@@ -5,7 +5,6 @@ mod executor;
 pub mod handler;
 pub mod http;
 pub mod locale;
-pub mod project_config;
 pub mod router;
 
 #[cfg(test)]

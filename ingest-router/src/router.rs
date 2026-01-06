@@ -1,10 +1,10 @@
 use crate::api::health::HealthHandler;
+use crate::api::project_config::ProjectConfigsHandler;
 use crate::api::register_challenge::RegisterChallenge;
 use crate::api::register_response::RegisterResponse;
 use crate::config::{CellConfig, HandlerAction, Route};
 use crate::handler::Handler;
 use crate::locale::{Cells, Locales};
-use crate::project_config::ProjectConfigsHandler;
 use hyper::Request;
 use locator::client::Locator;
 use std::collections::HashMap;

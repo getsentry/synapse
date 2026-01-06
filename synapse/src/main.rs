@@ -88,7 +88,10 @@ fn cli() -> Result<(), CliError> {
                 generate_metrics_table(locator::metrics_defs::ALL_METRICS)
             );
             println!("\n## Proxy Metrics\n");
-            println!("{}", generate_metrics_table(proxy::metrics_defs::ALL_METRICS));
+            println!(
+                "{}",
+                generate_metrics_table(proxy::metrics_defs::ALL_METRICS)
+            );
             Ok(())
         }
         CliCommand::SyncMetrics => {

@@ -79,7 +79,7 @@ impl ControlPlane {
         let status = if result.is_ok() { "success" } else { "failure" };
 
         metrics::histogram!(CONTROL_PLANE_SYNC_DURATION.name, "type" => sync_type, "status" => status)
-            .record(start.elapsed());
+            .record(start.elapsed().as_secs_f64());
 
         if let Ok(ref data) = result {
             metrics::histogram!(CONTROL_PLANE_SYNC_ROWS.name, "type" => sync_type)

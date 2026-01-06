@@ -13,7 +13,7 @@ use hyper::header::{CONTENT_TYPE, HeaderValue};
 use hyper::{Request, Response};
 use locator::client::Locator;
 use shared::http::make_error_response;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Default, Debug)]
 struct ProjectConfigsMetadata {
@@ -55,26 +55,17 @@ impl Handler for ProjectConfigsHandler {
         let public_keys = parsed.public_keys;
         let extra_fields = parsed.extra_fields;
 
-        let cell_ids: HashSet<&String> = cells.cell_list().iter().collect();
-
         // Route each public key to its owning cell using the locator service
         let mut cell_to_keys: HashMap<CellId, Vec<String>> = HashMap::new();
         let mut pending: Vec<String> = Vec::new();
 
         for public_key in public_keys {
-            // TODO: Enforce locality here?
-            match self.locator.lookup(&public_key, None).await {
+            match self
+                .locator
+                .lookup(&public_key, Some(cells.locality()))
+                .await
+            {
                 Ok(cell_id) => {
-                    if !cell_ids.contains(&cell_id) {
-                        tracing::warn!(
-                            public_key = %public_key,
-                            cell_id = %cell_id,
-                            "Located cell is not in the current locality's configured cells, adding to pending"
-                        );
-                        pending.push(public_key);
-                        continue;
-                    }
-
                     cell_to_keys.entry(cell_id).or_default().push(public_key);
                 }
                 Err(e) => {

@@ -51,6 +51,7 @@ impl From<CellConfig> for Upstream {
 #[derive(Debug)]
 struct CellsInner {
     /// Prioritized list of cell names (first = highest priority)
+    locality: String,
     cell_list: Vec<String>,
     cell_to_upstreams: HashMap<String, Upstream>,
 }
@@ -62,7 +63,7 @@ pub struct Cells {
 
 impl Cells {
     /// Build cells from cell configurations
-    fn from_config(cell_configs: Vec<CellConfig>) -> Self {
+    fn from_config(locality: String, cell_configs: Vec<CellConfig>) -> Self {
         let mut cell_list = Vec::new();
         let mut cell_to_upstreams = HashMap::new();
 
@@ -76,10 +77,15 @@ impl Cells {
 
         Self {
             inner: Arc::new(CellsInner {
+                locality,
                 cell_list,
                 cell_to_upstreams,
             }),
         }
+    }
+
+    pub fn locality(&self) -> &str {
+        &self.inner.locality
     }
 
     pub fn cell_list(&self) -> &[String] {
@@ -104,7 +110,7 @@ impl Locales {
         let locale_to_cells = locales
             .into_iter()
             .map(|(locale, cells)| {
-                let cells = Cells::from_config(cells);
+                let cells = Cells::from_config(locale.clone(), cells);
                 (locale, cells)
             })
             .collect();

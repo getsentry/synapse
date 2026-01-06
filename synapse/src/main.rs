@@ -14,6 +14,10 @@ enum CliCommand {
     Locator(LocatorArgs),
     Proxy(ProxyArgs),
     IngestRouter(IngestRouterArgs),
+    /// Show all metrics definitions as markdown table
+    ShowMetrics,
+    /// Sync METRICS.md with current metric definitions
+    SyncMetrics,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -77,7 +81,65 @@ fn cli() -> Result<(), CliError> {
 
             Ok(())
         }
+        CliCommand::ShowMetrics => {
+            println!(
+                "{}",
+                generate_metrics_table(locator::metrics_defs::ALL_METRICS)
+            );
+            Ok(())
+        }
+        CliCommand::SyncMetrics => {
+            let path = "METRICS.md";
+            let mut content = std::fs::read_to_string(path).expect("Failed to read METRICS.md");
+
+            content = sync_section(
+                &content,
+                "LOCATOR_METRICS",
+                &generate_metrics_table(locator::metrics_defs::ALL_METRICS),
+            );
+
+            std::fs::write(path, content).expect("Failed to write METRICS.md");
+            println!("Synced METRICS.md");
+            Ok(())
+        }
     }
+}
+
+fn sync_section(content: &str, name: &str, table: &str) -> String {
+    let start_marker = format!("<!-- {}:START -->", name);
+    let end_marker = format!("<!-- {}:END -->", name);
+
+    let start_idx = content
+        .find(&start_marker)
+        .unwrap_or_else(|| panic!("Missing {} marker", start_marker));
+    let end_idx = content
+        .find(&end_marker)
+        .unwrap_or_else(|| panic!("Missing {} marker", end_marker));
+
+    format!(
+        "{}{}\n{}\n{}{}",
+        &content[..start_idx],
+        start_marker,
+        table,
+        end_marker,
+        &content[end_idx + end_marker.len()..]
+    )
+}
+
+fn generate_metrics_table(metrics: &[shared::metrics_defs::MetricDef]) -> String {
+    let mut lines = vec![
+        "| Metric | Type | Description |".to_string(),
+        "|--------|------|-------------|".to_string(),
+    ];
+    for m in metrics {
+        lines.push(format!(
+            "| `{}` | {} | {} |",
+            m.name,
+            m.metric_type.as_str(),
+            m.description
+        ));
+    }
+    lines.join("\n")
 }
 
 pub fn init_statsd_recorder(prefix: &str, metrics_config: Option<MetricsConfig>) {
@@ -155,4 +217,26 @@ struct ProxyArgs {
 struct IngestRouterArgs {
     #[command(flatten)]
     base: BaseArgs,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn metrics_md_contains_all_defined_metrics() {
+        let metrics_md =
+            std::fs::read_to_string("../METRICS.md").expect("Failed to read METRICS.md");
+
+        let mut missing = Vec::new();
+        for m in locator::metrics_defs::ALL_METRICS {
+            if !metrics_md.contains(m.name) {
+                missing.push(m.name);
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "METRICS.md is missing these metrics: {:?}\nAdd them to METRICS.md",
+            missing
+        );
+    }
 }

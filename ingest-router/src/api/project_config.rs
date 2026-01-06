@@ -281,13 +281,6 @@
 //! }
 //! ```
 
-//! Protocol types for the Relay Project Configs endpoint (v3).
-//!
-//! This module defines the request and response structures for Sentry's
-//! `/api/0/relays/projectconfigs/` endpoint.
-//!
-//! See the module-level documentation in `mod.rs` for complete protocol details.
-
 use crate::api::utils::{deserialize_body, normalize_headers, serialize_to_body};
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};

@@ -35,6 +35,5 @@ metrics:
 | `requests.inflight` | Gauge | Number of requests currently being processed |
 <!-- PROXY_METRICS:END -->
 
-
 ## TODO: Add metrics for other modules
 

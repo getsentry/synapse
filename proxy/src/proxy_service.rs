@@ -175,7 +175,10 @@ where
             };
 
             // Record request metric (1% sample)
-            if REQUEST_COUNT.fetch_add(1, Ordering::Relaxed).is_multiple_of(100) {
+            if REQUEST_COUNT
+                .fetch_add(1, Ordering::Relaxed)
+                .is_multiple_of(100)
+            {
                 metrics::histogram!(
                     REQUEST_DURATION.name,
                     "status" => response.status().as_u16().to_string(),

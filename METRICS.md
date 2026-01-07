@@ -32,8 +32,17 @@ metrics:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `request.duration` | Histogram | Proxy request duration in seconds. Tagged with status, upstream. Sampled at 1%. |
-| `requests.inflight` | Gauge | Number of requests currently being processed |
+| `requests.inflight` | Gauge | Number of requests currently being processed. |
 <!-- PROXY_METRICS:END -->
+
+## Ingest Router Metrics
+
+<!-- INGEST_ROUTER_METRICS:START -->
+| Metric | Type | Description |
+|--------|------|-------------|
+| `request.duration` | Histogram | Request duration in seconds. Tagged with status, handler. |
+| `requests.inflight` | Gauge | Number of requests currently being processed |
+<!-- INGEST_ROUTER_METRICS:END -->
 
 ## TODO: Add metrics for other modules
 

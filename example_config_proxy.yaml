@@ -55,6 +55,7 @@ proxy:
         to: de-getsentry
     - match:
         host: conduit.us.sentry.io
+        path: /organizations/{organization}/*
       action:
         resolver: cell_from_organization
         cell_to_upstream:

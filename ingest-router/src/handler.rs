@@ -23,10 +23,7 @@ pub enum ExecutionMode {
 /// - How to merge results from multiple cells
 #[async_trait]
 pub trait Handler: Send + Sync {
-    /// Returns the type name of this handler for test assertions
-    fn type_name(&self) -> &'static str {
-        std::any::type_name::<Self>()
-    }
+    fn name(&self) -> &'static str;
 
     fn execution_mode(&self) -> ExecutionMode;
 

@@ -397,6 +397,10 @@ impl ProjectConfigsHandler {
 
 #[async_trait]
 impl Handler for ProjectConfigsHandler {
+    fn name(&self) -> &'static str {
+        "ProjectConfigsHandler"
+    }
+
     fn execution_mode(&self) -> ExecutionMode {
         ExecutionMode::Parallel
     }

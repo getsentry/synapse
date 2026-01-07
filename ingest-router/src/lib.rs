@@ -5,12 +5,14 @@ mod executor;
 pub mod handler;
 pub mod http;
 pub mod locale;
+pub mod metrics_defs;
 pub mod router;
 
 #[cfg(test)]
 mod testutils;
 
 use crate::errors::IngestRouterError;
+use crate::metrics_defs::{REQUESTS_INFLIGHT, REQUEST_DURATION};
 use http_body_util::{BodyExt, Full};
 use hyper::StatusCode;
 use hyper::body::Bytes;
@@ -19,6 +21,14 @@ use hyper::{Request, Response};
 use locator::client::Locator;
 use shared::http::{make_error_response, run_http_service};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+
+// Counter for 1% metric sampling.
+static REQUEST_COUNT: AtomicU64 = AtomicU64::new(0);
+
+// Gauge for number of requests currently being processed.
+static INFLIGHT: AtomicU64 = AtomicU64::new(0);
 
 pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
     let locator = Locator::new(config.locator.to_client_config()).await?;
@@ -61,31 +71,56 @@ where
         Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
     fn call(&self, req: Request<B>) -> Self::Future {
-        let maybe_handler = self.router.resolve(&req);
+        let start = Instant::now();
+        INFLIGHT.fetch_add(1, Ordering::Relaxed);
 
-        match maybe_handler {
-            Some((handler, cells)) => {
-                let (parts, body) = req.into_parts();
-                let executor = self.executor.clone();
+        let resolved = self.router.resolve(&req);
+        let (parts, body) = req.into_parts();
+        let executor = self.executor.clone();
 
-                Box::pin(async move {
-                    let body_bytes = match body.collect().await {
-                        Ok(c) => c.to_bytes(),
-                        Err(_) => {
-                            return Ok(make_error_response(StatusCode::BAD_REQUEST).map(Full::new));
+        Box::pin(async move {
+            let (response, handler_name): (Response<Full<Bytes>>, &str) = match resolved {
+                Some((handler, cells)) => {
+                    let handler_name = handler.name();
+                    match body.collect().await {
+                        Ok(c) => {
+                            let request = Request::from_parts(parts, c.to_bytes());
+                            let response = executor.execute(handler, request, cells).await;
+                            (response.map(Full::new), handler_name)
                         }
-                    };
-                    let request = Request::from_parts(parts, body_bytes);
-                    let response = executor.execute(handler, request, cells).await;
-                    Ok(response.map(Full::new))
-                })
-            }
-            None => {
-                Box::pin(
-                    async move { Ok(make_error_response(StatusCode::BAD_REQUEST).map(Full::new)) },
+                        Err(_) => {
+                            let response =
+                                make_error_response(StatusCode::BAD_REQUEST).map(Full::new);
+                            (response, handler_name)
+                        }
+                    }
+                }
+                None => {
+                    let response = make_error_response(StatusCode::BAD_REQUEST).map(Full::new);
+                    (response, "none")
+                }
+            };
+
+            // Record metrics (1% sample)
+            if REQUEST_COUNT
+                .fetch_add(1, Ordering::Relaxed)
+                .is_multiple_of(100)
+            {
+                metrics::histogram!(
+                    REQUEST_DURATION.name,
+                    "status" => response.status().as_u16().to_string(),
+                    "handler" => handler_name,
                 )
+                .record(start.elapsed().as_secs_f64());
+
+                let inflight = INFLIGHT.load(Ordering::Relaxed);
+                metrics::gauge!(REQUESTS_INFLIGHT.name).set(inflight as f64);
             }
-        }
+
+            INFLIGHT.fetch_sub(1, Ordering::Relaxed);
+
+            Ok(response)
+        })
     }
 }
 

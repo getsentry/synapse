@@ -12,7 +12,7 @@ pub mod router;
 mod testutils;
 
 use crate::errors::IngestRouterError;
-use crate::metrics_defs::{REQUESTS_INFLIGHT, REQUEST_DURATION};
+use crate::metrics_defs::{REQUEST_DURATION, REQUESTS_INFLIGHT};
 use http_body_util::{BodyExt, Full};
 use hyper::StatusCode;
 use hyper::body::Bytes;

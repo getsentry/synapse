@@ -13,4 +13,3 @@ pub const REQUESTS_INFLIGHT: MetricDef = MetricDef {
 };
 
 pub const ALL_METRICS: &[MetricDef] = &[REQUEST_DURATION, REQUESTS_INFLIGHT];
-

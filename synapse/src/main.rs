@@ -238,16 +238,24 @@ mod tests {
         let metrics_md =
             std::fs::read_to_string("../METRICS.md").expect("Failed to read METRICS.md");
 
+        let all_metrics = [
+            locator::metrics_defs::ALL_METRICS,
+            proxy::metrics_defs::ALL_METRICS,
+            ingest_router::metrics_defs::ALL_METRICS,
+        ]
+        .into_iter()
+        .flatten();
+
         let mut missing = Vec::new();
-        for m in locator::metrics_defs::ALL_METRICS {
-            if !metrics_md.contains(m.name) {
+        for m in all_metrics {
+            if !metrics_md.contains(m.name) || !metrics_md.contains(m.description) {
                 missing.push(m.name);
             }
         }
 
         assert!(
             missing.is_empty(),
-            "METRICS.md is missing these metrics: {:?}\nAdd them to METRICS.md",
+            "METRICS.md is missing: {:?}\nAdd them to METRICS.md",
             missing
         );
     }

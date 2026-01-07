@@ -63,7 +63,6 @@ proxy:
           us2: us2-conduit
     - match:
         host: conduit.de.sentry.io
-        path: /organizations/{organization}/*
       action:
         to: de-conduit
 

@@ -149,7 +149,7 @@ class MockControlApi(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode("utf-8"))
 
-        elif base_path == "projectkey-cell-mappings/":
+        elif base_path == "/projectkey-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
             (data, next_cursor, has_more) = get_results(EntityType.PROJECT_KEY, cursor)
 

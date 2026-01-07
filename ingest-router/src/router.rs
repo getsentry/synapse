@@ -1,7 +1,5 @@
-use crate::api::health::HealthHandler;
+use crate::api::any_cell_handler::AnyCellHandler;
 use crate::api::project_config::ProjectConfigsHandler;
-use crate::api::register_challenge::RegisterChallenge;
-use crate::api::register_response::RegisterResponse;
 use crate::config::{CellConfig, HandlerAction, Route};
 use crate::handler::Handler;
 use crate::locale::{Cells, Locales};
@@ -29,14 +27,17 @@ impl Router {
                 HandlerAction::RelayProjectConfigs,
                 Arc::new(ProjectConfigsHandler::new(locator)) as Arc<dyn Handler>,
             ),
-            (HandlerAction::Health, Arc::new(HealthHandler {})),
+            (
+                HandlerAction::Health,
+                Arc::new(AnyCellHandler::new("HealthCheck")),
+            ),
             (
                 HandlerAction::RegisterChallenge,
-                Arc::new(RegisterChallenge {}),
+                Arc::new(AnyCellHandler::new("RegisterChallenge")),
             ),
             (
                 HandlerAction::RegisterResponse,
-                Arc::new(RegisterResponse {}),
+                Arc::new(AnyCellHandler::new("RegisterResponse")),
             ),
         ]);
 
@@ -182,12 +183,12 @@ mod tests {
         // Should match first route
         let req = test_request(Method::POST, "/api/test", Some("api.example.com"));
         let (handler, _cells) = router.resolve(&req).unwrap();
-        assert!(handler.type_name().contains("ProjectConfigsHandler"));
+        assert_eq!(handler.name(), "ProjectConfigsHandler");
 
         // Should match second route
         let req = test_request(Method::GET, "/health", None);
         let (handler, _cells) = router.resolve(&req).unwrap();
-        assert!(handler.type_name().contains("HealthHandler"));
+        assert_eq!(handler.name(), "HealthCheck");
     }
 
     #[tokio::test]
@@ -215,7 +216,7 @@ mod tests {
         // Should strip port and match
         let req = test_request(Method::GET, "/test", Some("api.example.com:8080"));
         let (handler, _cells) = router.resolve(&req).unwrap();
-        assert!(handler.type_name().contains("ProjectConfigsHandler"));
+        assert_eq!(handler.name(), "ProjectConfigsHandler");
     }
 
     #[tokio::test]
@@ -235,7 +236,7 @@ mod tests {
         // POST should match
         let req = test_request(Method::POST, "/api/test", None);
         let (handler, _cells) = router.resolve(&req).unwrap();
-        assert!(handler.type_name().contains("ProjectConfigsHandler"));
+        assert_eq!(handler.name(), "ProjectConfigsHandler");
 
         // GET should not match
         let req = test_request(Method::GET, "/api/test", None);

@@ -77,7 +77,7 @@ fn cli() -> Result<(), CliError> {
                 .ingest_router
                 .ok_or(CliError::InvalidConfig("Missing ingest-router config"))?;
 
-            tracing::info!("Starting ingest-router with config {ingest_router_config:#?}");
+            run_async(ingest_router::run(ingest_router_config))?;
 
             Ok(())
         }

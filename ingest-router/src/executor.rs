@@ -3,6 +3,7 @@ use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler};
 use crate::http::send_to_upstream;
 use crate::locale::Cells;
+use crate::metrics_defs::UPSTREAM_REQUEST_DURATION;
 use http::StatusCode;
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -13,8 +14,13 @@ use hyper_util::rt::TokioExecutor;
 use shared::http::make_error_response;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use tokio::task::JoinSet;
 use tokio::time::{Duration, sleep};
+
+// Counter for 1% metric sampling.
+static UPSTREAM_REQUEST_COUNT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub struct Executor {
@@ -192,5 +198,26 @@ async fn send_to_cell(
     let request = Request::from_parts(parts, Full::new(body));
 
     // Send to upstream (using relay_url) - returns Response<Bytes>
-    send_to_upstream(client, &upstream.relay_url, request, timeout_secs).await
+    let start = Instant::now();
+    let result = send_to_upstream(client, &upstream.relay_url, request, timeout_secs).await;
+
+    // Record duration metric with status (1% sample)
+    if UPSTREAM_REQUEST_COUNT
+        .fetch_add(1, Ordering::Relaxed)
+        .is_multiple_of(100)
+    {
+        let status = match &result {
+            Ok(response) => response.status().as_u16().to_string(),
+            Err(IngestRouterError::UpstreamTimeout(_)) => "timeout".to_string(),
+            Err(_) => "error".to_string(),
+        };
+        metrics::histogram!(
+            UPSTREAM_REQUEST_DURATION.name,
+            "cell_id" => cell_id.to_string(),
+            "status" => status,
+        )
+        .record(start.elapsed().as_secs_f64());
+    }
+
+    result
 }

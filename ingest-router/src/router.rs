@@ -1,5 +1,6 @@
 use crate::api::any_cell_handler::AnyCellHandler;
 use crate::api::project_config::ProjectConfigsHandler;
+use crate::api::public_keys::PublicKeysHandler;
 use crate::config::{CellConfig, HandlerAction, Route};
 use crate::handler::Handler;
 use crate::locale::{Cells, Locales};
@@ -39,6 +40,7 @@ impl Router {
                 HandlerAction::RegisterResponse,
                 Arc::new(AnyCellHandler::new("RegisterResponse")),
             ),
+            (HandlerAction::PublicKeys, Arc::new(PublicKeysHandler {})),
         ]);
 
         Self {

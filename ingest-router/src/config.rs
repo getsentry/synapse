@@ -59,6 +59,7 @@ pub enum HandlerAction {
     Health,
     RegisterChallenge,
     RegisterResponse,
+    PublicKeys,
 }
 
 // Timeout configuration for relay project configs handler

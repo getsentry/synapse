@@ -90,6 +90,21 @@ ingest_router:
       action:
         handler: register_response
       locale: de
+    # Public keys endpoint
+    - match:
+        host: us.sentry.io
+        path: /api/0/relays/publickeys/
+        method: POST
+      action:
+        handler: public_keys
+      locale: us
+    - match:
+        host: de.sentry.io
+        path: /api/0/relays/publickeys/
+        method: POST
+      action:
+        handler: public_keys
+      locale: de
 
 # logging:
 #   sentry_dsn: "your_sentry_dsn_here"

@@ -15,7 +15,7 @@ pub const REQUESTS_INFLIGHT: MetricDef = MetricDef {
 pub const UPSTREAM_REQUEST_DURATION: MetricDef = MetricDef {
     name: "upstream.request.duration",
     metric_type: MetricType::Histogram,
-    description: "Per-cell upstream request duration in seconds. Tagged with cell_id, status (the status-code if sucessful, 'timeout', or 'error').",
+    description: "Per-cell upstream request duration in seconds. Tagged with cell_id, status (the status-code if successful, 'timeout', or 'error').",
 };
 
 pub const ALL_METRICS: &[MetricDef] = &[

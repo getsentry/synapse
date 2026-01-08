@@ -92,6 +92,11 @@ fn cli() -> Result<(), CliError> {
                 "{}",
                 generate_metrics_table(proxy::metrics_defs::ALL_METRICS)
             );
+            println!("\n## Ingest Router Metrics\n");
+            println!(
+                "{}",
+                generate_metrics_table(ingest_router::metrics_defs::ALL_METRICS)
+            );
             Ok(())
         }
         CliCommand::SyncMetrics => {
@@ -108,6 +113,12 @@ fn cli() -> Result<(), CliError> {
                 &content,
                 "PROXY_METRICS",
                 &generate_metrics_table(proxy::metrics_defs::ALL_METRICS),
+            );
+
+            content = sync_section(
+                &content,
+                "INGEST_ROUTER_METRICS",
+                &generate_metrics_table(ingest_router::metrics_defs::ALL_METRICS),
             );
 
             std::fs::write(path, content).expect("Failed to write METRICS.md");
@@ -238,16 +249,24 @@ mod tests {
         let metrics_md =
             std::fs::read_to_string("../METRICS.md").expect("Failed to read METRICS.md");
 
+        let all_metrics = [
+            locator::metrics_defs::ALL_METRICS,
+            proxy::metrics_defs::ALL_METRICS,
+            ingest_router::metrics_defs::ALL_METRICS,
+        ]
+        .into_iter()
+        .flatten();
+
         let mut missing = Vec::new();
-        for m in locator::metrics_defs::ALL_METRICS {
-            if !metrics_md.contains(m.name) {
+        for m in all_metrics {
+            if !metrics_md.contains(m.name) || !metrics_md.contains(m.description) {
                 missing.push(m.name);
             }
         }
 
         assert!(
             missing.is_empty(),
-            "METRICS.md is missing these metrics: {:?}\nAdd them to METRICS.md",
+            "METRICS.md is missing: {:?}\nAdd them to METRICS.md",
             missing
         );
     }

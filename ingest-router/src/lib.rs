@@ -6,6 +6,7 @@ pub mod handler;
 pub mod http;
 pub mod ingest_router_service;
 pub mod locale;
+pub mod metrics_defs;
 pub mod router;
 
 #[cfg(test)]
@@ -13,8 +14,9 @@ mod testutils;
 
 use crate::errors::IngestRouterError;
 use locator::client::Locator;
-use shared::admin_service::AdminService;
 use shared::http::run_http_service;
+
+use shared::admin_service::AdminService;
 
 pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
     let locator = Locator::new(config.locator.to_client_config()).await?;

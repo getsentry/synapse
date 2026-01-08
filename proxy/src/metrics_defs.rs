@@ -9,7 +9,7 @@ pub const REQUEST_DURATION: MetricDef = MetricDef {
 pub const REQUESTS_INFLIGHT: MetricDef = MetricDef {
     name: "requests.inflight",
     metric_type: MetricType::Gauge,
-    description: "Number of requests currently being processed",
+    description: "Number of requests currently being processed.",
 };
 
 // TODO: all metrics must be added here for now, this can be done dynamically with a macro in the future.

@@ -1701,6 +1701,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "locator",
+ "metrics",
  "reqwest",
  "serde",
  "serde_json",

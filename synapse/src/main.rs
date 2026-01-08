@@ -182,7 +182,7 @@ pub fn init_statsd_recorder(prefix: &str, metrics_config: Option<MetricsConfig>)
 fn run_async(
     fut: impl Future<Output = Result<(), impl std::error::Error>>,
 ) -> Result<(), CliError> {
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
     if let Err(e) = rt.block_on(fut) {

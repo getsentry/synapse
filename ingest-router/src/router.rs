@@ -39,6 +39,10 @@ impl Router {
                 HandlerAction::RegisterResponse,
                 Arc::new(AnyCellHandler::new("RegisterResponse")),
             ),
+            (
+                HandlerAction::PublicKeys,
+                Arc::new(AnyCellHandler::new("PublicKeys")),
+            ),
         ]);
 
         Self {

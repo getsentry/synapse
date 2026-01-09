@@ -9,6 +9,7 @@ http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+indexmap = { workspace = true }
 locator = { path = "../locator" }
 metrics = { workspace = true }
 reqwest = { workspace = true }

@@ -23,6 +23,7 @@
 //! The `Locales` is built at startup from configuration and remains immutable
 //! during request processing.
 
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use url::Url;
@@ -50,10 +51,9 @@ impl From<CellConfig> for Upstream {
 /// Collection of upstreams grouped by cell name
 #[derive(Debug)]
 struct CellsInner {
-    /// Prioritized list of cell names (first = highest priority)
     locality: String,
-    cell_list: Vec<String>,
-    cell_to_upstreams: HashMap<String, Upstream>,
+    /// Map of cell_id to upstream, preserving insertion order (first = highest priority)
+    cells: IndexMap<String, Upstream>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,23 +64,17 @@ pub struct Cells {
 impl Cells {
     /// Build cells from cell configurations
     fn from_config(locality: String, cell_configs: Vec<CellConfig>) -> Self {
-        let mut cell_list = Vec::new();
-        let mut cell_to_upstreams = HashMap::new();
-
-        for config in cell_configs {
-            let id = config.id.clone();
-            let upstream = Upstream::from(config);
-
-            cell_list.push(id.clone());
-            cell_to_upstreams.insert(id, upstream);
-        }
+        let cells: IndexMap<String, Upstream> = cell_configs
+            .into_iter()
+            .map(|config| {
+                let id = config.id.clone();
+                let upstream = Upstream::from(config);
+                (id, upstream)
+            })
+            .collect();
 
         Self {
-            inner: Arc::new(CellsInner {
-                locality,
-                cell_list,
-                cell_to_upstreams,
-            }),
+            inner: Arc::new(CellsInner { locality, cells }),
         }
     }
 
@@ -88,12 +82,19 @@ impl Cells {
         &self.inner.locality
     }
 
-    pub fn cell_list(&self) -> &[String] {
-        &self.inner.cell_list
+    /// Returns order list of cell ids
+    pub fn cell_list(&self) -> impl Iterator<Item = &String> {
+        self.inner.cells.keys()
     }
 
-    pub fn cell_to_upstreams(&self) -> &HashMap<String, Upstream> {
-        &self.inner.cell_to_upstreams
+    /// Get upstream for a cell_id, or None if not found
+    pub fn get_upstream(&self, cell_id: &str) -> Option<&Upstream> {
+        self.inner.cells.get(cell_id)
+    }
+
+    /// Check if a cell_id exists
+    pub fn contains_cell(&self, cell_id: &str) -> bool {
+        self.inner.cells.contains_key(cell_id)
     }
 }
 
@@ -167,20 +168,23 @@ mod tests {
 
         // Verify US locale has 2 cells
         let us_cells = locales.get_cells("us").unwrap();
-        assert_eq!(us_cells.cell_to_upstreams().len(), 2);
-        assert_eq!(us_cells.cell_list().len(), 2);
-        assert!(us_cells.cell_to_upstreams().contains_key("us1"));
-        assert!(us_cells.cell_to_upstreams().contains_key("us2"));
+        let cell_list: Vec<_> = us_cells.cell_list().collect();
+        assert_eq!(cell_list.len(), 2);
+        assert!(us_cells.contains_cell("us1"));
+        assert!(us_cells.contains_cell("us2"));
+        assert!(us_cells.get_upstream("us1").is_some());
+        assert!(us_cells.get_upstream("us2").is_some());
         // Verify priority order
-        assert_eq!(us_cells.cell_list()[0], "us1");
-        assert_eq!(us_cells.cell_list()[1], "us2");
+        assert_eq!(cell_list[0], "us1");
+        assert_eq!(cell_list[1], "us2");
 
         // Verify DE locale has 1 cell
         let de_cells = locales.get_cells("de").unwrap();
-        assert_eq!(de_cells.cell_to_upstreams().len(), 1);
-        assert_eq!(de_cells.cell_list().len(), 1);
-        assert!(de_cells.cell_to_upstreams().contains_key("de1"));
-        assert_eq!(de_cells.cell_list()[0], "de1");
+        let cell_list: Vec<_> = de_cells.cell_list().collect();
+        assert_eq!(cell_list.len(), 1);
+        assert!(de_cells.contains_cell("de1"));
+        assert!(de_cells.get_upstream("de1").is_some());
+        assert_eq!(cell_list[0], "de1");
 
         // Verify unknown locale returns None
         assert!(locales.get_cells("unknown").is_none());

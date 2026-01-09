@@ -53,7 +53,6 @@ impl Handler for AnyCellHandler {
         // Send the request to all cells
         let cell_requests = cells
             .cell_list()
-            .iter()
             .map(|cell_id| {
                 let req = Request::from_parts(parts.clone(), body.clone());
                 (cell_id.clone(), req)

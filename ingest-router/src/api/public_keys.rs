@@ -206,3 +206,153 @@ impl Handler for PublicKeysHandler {
         Response::from_parts(p, body)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::CellConfig;
+    use crate::locale::Locales;
+    use std::collections::HashMap;
+    use url::Url;
+
+    fn create_test_cells() -> Cells {
+        let locales = HashMap::from([(
+            "us".to_string(),
+            vec![
+                CellConfig {
+                    id: "us1".to_string(),
+                    sentry_url: Url::parse("http://sentry-us1:8080").unwrap(),
+                    relay_url: Url::parse("http://relay-us1:8090").unwrap(),
+                },
+                CellConfig {
+                    id: "us2".to_string(),
+                    sentry_url: Url::parse("http://sentry-us2:8080").unwrap(),
+                    relay_url: Url::parse("http://relay-us2:8090").unwrap(),
+                },
+            ],
+        )]);
+        Locales::new(locales).get_cells("us").unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_split_request_sends_to_all_cells() {
+        let handler = PublicKeysHandler;
+        let cells = create_test_cells();
+
+        let request_body = serde_json::json!({
+            "relay_ids": ["key1", "key2"]
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&request_body).unwrap());
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/0/relays/publickeys/")
+            .body(body_bytes)
+            .unwrap();
+
+        let (cell_requests, metadata) = handler.split_request(request, &cells).await.unwrap();
+
+        assert_eq!(cell_requests.len(), 2);
+        let cell_ids: Vec<_> = cell_requests.iter().map(|(id, _)| id.as_str()).collect();
+        assert!(cell_ids.contains(&"us1"));
+        assert!(cell_ids.contains(&"us2"));
+
+        // Verify metadata contains requested relay_ids
+        let meta = metadata.downcast::<PublicKeysMetadata>().unwrap();
+        assert_eq!(meta.requested_relay_ids.len(), 2);
+        assert!(meta.requested_relay_ids.contains("key1"));
+        assert!(meta.requested_relay_ids.contains("key2"));
+    }
+
+    #[tokio::test]
+    async fn test_merge_responses_all_success() {
+        let handler = PublicKeysHandler;
+
+        let response_body = serde_json::json!({
+            "public_keys": {
+                "key1": "pubkey1",
+                "key2": "pubkey2"
+            },
+            "relays": {
+                "key1": {
+                    "publicKey": "pubkey1",
+                    "internal": false
+                },
+                "key2": {
+                    "publicKey": "pubkey2",
+                    "internal": true
+                }
+            }
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&response_body).unwrap());
+
+        let success_response = Response::builder()
+            .status(StatusCode::OK)
+            .body(body_bytes)
+            .unwrap();
+
+        let metadata = Box::new(PublicKeysMetadata {
+            requested_relay_ids: HashSet::from(["key1".to_string(), "key2".to_string()]),
+        });
+
+        let body_bytes2 = Bytes::from(serde_json::to_vec(&response_body).unwrap());
+        let success_response2 = Response::builder()
+            .status(StatusCode::OK)
+            .body(body_bytes2)
+            .unwrap();
+
+        let responses = vec![
+            ("us1".to_string(), Ok(success_response)),
+            ("us2".to_string(), Ok(success_response2)),
+        ];
+
+        let merged = handler.merge_responses(responses, metadata).await;
+
+        assert_eq!(merged.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_merge_responses_with_failures_but_all_values() {
+        let handler = PublicKeysHandler;
+
+        let response_body = serde_json::json!({
+            "public_keys": {
+                "key1": "pubkey1",
+                "key2": "pubkey2"
+            },
+            "relays": {
+                "key1": {
+                    "publicKey": "pubkey1",
+                    "internal": false
+                },
+                "key2": {
+                    "publicKey": "pubkey2",
+                    "internal": true
+                }
+            }
+        });
+        let body_bytes = Bytes::from(serde_json::to_vec(&response_body).unwrap());
+
+        let success_response = Response::builder()
+            .status(StatusCode::OK)
+            .body(body_bytes)
+            .unwrap();
+
+        let metadata = Box::new(PublicKeysMetadata {
+            requested_relay_ids: HashSet::from(["key1".to_string(), "key2".to_string()]),
+        });
+
+        let responses = vec![
+            (
+                "us1".to_string(),
+                Err(IngestRouterError::UpstreamTimeout("us1".to_string())),
+            ),
+            ("us2".to_string(), Ok(success_response)),
+        ];
+
+        let merged = handler.merge_responses(responses, metadata).await;
+
+        // Should succeed because we have all values despite one failure
+        assert_eq!(merged.status(), StatusCode::OK);
+    }
+}

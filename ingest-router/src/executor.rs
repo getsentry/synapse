@@ -189,8 +189,7 @@ async fn send_to_cell(
 ) -> Result<Response<Bytes>, IngestRouterError> {
     // Look up the upstream for this cell
     let upstream = cells
-        .cell_to_upstreams()
-        .get(cell_id)
+        .get_upstream(cell_id)
         .ok_or_else(|| IngestRouterError::InternalError(format!("Unknown cell: {}", cell_id)))?;
 
     // Wrap Bytes in Full for the HTTP client

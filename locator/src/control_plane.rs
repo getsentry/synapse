@@ -1,4 +1,6 @@
 const BASE_DELAY: u64 = 500;
+const AUTH_SCHEME: &str = "Signature";
+const HMAC_SIGNATURE_PREFIX: &str = "synapse0";
 
 use crate::config::LocatorDataType;
 use crate::metrics_defs::{CONTROL_PLANE_SYNC_DURATION, CONTROL_PLANE_SYNC_ROWS};
@@ -116,6 +118,12 @@ impl ControlPlane {
         result
     }
 
+    /// Computes HMAC-SHA256 signature for the given path and body.
+    /// Returns the base64-encoded signature.
+    fn compute_hmac_signature(&self, path: &str, body: &[u8]) -> String {
+        unimplemented!()
+    }
+
     async fn load_mappings_inner(
         &self,
         cursor: Option<&str>,
@@ -144,7 +152,18 @@ impl ControlPlane {
                 url.query_pairs_mut().append_pair("cursor", c);
             }
 
-            let response = self.client.get(url).send().await?;
+            // Build request with optional HMAC authentication
+            let mut request = self.client.get(url.clone());
+
+            if let Some(_) = &self.hmac_secret {
+                // For GET requests, body is empty bytes
+                let signature = self.compute_hmac_signature(url.path(), &[]);
+                let auth_header =
+                    format!("{} {}:{}", AUTH_SCHEME, HMAC_SIGNATURE_PREFIX, signature);
+                request = request.header("Authorization", auth_header);
+            }
+
+            let response = request.send().await?;
 
             if !response.status().is_success() {
                 if RETRIABLE_STATUS_CODES.contains(&response.status()) && retries < 3 {

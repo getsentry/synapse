@@ -3,13 +3,13 @@ const BASE_DELAY: u64 = 500;
 use crate::config::LocatorDataType;
 use crate::metrics_defs::{CONTROL_PLANE_SYNC_DURATION, CONTROL_PLANE_SYNC_ROWS};
 use crate::types::{CellId, RouteData};
+use hmac::{Hmac, Mac};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::time::{Duration, sleep};
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 
 #[derive(Deserialize)]
 struct ControlPlaneRecord {
@@ -77,9 +77,7 @@ impl ControlPlane {
 
         let full_url = format!("{}/{}/", base_url.trim_end_matches('/'), path);
 
-        let hmac_secret = std::env::var("SYNAPSE_HMAC_SECRET")
-        .ok()
-        .or_else(|| {
+        let hmac_secret = std::env::var("SYNAPSE_HMAC_SECRET").ok().or_else(|| {
             tracing::warn!("SYNAPSE_HMAC_SECRET not set, HMAC authentication disabled");
             None
         });
@@ -90,7 +88,6 @@ impl ControlPlane {
             hmac_secret,
         }
     }
-
 
     // A cursor is passed for incremental loading. No cursor means the full snapshot will be loaded.
     pub async fn load_mappings(

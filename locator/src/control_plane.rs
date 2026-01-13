@@ -44,7 +44,7 @@ pub enum ControlPlaneError {
     MissingCursor,
 }
 
-/// Control plane client for syncing route mappings.
+/// Control plane client for syncing route mappings from Sentry's control silo.
 ///
 /// # HMAC Authentication
 ///
@@ -57,8 +57,8 @@ pub enum ControlPlaneError {
 /// Authorization: Signature synapse0:<base64-encoded-hmac-sha256-signature>
 /// ```
 ///
-/// The signature is computed as HMAC-SHA256 of the encoded body, signed with the secret
-/// key from `SYNAPSE_HMAC_SECRET`.
+/// The signature is computed as HMAC-SHA256 of path:body, signed with the secret
+/// key from `SYNAPSE_HMAC_SECRET`. For GET requests (as used here), the body is empty bytes.
 ///
 /// If `SYNAPSE_HMAC_SECRET` is not set, HMAC authentication will be disabled and a
 /// warning will be logged. The `Authorization` header will not be added to requests.

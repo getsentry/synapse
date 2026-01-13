@@ -44,6 +44,3 @@ metrics:
 | `requests.inflight` | Gauge | Number of requests currently being processed |
 | `upstream.request.duration` | Histogram | Per-cell upstream request duration in seconds. Tagged with cell_id, status (the status-code if successful, 'timeout', or 'error'). |
 <!-- INGEST_ROUTER_METRICS:END -->
-
-## TODO: Add metrics for other modules
-

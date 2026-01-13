@@ -8,6 +8,8 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::time::{Duration, sleep};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
 #[derive(Deserialize)]
 struct ControlPlaneRecord {
@@ -42,9 +44,28 @@ pub enum ControlPlaneError {
     MissingCursor,
 }
 
+/// Control plane client for syncing route mappings.
+///
+/// # HMAC Authentication
+///
+/// The `SYNAPSE_HMAC_SECRET` environment variable should contain a raw string secret
+/// that will be used as the key for HMAC-SHA256 authentication.
+///
+/// The signature will be included in HTTP requests to the control plane in the `Authorization` header:
+///
+/// ```
+/// Authorization: Signature synapse0:<base64-encoded-hmac-sha256-signature>
+/// ```
+///
+/// The signature is computed as HMAC-SHA256 of the encoded body, signed with the secret
+/// key from `SYNAPSE_HMAC_SECRET`.
+///
+/// If `SYNAPSE_HMAC_SECRET` is not set, HMAC authentication will be disabled and a
+/// warning will be logged. The `Authorization` header will not be added to requests.
 pub struct ControlPlane {
     client: reqwest::Client,
     full_url: String,
+    hmac_secret: Option<String>,
 }
 
 impl ControlPlane {
@@ -56,11 +77,20 @@ impl ControlPlane {
 
         let full_url = format!("{}/{}/", base_url.trim_end_matches('/'), path);
 
+        let hmac_secret = std::env::var("SYNAPSE_HMAC_SECRET")
+        .ok()
+        .or_else(|| {
+            tracing::warn!("SYNAPSE_HMAC_SECRET not set, HMAC authentication disabled");
+            None
+        });
+
         ControlPlane {
             client: reqwest::Client::new(),
             full_url,
+            hmac_secret,
         }
     }
+
 
     // A cursor is passed for incremental loading. No cursor means the full snapshot will be loaded.
     pub async fn load_mappings(

@@ -240,4 +240,17 @@ mod tests {
 
         assert_eq!(mapping.get("sentry0").unwrap(), "us1");
     }
+
+    #[test]
+    fn test_compute_hmac_signature() {
+        let secret = "test_secret";
+        let path = "/api/test";
+        let body = b"test_body";
+
+        let signature = ControlPlane::compute_hmac_signature(secret, path, body);
+
+        // Verify signature is 64 char hex string
+        assert_eq!(signature.len(), 64);
+        assert!(signature.chars().all(|c| c.is_ascii_hexdigit()));
+    }
 }

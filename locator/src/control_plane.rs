@@ -56,7 +56,7 @@ pub enum ControlPlaneError {
 /// The signature will be included in HTTP requests to the control plane in the `Authorization` header:
 ///
 /// ```
-/// Authorization: Signature synapse0:<base64-encoded-hmac-sha256-signature>
+/// Authorization: Signature synapse0:<hex-encoded-hmac-sha256-signature>
 /// ```
 ///
 /// The signature is computed as HMAC-SHA256 of path:body, signed with the secret
@@ -119,7 +119,7 @@ impl ControlPlane {
     }
 
     /// Computes HMAC-SHA256 signature for the given path and body.
-    /// Returns the base64-encoded signature.
+    /// Returns the hex-encoded signature.
     fn compute_hmac_signature(&self, path: &str, body: &[u8]) -> String {
         unimplemented!()
     }

@@ -50,8 +50,8 @@ pub struct ControlPlane {
 impl ControlPlane {
     pub fn new(data_type: LocatorDataType, base_url: String) -> Self {
         let path = match data_type {
-            LocatorDataType::Organization => "org-cell-mappings",
-            LocatorDataType::ProjectKey => "projectkey-cell-mappings",
+            LocatorDataType::Organization => "internal/org-cell-mappings",
+            LocatorDataType::ProjectKey => "internal/projectkey-cell-mappings",
         };
 
         let full_url = format!("{}/{}/", base_url.trim_end_matches('/'), path);

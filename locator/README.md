@@ -35,7 +35,7 @@ There are two ways in which the locator can be used:
 On initial bootstrap, the locator service requests a snapshot of all mappings from the control plane in pages. 
 
 ```
-$ curl sentry-control.internal/org-cell-mappings?cursor=abcdef&limit=100000
+$ curl sentry-control.internal/internal/org-cell-mappings?cursor=abcdef&limit=100000
 
 {
    "data": [{"id": 1, "slug": "sentry", "cell": "us1"}, ....],
@@ -76,7 +76,7 @@ Getsentry requirement:
 The locator service also periodically requests incremental mapping updates from the control plane, by requesting updates that occured after a specific timestamp.
 The incremental API is called periodically, as well as on demand if a cache miss occurs.
 ```
-$ curl sentry-control.sentry.internal/org-cell-mappings?after=1757030409
+$ curl sentry-control.sentry.internal/internal/org-cell-mappings?after=1757030409
 ```
 
 ### Backup route store

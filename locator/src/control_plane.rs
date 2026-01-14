@@ -55,7 +55,7 @@ pub enum ControlPlaneError {
 ///
 /// The signature will be included in HTTP requests to the control plane in the `Authorization` header:
 ///
-/// ```
+/// ```text
 /// Authorization: Signature synapse0:<hex-encoded-hmac-sha256-signature>
 /// ```
 ///

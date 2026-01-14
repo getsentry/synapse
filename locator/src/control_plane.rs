@@ -120,8 +120,19 @@ impl ControlPlane {
 
     /// Computes HMAC-SHA256 signature for the given path and body.
     /// Returns the hex-encoded signature.
-    fn compute_hmac_signature(&self, path: &str, body: &[u8]) -> String {
-        unimplemented!()
+    fn compute_hmac_signature(secret: &str, path: &str, body: &[u8]) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+            .expect("HMAC can take key of any size");
+
+        // Update with path:body format
+        mac.update(path.as_bytes());
+        mac.update(b":");
+        mac.update(body);
+
+        // Finalize and hex-encode
+        let result = mac.finalize();
+        let code_bytes = result.into_bytes();
+        code_bytes.iter().map(|b| format!("{:02x}", b)).collect()
     }
 
     async fn load_mappings_inner(
@@ -155,9 +166,9 @@ impl ControlPlane {
             // Build request with optional HMAC authentication
             let mut request = self.client.get(url.clone());
 
-            if let Some(_) = &self.hmac_secret {
+            if let Some(secret) = &self.hmac_secret {
                 // For GET requests, body is empty bytes
-                let signature = self.compute_hmac_signature(url.path(), &[]);
+                let signature = Self::compute_hmac_signature(secret, url.path(), &[]);
                 let auth_header =
                     format!("{} {}:{}", AUTH_SCHEME, HMAC_SIGNATURE_PREFIX, signature);
                 request = request.header("Authorization", auth_header);

@@ -119,17 +119,15 @@ impl ControlPlane {
     }
 
     /// Computes HMAC-SHA256 signature for the given path and body.
-    /// Returns the hex-encoded signature.
+    /// Returns the hex-encoded signature, using path:body format.
     fn compute_hmac_signature(secret: &str, path: &str, body: &[u8]) -> String {
         let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
             .expect("HMAC can take key of any size");
 
-        // Update with path:body format
         mac.update(path.as_bytes());
         mac.update(b":");
         mac.update(body);
 
-        // Finalize and hex-encode
         let result = mac.finalize();
         let code_bytes = result.into_bytes();
         code_bytes.iter().map(|b| format!("{:02x}", b)).collect()
@@ -245,7 +243,7 @@ mod tests {
     fn test_compute_hmac_signature() {
         let secret = "test_secret";
         let path = "/api/test";
-        let body = b"test_body";
+        let body = b"";
 
         let signature = ControlPlane::compute_hmac_signature(secret, path, body);
 

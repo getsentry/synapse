@@ -6,6 +6,10 @@ locator:
     base_dir: target/cache
     filename: backup.bin
     compression: zstd1
+  # Optional list of localities to restrict the locator to. If not specified,
+  # control plane data for all localities will be loaded.
+  localities:
+    - us
   locality_to_default_cell:
     us: us1
   # data type must be organization or project_key

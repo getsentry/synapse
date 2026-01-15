@@ -1,10 +1,14 @@
 const BASE_DELAY: u64 = 500;
+const AUTH_SCHEME: &str = "Signature";
+const HMAC_SIGNATURE_PREFIX: &str = "synapse0";
 
 use crate::config::LocatorDataType;
 use crate::metrics_defs::{CONTROL_PLANE_SYNC_DURATION, CONTROL_PLANE_SYNC_ROWS};
 use crate::types::{CellId, RouteData};
+use hmac::{Hmac, Mac};
 use reqwest::{StatusCode, Url};
 use serde::Deserialize;
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::time::{Duration, sleep};
@@ -42,23 +46,48 @@ pub enum ControlPlaneError {
     MissingCursor,
 }
 
+/// Control plane client for syncing route mappings from Sentry's control silo.
+///
+/// # HMAC Authentication
+///
+/// The `SYNAPSE_HMAC_SECRET` environment variable should contain a raw string secret
+/// that will be used as the key for HMAC-SHA256 authentication.
+///
+/// The signature will be included in HTTP requests to the control plane in the `Authorization` header:
+///
+/// ```text
+/// Authorization: Signature synapse0:<hex-encoded-hmac-sha256-signature>
+/// ```
+///
+/// The signature is computed as HMAC-SHA256 of path:body, signed with the secret
+/// key from `SYNAPSE_HMAC_SECRET`. For GET requests (as used here), the body is empty bytes.
+///
+/// If `SYNAPSE_HMAC_SECRET` is not set, HMAC authentication will be disabled and a
+/// warning will be logged. The `Authorization` header will not be added to requests.
 pub struct ControlPlane {
     client: reqwest::Client,
     full_url: String,
+    hmac_secret: Option<String>,
 }
 
 impl ControlPlane {
     pub fn new(data_type: LocatorDataType, base_url: String) -> Self {
         let path = match data_type {
-            LocatorDataType::Organization => "internal/org-cell-mappings",
-            LocatorDataType::ProjectKey => "internal/projectkey-cell-mappings",
+            LocatorDataType::Organization => "api/0/internal/org-cell-mappings",
+            LocatorDataType::ProjectKey => "api/0/internal/projectkey-cell-mappings",
         };
 
         let full_url = format!("{}/{}/", base_url.trim_end_matches('/'), path);
 
+        let hmac_secret = std::env::var("SYNAPSE_HMAC_SECRET").ok().or_else(|| {
+            tracing::warn!("SYNAPSE_HMAC_SECRET not set, HMAC authentication disabled");
+            None
+        });
+
         ControlPlane {
             client: reqwest::Client::new(),
             full_url,
+            hmac_secret,
         }
     }
 
@@ -89,6 +118,21 @@ impl ControlPlane {
         result
     }
 
+    /// Computes HMAC-SHA256 signature for the given path and body.
+    /// Returns the hex-encoded signature, using path:body format.
+    fn compute_hmac_signature(secret: &str, path: &str, body: &[u8]) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+            .expect("HMAC can take key of any size");
+
+        mac.update(path.as_bytes());
+        mac.update(b":");
+        mac.update(body);
+
+        let result = mac.finalize();
+        let code_bytes = result.into_bytes();
+        code_bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+
     async fn load_mappings_inner(
         &self,
         cursor: Option<&str>,
@@ -117,7 +161,18 @@ impl ControlPlane {
                 url.query_pairs_mut().append_pair("cursor", c);
             }
 
-            let response = self.client.get(url).send().await?;
+            // Build request with optional HMAC authentication
+            let mut request = self.client.get(url.clone());
+
+            if let Some(secret) = &self.hmac_secret {
+                // For GET requests, body is empty bytes
+                let signature = Self::compute_hmac_signature(secret, url.path(), &[]);
+                let auth_header =
+                    format!("{} {}:{}", AUTH_SCHEME, HMAC_SIGNATURE_PREFIX, signature);
+                request = request.header("Authorization", auth_header);
+            }
+
+            let response = request.send().await?;
 
             if !response.status().is_success() {
                 if RETRIABLE_STATUS_CODES.contains(&response.status()) && retries < 3 {
@@ -182,5 +237,18 @@ mod tests {
         assert_eq!(mapping.len(), 30);
 
         assert_eq!(mapping.get("sentry0").unwrap(), "us1");
+    }
+
+    #[test]
+    fn test_compute_hmac_signature() {
+        let secret = "test_secret";
+        let path = "/api/test";
+        let body = b"";
+
+        let signature = ControlPlane::compute_hmac_signature(secret, path, body);
+
+        // Verify signature is 64 char hex string
+        assert_eq!(signature.len(), 64);
+        assert!(signature.chars().all(|c| c.is_ascii_hexdigit()));
     }
 }

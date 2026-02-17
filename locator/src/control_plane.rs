@@ -72,7 +72,11 @@ pub struct ControlPlane {
 }
 
 impl ControlPlane {
-    pub fn new(data_type: LocatorDataType, base_url: String, localities: Option<Vec<String>>) -> Self {
+    pub fn new(
+        data_type: LocatorDataType,
+        base_url: String,
+        localities: Option<Vec<String>>,
+    ) -> Self {
         let path = match data_type {
             LocatorDataType::Organization => "api/0/internal/org-cell-mappings",
             LocatorDataType::ProjectKey => "api/0/internal/projectkey-cell-mappings",

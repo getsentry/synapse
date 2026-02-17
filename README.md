@@ -17,3 +17,32 @@ Synapse consists of 3 main components:
 ### Metrics
 
 Metrics emitted by Synapse are described [here](METRICS.md).
+
+
+### Development
+
+Run `make setup` once to install the pre-commit hook (runs format/lint checks before each commit).
+
+| Task | Command |
+|------|---------|
+| Build | `make build` |
+| Test | `make test` |
+| Lint | `make lint` |
+| Format | `make fmt` |
+| Auto-fix | `make fix` |
+| Full CI simulation | `make ci` |
+
+`make test` manages Docker automatically (it starts a fake GCS server on port 4443 for backup route integration tests). Running `cargo test` directly will fail those GCS related tests unless the server is already running.
+
+When adding or removing metrics, run `cargo run synapse sync-metrics` to regenerate `METRICS.md`, otherwise CI will fail.
+
+**Running services locally** (each requires a config file — see `example_config_*.yaml`):
+
+```sh
+make run-locator
+make run-proxy
+make run-ingest-router
+make run-mock-control-api   # mock control plane API for locator dev
+make run-mock-relay-api     # mock relay API for ingest-router dev
+make run-echo-server        # simple echo server for proxy dev
+```

@@ -145,7 +145,7 @@ class MockControlApi(BaseHTTPRequestHandler):
         base_path = parsed.path
         query_params = parse_qs(parsed.query)
 
-        if base_path == "/internal/org-cell-mappings/":
+        if base_path == "/api/0/internal/org-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
             localities = query_params.get("locality") or None
             (data, next_cursor, has_more) = get_results(EntityType.ORG, cursor, localities)
@@ -164,7 +164,7 @@ class MockControlApi(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(response).encode("utf-8"))
 
-        elif base_path == "/internal/projectkey-cell-mappings/":
+        elif base_path == "/api/0/internal/projectkey-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
             localities = query_params.get("locality") or None
             (data, next_cursor, has_more) = get_results(EntityType.PROJECT_KEY, cursor, localities)

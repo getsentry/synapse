@@ -41,8 +41,6 @@ impl Locator {
             localities,
             locality_to_default_cell,
             tx.clone(),
-            Duration::from_secs(60),
-            Duration::from_secs(1),
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
@@ -158,8 +156,6 @@ impl IdToCell {
         localities: Option<Vec<String>>,
         locality_to_default_cell: Option<HashMap<String, String>>,
         tx: mpsc::Sender<Command>,
-        refresh_interval: std::time::Duration,
-        min_refresh_interval: std::time::Duration,
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
@@ -178,8 +174,8 @@ impl IdToCell {
             update_lock: Semaphore::new(1),
             ready: AtomicBool::new(false),
             backup_routes,
-            refresh_interval,
-            min_refresh_interval,
+            refresh_interval: Duration::from_secs(60),
+            min_refresh_interval: Duration::from_secs(1),
             tx,
         }
     }

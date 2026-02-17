@@ -45,10 +45,11 @@ pub enum ControlPlaneError {
 pub struct ControlPlane {
     client: reqwest::Client,
     full_url: String,
+    localities: Option<Vec<String>>,
 }
 
 impl ControlPlane {
-    pub fn new(data_type: LocatorDataType, base_url: String) -> Self {
+    pub fn new(data_type: LocatorDataType, base_url: String, localities: Option<Vec<String>>) -> Self {
         let path = match data_type {
             LocatorDataType::Organization => "internal/org-cell-mappings",
             LocatorDataType::ProjectKey => "internal/projectkey-cell-mappings",
@@ -59,6 +60,7 @@ impl ControlPlane {
         ControlPlane {
             client: reqwest::Client::new(),
             full_url,
+            localities,
         }
     }
 
@@ -115,6 +117,13 @@ impl ControlPlane {
 
             if let Some(ref c) = next_cursor {
                 url.query_pairs_mut().append_pair("cursor", c);
+            }
+
+            // Add locality query parameters if configured
+            if let Some(ref localities) = self.localities {
+                for locality in localities {
+                    url.query_pairs_mut().append_pair("locality", locality);
+                }
             }
 
             let response = self.client.get(url).send().await?;
@@ -174,6 +183,7 @@ mod tests {
         let control_plane = ControlPlane::new(
             LocatorDataType::Organization,
             "http://127.0.0.1:9000/".to_string(),
+            None,
         );
         let response = control_plane.load_mappings(None).await;
 
@@ -182,5 +192,25 @@ mod tests {
         assert_eq!(mapping.len(), 30);
 
         assert_eq!(mapping.get("sentry0").unwrap(), "us1");
+    }
+
+    #[tokio::test]
+    async fn test_control_plane_with_localities() {
+        let _server = TestControlPlaneServer::spawn("127.0.0.1", 9002).unwrap();
+        let control_plane = ControlPlane::new(
+            LocatorDataType::Organization,
+            "http://127.0.0.1:9002/".to_string(),
+            Some(vec!["de".into()]),
+        );
+        let response = control_plane.load_mappings(None).await;
+
+        let mapping = response.unwrap().id_to_cell;
+
+        // Only the 3 "de" orgs (i=4,9,14) should be returned, each with id + slug = 6 entries
+        assert_eq!(mapping.len(), 6);
+        assert_eq!(mapping.get("4").unwrap(), "de1");
+        assert_eq!(mapping.get("sentry4").unwrap(), "de1");
+        assert_eq!(mapping.get("9").unwrap(), "de1");
+        assert_eq!(mapping.get("14").unwrap(), "de1");
     }
 }

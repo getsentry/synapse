@@ -59,6 +59,7 @@ pub async fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locato
         "http://invalid-control-plane:9000".to_string(),
         provider,
         None,
+        None,
     );
 
     let locator = Locator::from_in_process_service(service);

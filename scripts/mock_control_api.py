@@ -26,11 +26,24 @@ Cursor = Optional[str]
 HasMore = bool
 
 
+CELL_TO_LOCALITY = {
+    "us1": "us",
+    "us2": "us",
+    "de1": "de",
+}
+
+
+def org_cell(i: int) -> str:
+    if i % 5 == 4:
+        return "de1"
+    return f"us{i % 2 + 1}"
+
+
 ALL_ORG_RESULTS = [
     {
         "id": str(i),
         "slug": f"sentry{i}",
-        "cell": f"us{i % 2 + 1}",
+        "cell": org_cell(i),
         "updated_at": START_TIME + i
     }
     for i in range(TOTAL_RESULTS)
@@ -53,7 +66,7 @@ class EntityType(Enum):
 
 
 def get_results(
-    entity: EntityType, cursor: Optional[str]
+    entity: EntityType, cursor: Optional[str], requested_localities: Optional[list[str]] = None
 ) -> tuple[Results, Cursor, HasMore]:
 
     all_results = (
@@ -61,6 +74,9 @@ def get_results(
         if entity == EntityType.PROJECT_KEY
         else ALL_ORG_RESULTS
     )
+
+    if requested_localities:
+        all_results = [r for r in all_results if CELL_TO_LOCALITY.get(r["cell"]) in requested_localities]
 
     from_idx: Optional[int] = None
 
@@ -92,9 +108,10 @@ def get_results(
             return [], None, False
         assert from_idx is not None
 
-    to_idx = min(from_idx + DEFAULT_PAGE_SIZE - 1, TOTAL_RESULTS - 1)
+    total = len(all_results)
+    to_idx = min(from_idx + DEFAULT_PAGE_SIZE - 1, total - 1)
 
-    has_more = to_idx < TOTAL_RESULTS - 1
+    has_more = to_idx < total - 1
 
     if has_more:
         next_result = all_results[to_idx + 1]
@@ -130,17 +147,15 @@ class MockControlApi(BaseHTTPRequestHandler):
 
         if base_path == "/api/0/internal/org-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
-            (data, next_cursor, has_more) = get_results(EntityType.ORG, cursor)
+            localities = query_params.get("locality") or None
+            (data, next_cursor, has_more) = get_results(EntityType.ORG, cursor, localities)
 
             response = {
                 "data": data,
                 "metadata": {
                     "cursor": next_cursor,
                     "has_more": has_more,
-                    "cell_to_locality": {
-                        "us1": "us",
-                        "us2": "us",
-                    },
+                    "cell_to_locality": CELL_TO_LOCALITY,
                 },
             }
 
@@ -151,17 +166,15 @@ class MockControlApi(BaseHTTPRequestHandler):
 
         elif base_path == "/api/0/internal/projectkey-cell-mappings/":
             cursor = query_params.get("cursor", [None])[0]
-            (data, next_cursor, has_more) = get_results(EntityType.PROJECT_KEY, cursor)
+            localities = query_params.get("locality") or None
+            (data, next_cursor, has_more) = get_results(EntityType.PROJECT_KEY, cursor, localities)
 
             response = {
                 "data": data,
                 "metadata": {
                     "cursor": next_cursor,
                     "has_more": has_more,
-                    "cell_to_locality": {
-                        "us1": "us",
-                        "us2": "us",
-                    },
+                    "cell_to_locality": CELL_TO_LOCALITY,
                 },
             }
 

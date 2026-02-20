@@ -66,6 +66,7 @@ pub struct Config {
     pub listener: Listener,
     pub control_plane: ControlPlane,
     pub backup_route_store: BackupRouteStore,
+    pub localities: Option<Vec<String>>,
     pub locality_to_default_cell: Option<HashMap<String, String>>,
     pub data_type: LocatorDataType,
 }

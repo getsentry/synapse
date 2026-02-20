@@ -28,6 +28,7 @@ impl Locator {
         data_type: LocatorDataType,
         control_plane_url: String,
         backup_provider: Arc<dyn BackupRouteProvider + 'static>,
+        localities: Option<Vec<String>>,
         locality_to_default_cell: Option<HashMap<String, String>>,
     ) -> Self {
         // Channel to send commands to the worker thread.
@@ -37,10 +38,9 @@ impl Locator {
             data_type,
             control_plane_url,
             backup_provider,
+            localities,
             locality_to_default_cell,
             tx.clone(),
-            Duration::from_secs(60),
-            Duration::from_secs(1),
         ));
 
         // Spawn the loader thread. All loading should happen from this thread.
@@ -153,10 +153,9 @@ impl IdToCell {
         data_type: LocatorDataType,
         control_plane_url: String,
         backup_routes: Arc<dyn BackupRouteProvider + Send + Sync>,
+        localities: Option<Vec<String>>,
         locality_to_default_cell: Option<HashMap<String, String>>,
         tx: mpsc::Sender<Command>,
-        refresh_interval: std::time::Duration,
-        min_refresh_interval: std::time::Duration,
     ) -> Self {
         let data = RouteDataWithTimestamp {
             data: RouteData {
@@ -168,15 +167,15 @@ impl IdToCell {
         };
 
         IdToCell {
-            control_plane: ControlPlane::new(data_type, control_plane_url),
+            control_plane: ControlPlane::new(data_type, control_plane_url, localities),
             locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
             data: RwLock::new(data),
             negative_cache: NegativeCache::new(),
             update_lock: Semaphore::new(1),
             ready: AtomicBool::new(false),
             backup_routes,
-            refresh_interval,
-            min_refresh_interval,
+            refresh_interval: Duration::from_secs(60),
+            min_refresh_interval: Duration::from_secs(1),
             tx,
         }
     }
@@ -434,6 +433,7 @@ mod tests {
             LocatorDataType::Organization,
             format!("http://{host}:{port}").to_string(),
             provider.clone(),
+            None,
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 
@@ -469,6 +469,7 @@ mod tests {
             LocatorDataType::Organization,
             "http://invalid-control-plane:9000".to_string(),
             provider,
+            None,
             Some(HashMap::from([("de".into(), "de".into())])),
         );
 

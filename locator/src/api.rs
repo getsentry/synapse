@@ -28,12 +28,14 @@ pub async fn serve(
     listener: ListenerConfig,
     control_plane: ControlPlaneConfig,
     provider: Arc<dyn BackupRouteProvider + 'static>,
+    localities: Option<Vec<String>>,
     locality_to_default_cell: Option<HashMap<String, String>>,
 ) -> Result<(), LocatorApiError> {
     let locator = Locator::new(
         data_type,
         control_plane.url,
         provider,
+        localities,
         locality_to_default_cell,
     );
     let app = Router::new()

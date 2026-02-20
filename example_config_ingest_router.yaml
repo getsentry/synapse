@@ -16,6 +16,9 @@ ingest_router:
       base_dir: target/cache
       filename: backup.bin
       compression: zstd1
+    localities:
+      - us
+      - de
     locality_to_default_cell:
       us: us1
       de: de1

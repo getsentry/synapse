@@ -88,6 +88,7 @@ mod tests {
             "http://control-plane-url".to_string(),
             Arc::new(provider),
             None,
+            None,
         );
         let locator = Locator::from_in_process_service(service);
 

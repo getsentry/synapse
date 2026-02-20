@@ -25,6 +25,7 @@ pub async fn run(config: config::Config) -> Result<(), api::LocatorApiError> {
         config.listener,
         config.control_plane,
         provider,
+        config.localities,
         config.locality_to_default_cell,
     )
     .await

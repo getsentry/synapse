@@ -26,6 +26,7 @@ pub enum LocatorType {
     InProcess {
         control_plane_url: String,
         backup_route_store_type: BackupRouteStoreType,
+        localities: Option<Vec<String>>,
         locality_to_default_cell: Option<HashMap<String, String>>,
     },
     Url {
@@ -44,6 +45,7 @@ impl Locator {
             LocatorType::InProcess {
                 control_plane_url,
                 backup_route_store_type,
+                localities,
                 locality_to_default_cell,
             } => {
                 let provider = get_provider(backup_route_store_type).await?;
@@ -51,6 +53,7 @@ impl Locator {
                     config.data_type,
                     control_plane_url,
                     provider,
+                    localities,
                     locality_to_default_cell,
                 ))))
             }

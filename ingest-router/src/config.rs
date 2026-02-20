@@ -135,6 +135,7 @@ pub enum LocatorType {
     InProcess {
         control_plane: ControlPlane,
         backup_route_store: BackupRouteStore,
+        localities: Option<Vec<String>>,
         locality_to_default_cell: Option<HashMap<String, String>>,
     },
 }
@@ -153,10 +154,12 @@ impl Locator {
                 LocatorType::InProcess {
                     control_plane,
                     backup_route_store,
+                    localities,
                     locality_to_default_cell,
                 } => ClientLocatorType::InProcess {
                     control_plane_url: control_plane.url,
                     backup_route_store_type: backup_route_store.r#type,
+                    localities,
                     locality_to_default_cell,
                 },
                 LocatorType::Url { url } => ClientLocatorType::Url { url },

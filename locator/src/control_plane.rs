@@ -23,7 +23,7 @@ struct ControlPlaneRecord {
 
 #[derive(Deserialize)]
 struct ControlPlaneMetadata {
-    cursor: String,
+    cursor: Option<String>,
     has_more: bool,
     cell_to_locality: HashMap<String, String>,
 }
@@ -214,17 +214,21 @@ impl ControlPlane {
             }
 
             page_fetches += 1;
-            next_cursor = Some(json_response.metadata.cursor);
 
-            if !json_response.metadata.has_more {
-                break;
+            match (json_response.metadata.has_more, json_response.metadata.cursor) {
+                (true, Some(c)) => next_cursor = Some(c),
+                (true, None) => return Err(ControlPlaneError::MissingCursor),
+                (false, Some(c)) => {
+                    next_cursor = Some(c);
+                    break;
+                }
+                (false, None) => break,
             }
         }
 
         tracing::info!("Fetched {page_fetches} pages from control plane");
 
-        let cursor = next_cursor.ok_or(ControlPlaneError::MissingCursor)?;
-        let data = RouteData::from(org_to_cell, cursor, cell_to_locality);
+        let data = RouteData::from(org_to_cell, next_cursor, cell_to_locality);
 
         Ok(data)
     }

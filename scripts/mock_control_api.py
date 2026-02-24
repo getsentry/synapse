@@ -90,16 +90,10 @@ def get_results(
         entity_id = decoded["id"]
 
         for idx, result in enumerate(all_results):
-            # cursor matches exactly, start from next result
-            if result["updated_at"] == updated_at and result["id"] == entity_id:
+            if result["updated_at"] > updated_at:
                 from_idx = idx
                 break
-            # the cursor doesn't have an entity_id
-            elif result["updated_at"] == updated_at and entity_id is None:
-                from_idx = idx
-                break
-            # we passed the cursor and there was no exact match
-            elif result["updated_at"] > updated_at:
+            elif result["updated_at"] == updated_at and str(result["id"]) > entity_id:
                 from_idx = idx
                 break
 
@@ -109,15 +103,16 @@ def get_results(
         assert from_idx is not None
 
     total = len(all_results)
+
+    if total == 0:
+        return [], None, False
+
     to_idx = min(from_idx + DEFAULT_PAGE_SIZE - 1, total - 1)
 
     has_more = to_idx < total - 1
 
-    if has_more:
-        next_result = all_results[to_idx + 1]
-        next_cursor = make_cursor(next_result["updated_at"], next_result["id"])
-    else:
-        next_cursor = make_cursor(to_idx, None)
+    last_result = all_results[to_idx]
+    next_cursor = make_cursor(last_result["updated_at"], str(last_result["id"]))
 
     results = []
     for i in range(from_idx, to_idx + 1):
@@ -189,7 +184,7 @@ class MockControlApi(BaseHTTPRequestHandler):
             self.wfile.write(b"Not Found")
 
 
-def make_cursor(updated_at: int, entity_id: Optional[str]) -> str:
+def make_cursor(updated_at: int, entity_id: str) -> str:
     return base64.b64encode(
         json.dumps(
             {

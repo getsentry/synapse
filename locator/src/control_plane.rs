@@ -215,7 +215,10 @@ impl ControlPlane {
 
             page_fetches += 1;
 
-            match (json_response.metadata.has_more, json_response.metadata.cursor) {
+            match (
+                json_response.metadata.has_more,
+                json_response.metadata.cursor,
+            ) {
                 (true, Some(c)) => next_cursor = Some(c),
                 (true, None) => return Err(ControlPlaneError::MissingCursor),
                 (false, Some(c)) => {

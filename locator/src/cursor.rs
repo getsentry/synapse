@@ -32,10 +32,7 @@ impl Ord for Cursor {
         // comparison first to avoid lexicographic mis-ordering ("9" > "10").
         // Fallback to lexicographic if either ID isn't a valid number.
         match self.updated_at.cmp(&other.updated_at) {
-            std::cmp::Ordering::Equal => match (
-                self.id.parse::<u64>(),
-                other.id.parse::<u64>(),
-            ) {
+            std::cmp::Ordering::Equal => match (self.id.parse::<u64>(), other.id.parse::<u64>()) {
                 (Ok(a), Ok(b)) => a.cmp(&b),
                 _ => self.id.cmp(&other.id),
             },

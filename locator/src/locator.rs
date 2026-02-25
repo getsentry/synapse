@@ -160,7 +160,7 @@ impl IdToCell {
         let data = RouteDataWithTimestamp {
             data: RouteData {
                 id_to_cell: HashMap::new(),
-                last_cursor: "".into(),
+                last_cursor: None,
                 cells: HashMap::new(),
             },
             last_updated: None,
@@ -370,7 +370,7 @@ impl IdToCell {
         // Fetch incremental updates from the control plane using the current cursor
         let route_data = self
             .control_plane
-            .load_mappings(Some(&current_cursor))
+            .load_mappings(current_cursor.as_deref())
             .await?;
 
         // Merge the incremental data with the existing data
@@ -404,7 +404,7 @@ mod tests {
                 ("org_1".into(), "us1".into()),
                 ("org_2".into(), "de".into()),
             ]),
-            "cursor1".into(),
+            Some("cursor1".into()),
             HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),
         );
 

@@ -6,8 +6,7 @@ use std::str::FromStr;
 pub struct Cursor {
     // seconds since 1970-01-01 00:00:00 UTC
     pub updated_at: u64,
-    // None id means no more results. The last cursor is always none.
-    pub id: Option<String>,
+    pub id: String,
 }
 
 impl FromStr for Cursor {
@@ -53,7 +52,7 @@ mod tests {
         // Create a cursor object and encode it
         let cursor_data = serde_json::json!({
             "updated_at": 1757030409,
-            "id": null
+            "id": "a"
         });
         let json_str = cursor_data.to_string();
         let encoded = STANDARD.encode(json_str.as_bytes());
@@ -61,7 +60,7 @@ mod tests {
         // Parse it back and verify
         let cursor: Cursor = encoded.parse().unwrap();
         assert_eq!(cursor.updated_at, 1757030409);
-        assert_eq!(cursor.id, None);
+        assert_eq!(cursor.id, "a");
     }
 
     #[test]
@@ -74,24 +73,24 @@ mod tests {
     fn test_cursor_comparison() {
         let cursor1 = Cursor {
             updated_at: 1000,
-            id: Some("b".to_string()),
+            id: "b".to_string(),
         };
         let cursor2 = Cursor {
             updated_at: 2000,
-            id: Some("a".to_string()),
+            id: "a".to_string(),
         };
 
-        // Ordering is by updated at first and id second
+        // Ordering is by updated_at first
         assert!(cursor1 < cursor2);
 
-        // None is less than some
+        // Same timestamp, id is tiebreaker
         let cursor1 = Cursor {
             updated_at: 1000,
-            id: None,
+            id: "1".to_string(),
         };
         let cursor2 = Cursor {
             updated_at: 1000,
-            id: Some("a".to_string()),
+            id: "a".to_string(),
         };
 
         assert!(cursor1 < cursor2);

@@ -46,7 +46,7 @@ $ curl sentry-control.internal/api/0/internal/org-cell-mappings?cursor=abcdef&li
 }
 ```
 
-The cursor represents a base64-encoded composite sort key comprised of the last updated timestamp the id of the row.
+The cursor represents a base64-encoded composite sort key comprised of the last updated timestamp and the id of the row.
 The ID is either the org ID for organization mode, or the project key itself for project key mode.
 
 ```python
@@ -60,23 +60,16 @@ cursor = {
 b'eyJ1cGRhdGVkX2F0IjogMTc1NzAzMDQwOSwgImlkIjogIjk5OSJ9'
 ```
 
-When there are no more pages to return, the cursor contains a `null` value in the ID field, so incremental polling can pick up from this point.
-
-```python
-cursor = {
-  "updated_at": 1757030409,
-  "id": None
-}
-```
-
 Getsentry requirement:
 - This requires the control plane database to have a new `date_updated` column. The column must be indexed.
 - The organization ID is already the primary key in the `organizationmapping` table.
 
-The locator service also periodically requests incremental mapping updates from the control plane, by requesting updates that occured after a specific timestamp.
+If the response contains no results, `cursor` will be absent from the metadata. The caller should retain its previous cursor and use it on the next poll.
+
+The locator service also periodically requests incremental mapping updates from the control plane using the same cursor-based API. The cursor always points to the last returned item, so passing it back returns only items strictly after that point.
 The incremental API is called periodically, as well as on demand if a cache miss occurs.
 ```
-$ curl sentry-control.sentry.internal/api/0/internal/org-cell-mappings?after=1757030409
+$ curl sentry-control.sentry.internal/api/0/internal/org-cell-mappings?cursor=abcdef
 ```
 
 ### Backup route store

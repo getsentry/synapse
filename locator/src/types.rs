@@ -26,14 +26,14 @@ impl Cell {
 #[derive(Clone, Debug, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct RouteData {
     pub id_to_cell: HashMap<String, CellId>,
-    pub last_cursor: String,
+    pub last_cursor: Option<String>,
     pub cells: HashMap<CellId, Arc<Cell>>,
 }
 
 impl RouteData {
     pub fn from(
         id_to_cell: HashMap<String, CellId>,
-        last_cursor: String,
+        last_cursor: Option<String>,
         cell_to_locality: HashMap<CellId, String>,
     ) -> Self {
         // Construct RouteData from control plane response data

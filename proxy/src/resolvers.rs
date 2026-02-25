@@ -66,7 +66,7 @@ mod tests {
                 ("org_1".into(), "us1".into()),
                 ("org_2".into(), "de".into()),
             ]),
-            "cursor1".into(),
+            Some("cursor1".into()),
             HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),
         );
 

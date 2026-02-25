@@ -273,17 +273,21 @@ impl BackupRouteProvider for GcsRouteProvider {
         let reader = io::Cursor::new(data);
         let data = self.codec.read(reader)?;
 
-        let last_cursor = data.last_cursor.parse()?;
-
-        // This shouldn't happen: prefer to unwrap/panic than risk continuing with corrupted state
-        let mut guard = self.last_cursor.lock().unwrap();
-        *guard = Some(last_cursor);
+        if let Some(ref s) = data.last_cursor {
+            let last_cursor = s.parse()?;
+            // This shouldn't happen: prefer to unwrap/panic than risk continuing with corrupted state
+            let mut guard = self.last_cursor.lock().unwrap();
+            *guard = Some(last_cursor);
+        }
 
         Ok(data)
     }
 
     async fn store(&self, route_data: &RouteData) -> Result<(), BackupError> {
-        let new_last_cursor = route_data.last_cursor.parse()?;
+        let Some(ref cursor_str) = route_data.last_cursor else {
+            return Ok(());
+        };
+        let new_last_cursor: Cursor = cursor_str.parse()?;
 
         // Check the cursor stored in GCS metadata first. Only proceed with
         // write if the new cursor is later than the one already stored.
@@ -310,12 +314,12 @@ impl BackupRouteProvider for GcsRouteProvider {
         let _ = self
             .client
             .write_object(&self.bucket_name, &self.object_key, bytes_data)
-            .set_metadata([(METADATA_KEY, &route_data.last_cursor)])
+            .set_metadata([(METADATA_KEY, cursor_str.as_str())])
             .send_buffered()
             .await?;
 
         // Update last cursor if the write was successful
-        let last_cursor = route_data.last_cursor.parse()?;
+        let last_cursor = cursor_str.parse()?;
         let mut guard = self.last_cursor.lock().unwrap();
         *guard = Some(last_cursor);
 
@@ -341,14 +345,14 @@ mod tests {
     fn get_route_data() -> RouteData {
         let cursor_json_str = serde_json::json!({
             "updated_at": 1757030409,
-            "id": null
+            "id": "42"
         })
         .to_string();
         let last_cursor = STANDARD.encode(cursor_json_str.as_bytes());
 
         RouteData {
             id_to_cell: HashMap::from([("org1".into(), "cell1".into())]),
-            last_cursor,
+            last_cursor: Some(last_cursor),
             cells: HashMap::from([(
                 "cell1".into(),
                 Arc::new(Cell {
@@ -371,7 +375,7 @@ mod tests {
             let data = get_route_data();
             let mut buffer: Vec<u8> = Vec::new();
             let size = codec.write(&mut buffer, &data).unwrap();
-            assert_eq!(size, 77);
+            assert_eq!(size, 78);
             let mut reader: &[u8] = &buffer;
             let decoded = codec.read(&mut reader).unwrap();
             assert_eq!(data, decoded);

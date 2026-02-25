@@ -12,7 +12,7 @@ pub async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider)
             ("b".repeat(32).into(), "us1".into()),
             ("c".repeat(32).into(), "de".into()),
         ]),
-        "cursor1".into(),
+        Some("cursor1".into()),
         HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),
     );
 
@@ -45,7 +45,7 @@ impl BackupRouteProvider for MockBackupProvider {
 pub async fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locator {
     let route_data = RouteData::from(
         key_to_cell,
-        "cursor".to_string(),
+        Some("cursor".to_string()),
         HashMap::from([
             ("us1".to_string(), "us".to_string()),
             ("us2".to_string(), "us".to_string()),

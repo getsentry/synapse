@@ -27,9 +27,15 @@ impl PartialOrd for Cursor {
 
 impl Ord for Cursor {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Compare by updated_at first, then by id
+        // Compare by updated_at first, then by id.
+        // IDs are numeric strings (e.g. "9", "10"), so try numeric
+        // comparison first to avoid lexicographic mis-ordering ("9" > "10").
+        // Fallback to lexicographic if either ID isn't a valid number.
         match self.updated_at.cmp(&other.updated_at) {
-            std::cmp::Ordering::Equal => self.id.cmp(&other.id),
+            std::cmp::Ordering::Equal => match (self.id.parse::<u64>(), other.id.parse::<u64>()) {
+                (Ok(a), Ok(b)) => a.cmp(&b),
+                _ => self.id.cmp(&other.id),
+            },
             ordering => ordering,
         }
     }
@@ -91,6 +97,18 @@ mod tests {
         let cursor2 = Cursor {
             updated_at: 1000,
             id: "a".to_string(),
+        };
+
+        assert!(cursor1 < cursor2);
+
+        // Numeric IDs: "10" must sort after "9"
+        let cursor1 = Cursor {
+            updated_at: 1000,
+            id: "9".to_string(),
+        };
+        let cursor2 = Cursor {
+            updated_at: 1000,
+            id: "10".to_string(),
         };
 
         assert!(cursor1 < cursor2);

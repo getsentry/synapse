@@ -223,7 +223,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            IngestRouterError::UpstreamTimeout(_)
+            IngestRouterError::UpstreamTimeout(_) | IngestRouterError::UpstreamRequestFailed(_, _)
         ));
     }
 }

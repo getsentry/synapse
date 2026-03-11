@@ -422,16 +422,15 @@ mod tests {
     async fn test_locator_control_plane_available() {
         // Control plane available, use results from control plane
         let host = "127.0.0.1";
-        let port = 9001;
 
         // Run the control plane server
-        let _server = TestControlPlaneServer::spawn(host, port).unwrap();
+        let server = TestControlPlaneServer::spawn(host).unwrap();
 
         let (_dir, provider) = get_mock_provider().await;
 
         let locator = Locator::new(
             LocatorDataType::Organization,
-            format!("http://{host}:{port}").to_string(),
+            format!("http://{}:{}", host, server.port),
             provider.clone(),
             None,
             Some(HashMap::from([("de".into(), "de".into())])),

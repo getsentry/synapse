@@ -245,10 +245,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_control_plane() {
-        let _server = TestControlPlaneServer::spawn("127.0.0.1", 9000).unwrap();
+        let server = TestControlPlaneServer::spawn("127.0.0.1").unwrap();
         let control_plane = ControlPlane::new(
             LocatorDataType::Organization,
-            "http://127.0.0.1:9000/".to_string(),
+            format!("http://127.0.0.1:{}/", server.port),
             None,
         );
         let response = control_plane.load_mappings(None).await;
@@ -262,10 +262,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_control_plane_with_localities() {
-        let _server = TestControlPlaneServer::spawn("127.0.0.1", 9002).unwrap();
+        let server = TestControlPlaneServer::spawn("127.0.0.1").unwrap();
         let control_plane = ControlPlane::new(
             LocatorDataType::Organization,
-            "http://127.0.0.1:9002/".to_string(),
+            format!("http://127.0.0.1:{}/", server.port),
             Some(vec!["de".into()]),
         );
         let response = control_plane.load_mappings(None).await;

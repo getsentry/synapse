@@ -12,6 +12,9 @@ from urllib.parse import urlparse, parse_qs
 import argparse
 from enum import Enum
 import itertools
+import os
+import sys
+import threading
 
 
 # This API mocks the control plane snapshot request, split across pages
@@ -206,4 +209,12 @@ if __name__ == "__main__":
 
     server = HTTPServer((host, port), MockControlApi)
     print(f"Mock control plane listening on http://{host}:{port}")
+
+    # Exit when the parent process closes the stdin pipe.
+
+    def _watch_stdin():
+        sys.stdin.read()
+        os._exit(0)
+    threading.Thread(target=_watch_stdin, daemon=True).start()
+
     server.serve_forever()

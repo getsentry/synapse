@@ -55,7 +55,8 @@ ALL_ORG_RESULTS = [
 
 ALL_PROJECTKEY_RESULTS = [
     {
-        "id": d * 32,
+        "id": i,
+        "publickey": d * 32,
         "cell": f"us{i % 2 + 1}",
         "updated_at": START_TIME + i
     }
@@ -131,6 +132,7 @@ def get_results(
             results.append(
                 {
                     "id": all_results[i]["id"],
+                    "publickey": all_results[i]["publickey"],
                     "cell": all_results[i]["cell"],
                 }
             )

@@ -14,11 +14,10 @@ use std::time::Instant;
 use tokio::time::{Duration, sleep};
 
 #[derive(Deserialize)]
-struct ControlPlaneRecord {
-    id: String,
-    // Slug is present in organization but not project key responses
-    slug: Option<String>,
-    cell: CellId,
+#[serde(untagged)]
+enum ControlPlaneRecord {
+    Org { id: String, slug: String, cell: CellId },
+    ProjectKey { publickey: String, cell: CellId },
 }
 
 #[derive(Deserialize)]
@@ -207,9 +206,14 @@ impl ControlPlane {
             cell_to_locality.extend(json_response.metadata.cell_to_locality);
 
             for row in json_response.data {
-                org_to_cell.insert(row.id, row.cell.clone());
-                if let Some(slug) = row.slug {
-                    org_to_cell.insert(slug, row.cell);
+                match row {
+                    ControlPlaneRecord::Org { id, slug, cell } => {
+                        org_to_cell.insert(id, cell.clone());
+                        org_to_cell.insert(slug, cell);
+                    }
+                    ControlPlaneRecord::ProjectKey { publickey, cell } => {
+                        org_to_cell.insert(publickey, cell);
+                    }
                 }
             }
 
@@ -278,6 +282,25 @@ mod tests {
         assert_eq!(mapping.get("sentry4").unwrap(), "de1");
         assert_eq!(mapping.get("9").unwrap(), "de1");
         assert_eq!(mapping.get("14").unwrap(), "de1");
+    }
+
+    #[tokio::test]
+    async fn test_control_plane_projectkey() {
+        let server = TestControlPlaneServer::spawn("127.0.0.1").unwrap();
+        let control_plane = ControlPlane::new(
+            LocatorDataType::ProjectKey,
+            format!("http://127.0.0.1:{}/", server.port),
+            None,
+        );
+        let response = control_plane.load_mappings(None).await;
+
+        let mapping = response.unwrap().id_to_cell;
+
+        assert_eq!(mapping.len(), 15);
+        assert_eq!(
+            mapping.get("00000000000000000000000000000000").unwrap(),
+            "us1"
+        );
     }
 
     #[test]

@@ -16,8 +16,15 @@ use tokio::time::{Duration, sleep};
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum ControlPlaneRecord {
-    Org { id: String, slug: String, cell: CellId },
-    ProjectKey { publickey: String, cell: CellId },
+    Org {
+        id: String,
+        slug: String,
+        cell: CellId,
+    },
+    ProjectKey {
+        publickey: String,
+        cell: CellId,
+    },
 }
 
 #[derive(Deserialize)]

@@ -1,0 +1,44 @@
+x-sentry-service-config:
+  version: 0.1
+  service_name: synapse
+  description: Cell routing services (proxy + ingest-router).
+  modes:
+    default:
+      - synapse-proxy
+      - synapse-ingest-router
+
+services:
+  synapse-proxy:
+    image: us-docker.pkg.dev/sentryio/synapse/image:latest
+    command: ["proxy", "--config-file-path", "/app/proxy.yaml"]
+    ports:
+      - "13000:3000"
+      - "13001:3001"
+    volumes:
+      - ./proxy.yaml:/app/proxy.yaml:ro
+      - synapse-proxy-cache:/tmp/synapse-cache
+    networks:
+      - devservices
+    restart: unless-stopped
+
+  synapse-ingest-router:
+    image: us-docker.pkg.dev/sentryio/synapse/image:latest
+    command: ["ingest-router", "--config-file-path", "/app/ingest-router.yaml"]
+    ports:
+      - "13002:3000"
+      - "13003:3001"
+    volumes:
+      - ./ingest-router.yaml:/app/ingest-router.yaml:ro
+      - synapse-ingest-router-cache:/tmp/synapse-cache
+    networks:
+      - devservices
+    restart: unless-stopped
+
+volumes:
+  synapse-proxy-cache:
+  synapse-ingest-router-cache:
+
+networks:
+  devservices:
+    name: devservices
+    external: true

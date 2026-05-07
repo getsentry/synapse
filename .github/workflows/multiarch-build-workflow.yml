@@ -3,10 +3,6 @@ name: multiarch-build-workflow
 # Reusable workflow: matrix-builds a Dockerfile per-arch on native runners
 # via getsentry/action-build-and-push-images, then assembles a multi-arch
 # manifest from the per-arch suffixed tags.
-#
-# Scope: GAR-only for now. GHCR / multi-registry can be added when the
-# pattern is upstreamed into getsentry/action-build-and-push-images.
-
 on:
     workflow_call:
         inputs:

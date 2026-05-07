@@ -2,6 +2,11 @@ x-sentry-service-config:
   version: 0.1
   service_name: synapse
   description: Cell routing services (proxy + ingest-router).
+  dependencies:
+    synapse-proxy:
+      description: Synapse proxy
+    synapse-ingest-router:
+      description: Synapse ingest router
   modes:
     default:
       - synapse-proxy

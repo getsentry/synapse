@@ -19,6 +19,7 @@ jobs:
 
     # Gate job — keeps `build-docker` as a single branch-protection check.
     build-docker:
+        permissions: {}
         needs: [ multiarch ]
         runs-on: ubuntu-latest
         steps:

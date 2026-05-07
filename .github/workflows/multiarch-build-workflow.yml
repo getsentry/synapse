@@ -43,12 +43,16 @@ jobs:
                 with:
                     image_name: ${{ inputs.image_name }}
                     platforms: ${{ matrix.platform }}
+                    # Each matrix leg stages a single arch as :sha-<arch>;
+                    # the assemble job stitches them into the multi-arch :sha and :latest.
+                    # This is the same as Snuba's multiarch workflow.
                     tag_suffix: -${{ matrix.pair }}
                     ghcr: false
                     google_ar: true
                     google_ar_image_name: ${{ inputs.google_ar_image_name }}
                     google_workload_identity_provider: ${{ inputs.google_workload_identity_provider }}
                     google_service_account: ${{ inputs.google_service_account }}
+                    # latest/nightly belong on the assembled manifest, not per-arch.
                     tag_latest: false
                     tag_nightly: false
 

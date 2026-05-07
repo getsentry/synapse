@@ -1,0 +1,28 @@
+name: arm64-bench
+on:
+    workflow_dispatch:
+    push:
+        branches: [ devservices-multiarch ]
+
+jobs:
+    bench-native:
+        runs-on: ubuntu-24.04-arm
+        steps:
+            -   uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            -   uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+                with:
+                    image_name: synapse
+                    platforms: linux/arm64
+                    ghcr: false
+                    tag_nightly: false
+
+    bench-qemu:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            -   uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+                with:
+                    image_name: synapse
+                    platforms: linux/arm64
+                    ghcr: false
+                    tag_nightly: false

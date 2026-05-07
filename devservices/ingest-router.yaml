@@ -9,7 +9,7 @@ ingest_router:
   locator:
     type: in_process
     control_plane:
-      url: http://dev.getsentry.net:8000
+      url: http://host.docker.internal:8000
     backup_route_store:
       type: filesystem
       base_dir: /tmp/synapse-cache
@@ -23,8 +23,8 @@ ingest_router:
   locales:
     "--monolith--":
       - id: "--monolith--"
-        sentry_url: http://dev.getsentry.net:8000
-        relay_url: TODO
+        sentry_url: http://host.docker.internal:8000
+        relay_url: http://relay:7899
 
   routes:
     - match:

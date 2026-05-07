@@ -1,0 +1,88 @@
+name: multiarch-build-workflow
+
+# Reusable workflow: matrix-builds a Dockerfile per-arch on native runners
+# via getsentry/action-build-and-push-images, then assembles a multi-arch
+# manifest from the per-arch suffixed tags.
+#
+# Scope: GAR-only for now. GHCR / multi-registry can be added when the
+# pattern is upstreamed into getsentry/action-build-and-push-images.
+
+on:
+    workflow_call:
+        inputs:
+            image_name:
+                description: Image name (matches the wrapper's image_name input).
+                required: true
+                type: string
+            google_ar_image_name:
+                description: Fully-qualified GAR image path (e.g. us-docker.pkg.dev/sentryio/synapse/image).
+                required: true
+                type: string
+            push:
+                description: Whether to assemble the manifest. The wrapper itself decides whether per-arch images get pushed; this only gates the assemble step. Caller typically computes from event/ref.
+                type: boolean
+                default: false
+            google_workload_identity_provider:
+                required: true
+                type: string
+            google_service_account:
+                required: true
+                type: string
+
+jobs:
+    build-arch:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    -   { platform: linux/amd64, runner: ubuntu-latest, pair: amd64 }
+                    -   { platform: linux/arm64, runner: ubuntu-24.04-arm, pair: arm64 }
+        runs-on: ${{ matrix.runner }}
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            -   uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            -   uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
+                with:
+                    image_name: ${{ inputs.image_name }}
+                    platforms: ${{ matrix.platform }}
+                    tag_suffix: -${{ matrix.pair }}
+                    ghcr: false
+                    google_ar: true
+                    google_ar_image_name: ${{ inputs.google_ar_image_name }}
+                    google_workload_identity_provider: ${{ inputs.google_workload_identity_provider }}
+                    google_service_account: ${{ inputs.google_service_account }}
+                    tag_latest: false
+                    tag_nightly: false
+
+    assemble:
+        needs: [ build-arch ]
+        if: inputs.push
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            -   uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
+                with:
+                    workload_identity_provider: ${{ inputs.google_workload_identity_provider }}
+                    service_account: ${{ inputs.google_service_account }}
+
+            -   env:
+                    IMAGE: ${{ inputs.google_ar_image_name }}
+                run: gcloud auth configure-docker "$(echo "$IMAGE" | cut -d/ -f1)"
+
+            -   uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+            -   name: Assemble manifest
+                env:
+                    IMAGE: ${{ inputs.google_ar_image_name }}
+                    SHA: ${{ github.sha }}
+                run: |
+                    docker buildx imagetools create \
+                        -t "${IMAGE}:${SHA}" \
+                        -t "${IMAGE}:latest" \
+                        "${IMAGE}:${SHA}-amd64" \
+                        "${IMAGE}:${SHA}-arm64"
+                    docker buildx imagetools inspect "${IMAGE}:${SHA}"

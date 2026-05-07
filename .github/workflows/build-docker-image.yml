@@ -1,36 +1,25 @@
 name: build-docker-image
-permissions:
-    contents: read
-    id-token: write
 on:
     push:
         branches: [ main ]
     pull_request:
+
 jobs:
+    multiarch:
+        permissions:
+            contents: read
+            id-token: write
+        uses: ./.github/workflows/multiarch-build-workflow.yml
+        with:
+            image_name: synapse
+            google_ar_image_name: us-docker.pkg.dev/sentryio/synapse/image
+            google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
+            google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+            push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+    # Gate job — keeps `build-docker` as a single branch-protection check.
     build-docker:
+        needs: [ multiarch ]
         runs-on: ubuntu-latest
         steps:
-            -   name: Checkout repository
-                uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-            -   name: Docker build - pull request
-                if: github.event_name == 'pull_request'
-                uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
-                with:
-                    image_name: synapse
-                    platforms: linux/amd64,linux/arm64
-                    ghcr: false
-                    tag_nightly: false
-
-            -   name: Docker build - push to registry
-                if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-                uses: getsentry/action-build-and-push-images@8fc75e483c09a68721f2c8951292ee17f8821766
-                with:
-                    image_name: synapse
-                    platforms: linux/amd64,linux/arm64
-                    google_ar: true
-                    google_ar_image_name: us-docker.pkg.dev/sentryio/synapse/image
-                    ghcr: false
-                    tag_nightly: false
-                    google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
-                    google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+            -   run: 'true'

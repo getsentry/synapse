@@ -8,7 +8,7 @@ proxy:
   locator:
     type: in_process
     control_plane:
-      url: http://localhost:8000
+      url: http://dev.getsentry.net:8000
     backup_route_store:
       type: filesystem
       base_dir: /tmp/synapse-cache
@@ -20,7 +20,7 @@ proxy:
       "--monolith--": "--monolith--"
   upstreams:
     - name: sentry-dev-monolith
-      url: http://localhost:8000
+      url: http://dev.getsentry.net:8000
   routes:
     - match:
         host: localhost

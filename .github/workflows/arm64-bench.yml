@@ -1,4 +1,6 @@
 name: arm64-bench
+permissions:
+    contents: read
 on:
     workflow_dispatch:
     push:

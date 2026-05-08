@@ -2,6 +2,7 @@ use clap::{Args, Parser};
 use std::path::PathBuf;
 
 mod config;
+mod healthcheck;
 use config::{Config, MetricsConfig};
 use metrics_exporter_statsd::StatsdBuilder;
 use std::future::Future;
@@ -14,6 +15,8 @@ enum CliCommand {
     Locator(LocatorArgs),
     Proxy(ProxyArgs),
     IngestRouter(IngestRouterArgs),
+    /// Probe a URL and exit 0 on a 2xx response, non-zero otherwise.
+    Healthcheck(HealthcheckArgs),
     /// Show all metrics definitions as markdown table
     ShowMetrics,
     /// Sync METRICS.md with current metric definitions
@@ -28,6 +31,8 @@ enum CliError {
     InvalidConfig(&'static str),
     #[error("Failed to create runtime: {0}")]
     RuntimeError(#[from] std::io::Error),
+    #[error("Healthcheck failed: {0}")]
+    HealthcheckFailed(String),
 }
 
 fn main() {
@@ -81,6 +86,7 @@ fn cli() -> Result<(), CliError> {
 
             Ok(())
         }
+        CliCommand::Healthcheck(args) => healthcheck::run(&args.base.config_file_path),
         CliCommand::ShowMetrics => {
             println!("## Locator Metrics\n");
             println!(
@@ -238,6 +244,12 @@ struct ProxyArgs {
 
 #[derive(Args, Debug)]
 struct IngestRouterArgs {
+    #[command(flatten)]
+    base: BaseArgs,
+}
+
+#[derive(Args, Debug)]
+struct HealthcheckArgs {
     #[command(flatten)]
     base: BaseArgs,
 }

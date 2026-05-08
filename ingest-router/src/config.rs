@@ -445,9 +445,7 @@ routes:
 
         // Test locality with no cells
         let mut config = base_config.clone();
-        config
-            .localities
-            .insert("locality".to_string(), Vec::new());
+        config.localities.insert("locality".to_string(), Vec::new());
         assert!(matches!(
             config.validate().unwrap_err(),
             ValidationError::LocalityHasNoValidCells(_)

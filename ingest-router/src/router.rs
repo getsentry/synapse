@@ -2,7 +2,7 @@ use crate::api::any_cell_handler::AnyCellHandler;
 use crate::api::project_config::ProjectConfigsHandler;
 use crate::config::{CellConfig, HandlerAction, Route};
 use crate::handler::Handler;
-use crate::locale::{Cells, Locales};
+use crate::locality::{Cells, Localities};
 use hyper::Request;
 use locator::client::Locator;
 use std::collections::HashMap;
@@ -12,14 +12,14 @@ use std::sync::Arc;
 pub struct Router {
     routes: Arc<Vec<Route>>,
     action_to_handler: HashMap<HandlerAction, Arc<dyn Handler>>,
-    locales_to_cells: Locales,
+    localities_to_cells: Localities,
 }
 
 impl Router {
     /// Creates a new router with the given routes
     pub fn new(
         routes: Vec<Route>,
-        locales: HashMap<String, Vec<CellConfig>>,
+        localities: HashMap<String, Vec<CellConfig>>,
         locator: Locator,
     ) -> Self {
         let action_to_handler = HashMap::from([
@@ -48,7 +48,7 @@ impl Router {
         Self {
             routes: Arc::new(routes),
             action_to_handler,
-            locales_to_cells: Locales::new(locales),
+            localities_to_cells: Localities::new(localities),
         }
     }
 
@@ -58,7 +58,7 @@ impl Router {
             .iter()
             .find(|route| self.matches_route(req, route))
             .and_then(|route| {
-                let cells = self.locales_to_cells.get_cells(&route.locale)?;
+                let cells = self.localities_to_cells.get_cells(&route.locality)?;
                 let handler = self.action_to_handler.get(&route.action)?.clone();
                 Some((handler, cells))
             })
@@ -126,7 +126,7 @@ mod tests {
                     method: Some(HttpMethod::Post),
                 },
                 action: HandlerAction::RelayProjectConfigs,
-                locale: "us".to_string(),
+                locality: "us".to_string(),
             },
             Route {
                 r#match: Match {
@@ -135,13 +135,13 @@ mod tests {
                     method: Some(HttpMethod::Get),
                 },
                 action: HandlerAction::Health,
-                locale: "us".to_string(),
+                locality: "us".to_string(),
             },
         ];
 
         let routes = routes.unwrap_or(default_routes);
 
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![CellConfig {
                 id: "us1".to_string(),
@@ -160,7 +160,7 @@ mod tests {
         );
         let locator = Locator::from_in_process_service(locator_service);
 
-        Router::new(routes, locales, locator)
+        Router::new(routes, localities, locator)
     }
 
     fn test_request(
@@ -213,7 +213,7 @@ mod tests {
                 method: None,
             },
             action: HandlerAction::RelayProjectConfigs,
-            locale: "us".to_string(),
+            locality: "us".to_string(),
         }];
 
         let router = test_router(Some(routes)).await;
@@ -233,7 +233,7 @@ mod tests {
                 method: Some(HttpMethod::Post),
             },
             action: HandlerAction::RelayProjectConfigs,
-            locale: "us".to_string(),
+            locality: "us".to_string(),
         }];
 
         let router = test_router(Some(routes)).await;

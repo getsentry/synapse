@@ -1,18 +1,18 @@
-//! Locale-based Routing Infrastructure
+//! Locality-based Routing Infrastructure
 //!
-//! Maps locales to cells and cells to upstreams for request routing.
+//! Maps localities to cells and cells to upstreams for request routing.
 //!
 //! # Model
 //!
 //! The routing system uses a two-level hierarchy:
 //!
-//! 1. **Locale → Cells**: Each locale (e.g., "us", "de") maps to cell names
+//! 1. **Locality → Cells**: Each locality (e.g., "us", "de") maps to cell names
 //! 2. **Cell → Upstream**: Each cell name maps to an `Upstream` with URLs
 //!
 //! ## Example
 //!
 //! ```text
-//! Locale "us" → Cells ["us-1", "us-2"]
+//! Locality "us" → Cells ["us-1", "us-2"]
 //!   ├─ "us-1" → Upstream {
 //!   │    relay_url: "http://us1-relay.example.com",
 //!   │    sentry_url: "http://us1-sentry.example.com"
@@ -20,7 +20,7 @@
 //!   └─ "us-2" → Upstream { ... }
 //! ```
 //!
-//! The `Locales` is built at startup from configuration and remains immutable
+//! `Localties` is built at startup from configuration and remains immutable
 //! during request processing.
 
 use indexmap::IndexMap;
@@ -98,30 +98,30 @@ impl Cells {
     }
 }
 
-/// Maps locales to their cells (which map to upstreams)
-pub struct Locales {
-    /// Mapping from locale to cells
-    locale_to_cells: HashMap<String, Cells>,
+/// Maps localities to their cells (which map to upstreams)
+pub struct Localities {
+    /// Mapping from locality to cells
+    locality_to_cells: HashMap<String, Cells>,
 }
 
-impl Locales {
-    /// Build locale mappings from configuration
-    pub fn new(locales: HashMap<String, Vec<CellConfig>>) -> Self {
-        // Build locale -> cells mapping
-        let locale_to_cells = locales
+impl Localities {
+    /// Build locality mappings from configuration
+    pub fn new(localities: HashMap<String, Vec<CellConfig>>) -> Self {
+        // Build locality -> cells mapping
+        let locality_to_cells = localities
             .into_iter()
-            .map(|(locale, cells)| {
-                let cells = Cells::from_config(locale.clone(), cells);
-                (locale, cells)
+            .map(|(locality, cells_config)| {
+                let cells = Cells::from_config(locality.clone(), cells_config);
+                (locality, cells)
             })
             .collect();
 
-        Self { locale_to_cells }
+        Self { locality_to_cells }
     }
 
-    /// Get the cells for a specific locale
-    pub fn get_cells(&self, locale: &str) -> Option<Cells> {
-        self.locale_to_cells.get(locale).cloned()
+    /// Get the cells for a specific locality
+    pub fn get_cells(&self, locality: &str) -> Option<Cells> {
+        self.locality_to_cells.get(locality).cloned()
     }
 }
 
@@ -138,9 +138,9 @@ mod tests {
     }
 
     #[test]
-    fn test_locales() {
-        let mut locales_config = HashMap::new();
-        locales_config.insert(
+    fn test_localities() {
+        let mut localities_config = HashMap::new();
+        localities_config.insert(
             "us".to_string(),
             vec![
                 cell_config(
@@ -155,7 +155,7 @@ mod tests {
                 ),
             ],
         );
-        locales_config.insert(
+        localities_config.insert(
             "de".to_string(),
             vec![cell_config(
                 "de1",
@@ -164,10 +164,10 @@ mod tests {
             )],
         );
 
-        let locales = Locales::new(locales_config);
+        let localities = Localities::new(localities_config);
 
-        // Verify US locale has 2 cells
-        let us_cells = locales.get_cells("us").unwrap();
+        // Verify US locality has 2 cells
+        let us_cells = localities.get_cells("us").unwrap();
         let cell_list: Vec<_> = us_cells.cell_list().collect();
         assert_eq!(cell_list.len(), 2);
         assert!(us_cells.contains_cell("us1"));
@@ -178,15 +178,15 @@ mod tests {
         assert_eq!(cell_list[0], "us1");
         assert_eq!(cell_list[1], "us2");
 
-        // Verify DE locale has 1 cell
-        let de_cells = locales.get_cells("de").unwrap();
+        // Verify DE locality has 1 cell
+        let de_cells = localities.get_cells("de").unwrap();
         let cell_list: Vec<_> = de_cells.cell_list().collect();
         assert_eq!(cell_list.len(), 1);
         assert!(de_cells.contains_cell("de1"));
         assert!(de_cells.get_upstream("de1").is_some());
         assert_eq!(cell_list[0], "de1");
 
-        // Verify unknown locale returns None
-        assert!(locales.get_cells("unknown").is_none());
+        // Verify unknown locality returns None
+        assert!(localities.get_cells("unknown").is_none());
     }
 }

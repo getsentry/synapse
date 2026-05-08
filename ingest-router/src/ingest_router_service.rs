@@ -153,7 +153,7 @@ mod tests {
                     method: Some(HttpMethod::Post),
                 },
                 action: HandlerAction::RelayProjectConfigs,
-                locale: "us".to_string(),
+                locality: "us".to_string(),
             },
             Route {
                 r#match: Match {
@@ -162,11 +162,11 @@ mod tests {
                     method: Some(HttpMethod::Get),
                 },
                 action: HandlerAction::Health,
-                locale: "us".to_string(),
+                locality: "us".to_string(),
             },
         ];
 
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![CellConfig {
                 id: "us1".to_string(),
@@ -182,7 +182,7 @@ mod tests {
         .await;
 
         let service = IngestRouterService::new(
-            router::Router::new(routes_config, locales, locator),
+            router::Router::new(routes_config, localities, locator),
             config::RelayTimeouts {
                 http_timeout_secs: 5000,
                 task_initial_timeout_secs: 10000,

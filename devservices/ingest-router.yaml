@@ -20,7 +20,7 @@ ingest_router:
     locality_to_default_cell:
       "--monolith--": "--monolith--"
 
-  locales:
+  localities:
     "--monolith--":
       - id: "--monolith--"
         sentry_url: http://host.docker.internal:8000
@@ -33,35 +33,35 @@ ingest_router:
         method: POST
       action:
         handler: relay_project_configs
-      locale: "--monolith--"
+      locality: "--monolith--"
     - match:
         host: localhost
         path: /api/0/relays/live/
         method: GET
       action:
         handler: health
-      locale: "--monolith--"
+      locality: "--monolith--"
     - match:
         host: localhost
         path: /api/0/relays/register/challenge/
         method: POST
       action:
         handler: register_challenge
-      locale: "--monolith--"
+      locality: "--monolith--"
     - match:
         host: localhost
         path: /api/0/relays/register/response/
         method: POST
       action:
         handler: register_response
-      locale: "--monolith--"
+      locality: "--monolith--"
     - match:
         host: localhost
         path: /api/0/relays/publickeys/
         method: POST
       action:
         handler: public_keys
-      locale: "--monolith--"
+      locality: "--monolith--"
 
 metrics:
   statsd_host: "127.0.0.1"

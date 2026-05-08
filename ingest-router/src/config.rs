@@ -10,8 +10,8 @@ pub enum ValidationError {
     #[error("Port cannot be 0")]
     InvalidPort,
 
-    #[error("Route action references unknown locale: {0}")]
-    UnknownLocale(String),
+    #[error("Route action references unknown locality: {0}")]
+    UnknownLocality(String),
 
     #[error("Duplicate upstream id: {0}")]
     DuplicateUpstream(String),
@@ -19,11 +19,11 @@ pub enum ValidationError {
     #[error("Empty upstream id")]
     EmptyUpstreamId,
 
-    #[error("Empty locale in action")]
-    EmptyLocale,
+    #[error("Empty locality in action")]
+    EmptyLocality,
 
-    #[error("Locale '{0}' has no valid cells (none of its cells match any upstream)")]
-    LocaleHasNoValidCells(String),
+    #[error("Locality '{0}' has no valid cells (none of its cells match any upstream)")]
+    LocalityHasNoValidCells(String),
 
     #[error("Invalid timeout configuration: {0}")]
     InvalidTimeouts(String),
@@ -114,7 +114,7 @@ impl RelayTimeouts {
 }
 
 /// Cell/upstream configuration
-/// Note: The cell id is the HashMap key in Config.locales
+/// Note: The cell id is the HashMap key in Config.localities
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CellConfig {
     /// Identifier of the cell
@@ -180,7 +180,7 @@ pub struct Config {
     pub admin_listener: AdminListener,
     /// Cells are stored as a Vec to maintain priority order - the first cell
     /// in the list has highest priority for global config responses.
-    pub locales: HashMap<String, Vec<CellConfig>>,
+    pub localities: HashMap<String, Vec<CellConfig>>,
     /// Request routing rules
     pub routes: Vec<Route>,
     /// Locator service configuration
@@ -199,11 +199,11 @@ impl Config {
 
         self.relay_timeouts.validate()?;
 
-        // Validate locales and cells
-        for (locale, cells) in &self.locales {
-            // Check that locale has at least one cell
+        // Validate localities and cells
+        for (locality, cells) in &self.localities {
+            // Check that locality has at least one cell
             if cells.is_empty() {
-                return Err(ValidationError::LocaleHasNoValidCells(locale.clone()));
+                return Err(ValidationError::LocalityHasNoValidCells(locality.clone()));
             }
 
             // Check for empty cell ids and collect for duplicate checking
@@ -218,13 +218,13 @@ impl Config {
             }
         }
 
-        // Collect valid locales
-        let valid_locales: HashSet<&String> = self.locales.keys().collect();
+        // Collect valid localities
+        let valid_localities: HashSet<&String> = self.localities.keys().collect();
 
         for r in &self.routes {
-            // Validate that action locale exists
-            if valid_locales.is_empty() || !valid_locales.contains(&r.locale) {
-                return Err(ValidationError::UnknownLocale(r.locale.clone()));
+            // Validate that action locality exists
+            if valid_localities.is_empty() || !valid_localities.contains(&r.locality) {
+                return Err(ValidationError::UnknownLocality(r.locality.clone()));
             }
         }
 
@@ -294,8 +294,8 @@ pub struct Route {
     pub r#match: Match,
     /// Action to take when the match conditions are met
     pub action: HandlerAction,
-    // Locale that the route applies to
-    pub locale: String,
+    // Locality that the route applies to
+    pub locality: String,
 }
 
 /// Request matching criteria
@@ -325,7 +325,7 @@ admin_listener:
 locator:
     type: url
     url: "http://localhost:8000"
-locales:
+localities:
     us:
         - id: us1
           sentry_url: "http://127.0.0.1:8080"
@@ -344,12 +344,12 @@ routes:
         method: POST
       action:
         handler: relay_project_configs
-      locale: us
+      locality: us
     - match:
         path: /api/0/relays/live/
       action:
         handler: health
-      locale: us
+      locality: us
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
@@ -357,11 +357,11 @@ routes:
 
         // Verify key config values
         assert_eq!(config.listener.port, 3000);
-        assert_eq!(config.locales.len(), 2);
-        assert_eq!(config.locales.get("us").unwrap().len(), 2);
-        assert_eq!(config.locales.get("de").unwrap().len(), 1);
-        assert_eq!(config.locales.get("us").unwrap()[0].id, "us1");
-        assert_eq!(config.locales.get("us").unwrap()[1].id, "us2");
+        assert_eq!(config.localities.len(), 2);
+        assert_eq!(config.localities.get("us").unwrap().len(), 2);
+        assert_eq!(config.localities.get("de").unwrap().len(), 1);
+        assert_eq!(config.localities.get("us").unwrap()[0].id, "us1");
+        assert_eq!(config.localities.get("us").unwrap()[1].id, "us2");
         assert_eq!(config.routes.len(), 2);
         assert_eq!(config.routes[0].r#match.method, Some(HttpMethod::Post));
         assert_eq!(config.routes[1].r#match.host, None);
@@ -378,7 +378,7 @@ routes:
                 host: "127.0.0.1".to_string(),
                 port: 3001,
             },
-            locales: HashMap::from([(
+            localities: HashMap::from([(
                 "us".to_string(),
                 vec![CellConfig {
                     id: "us1".to_string(),
@@ -394,7 +394,7 @@ routes:
                     method: None,
                 },
                 action: HandlerAction::RelayProjectConfigs,
-                locale: "us".to_string(),
+                locality: "us".to_string(),
             }],
             locator: Locator {
                 r#type: LocatorType::Url {
@@ -413,7 +413,7 @@ routes:
 
         // Test empty cell id
         let mut config = base_config.clone();
-        config.locales.get_mut("us").unwrap().push(CellConfig {
+        config.localities.get_mut("us").unwrap().push(CellConfig {
             id: "".to_string(),
             sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
             relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
@@ -425,7 +425,7 @@ routes:
 
         // Test duplicate cell id
         let mut config = base_config.clone();
-        config.locales.get_mut("us").unwrap().push(CellConfig {
+        config.localities.get_mut("us").unwrap().push(CellConfig {
             id: "us1".to_string(),
             sentry_url: Url::parse("http://10.0.0.2:8080").unwrap(),
             relay_url: Url::parse("http://10.0.0.2:8090").unwrap(),
@@ -435,22 +435,22 @@ routes:
             ValidationError::DuplicateUpstream(_)
         ));
 
-        // Test unknown locale in action
+        // Test unknown locality in action
         let mut config = base_config.clone();
-        config.routes[0].locale = "invalid".to_string();
+        config.routes[0].locality = "invalid".to_string();
         assert!(matches!(
             config.validate().unwrap_err(),
-            ValidationError::UnknownLocale(_)
+            ValidationError::UnknownLocality(_)
         ));
 
-        // Test locale with no cells
+        // Test locality with no cells
         let mut config = base_config.clone();
         config
-            .locales
-            .insert("invalid_locale".to_string(), Vec::new());
+            .localities
+            .insert("locality".to_string(), Vec::new());
         assert!(matches!(
             config.validate().unwrap_err(),
-            ValidationError::LocaleHasNoValidCells(_)
+            ValidationError::LocalityHasNoValidCells(_)
         ));
 
         // Test invalid timeouts: task_initial < http
@@ -486,7 +486,7 @@ routes:
                 r#"
 listener: {host: "0.0.0.0", port: 3000}
 admin_listener: {host: "127.0.0.1", port: 3001}
-locale_to_cells: {us: [us1]}
+locality_to_cells: {us: [us1]}
 upstreams: [{id: us1, sentry_url: "not-a-url", relay_url: "http://127.0.0.1:8090"}]
 routes: []
 "#

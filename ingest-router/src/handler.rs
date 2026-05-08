@@ -1,5 +1,5 @@
 use crate::errors::IngestRouterError;
-use crate::locale::Cells;
+use crate::locality::Cells;
 use async_trait::async_trait;
 use hyper::body::Bytes;
 use hyper::{Request, Response};

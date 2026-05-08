@@ -24,6 +24,11 @@ services:
       - synapse-proxy-cache:/tmp/synapse-cache
     networks:
       - devservices
+    healthcheck:
+      test: ["CMD", "/app/synapse", "healthcheck", "--config-file-path", "/app/proxy.yaml"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   synapse-ingest-router:
@@ -37,6 +42,11 @@ services:
       - synapse-ingest-router-cache:/tmp/synapse-cache
     networks:
       - devservices
+    healthcheck:
+      test: ["CMD", "/app/synapse", "healthcheck", "--config-file-path", "/app/ingest-router.yaml"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:

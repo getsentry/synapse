@@ -10,6 +10,7 @@ locator = { path = "../locator" }
 metrics = { workspace = true }
 metrics-exporter-statsd = { workspace = true }
 proxy = { path = "../proxy" }
+reqwest = { workspace = true, features = ["blocking"] }
 sentry = { workspace = true }
 serde = { workspace = true }
 shared = { path = "../shared" }

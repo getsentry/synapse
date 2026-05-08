@@ -18,12 +18,14 @@ COPY shared ./shared
 
 RUN cargo build --release
 
+RUN mkdir /stage && cp --parents /usr/lib/$(gcc -print-multiarch)/libzstd.so.1 /stage
+
 # Runtime stage
 FROM gcr.io/distroless/cc-debian13:nonroot
 WORKDIR /app
 
 COPY --from=builder /app/target/release/synapse synapse
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libzstd.so.1 /usr/lib/x86_64-linux-gnu/libzstd.so.1
+COPY --from=builder /stage/ /
 
 ENTRYPOINT ["/app/synapse"]
 CMD []

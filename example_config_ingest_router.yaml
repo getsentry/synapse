@@ -23,7 +23,7 @@ ingest_router:
       us: us1
       de: de1
 
-  locales:
+  localities:
     us:
       - id: us1
         sentry_url: "http://10.0.0.1:8080"
@@ -43,56 +43,56 @@ ingest_router:
         method: POST
       action:
         handler: relay_project_configs
-      locale: us
+      locality: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
         handler: relay_project_configs
-      locale: de
+      locality: de
     - match:
         host: us.sentry.io
         path: /api/0/relays/live/
         method: GET
       action:
         handler: health
-      locale: us
+      locality: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/live/
         method: GET
       action:
         handler: health
-      locale: de
+      locality: de
     - match:
         host: us.sentry.io
         path: /api/0/relays/register/challenge/
         method: POST
       action:
         handler: register_challenge
-      locale: us
+      locality: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/register/challenge/
         method: POST
       action:
         handler: register_challenge
-      locale: de
+      locality: de
     - match:
         host: us.sentry.io
         path: /api/0/relays/register/response/
         method: POST
       action:
         handler: register_response
-      locale: us
+      locality: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/register/response/
         method: POST
       action:
         handler: register_response
-      locale: de
+      locality: de
     # Public keys endpoint
     - match:
         host: us.sentry.io
@@ -100,14 +100,14 @@ ingest_router:
         method: POST
       action:
         handler: public_keys
-      locale: us
+      locality: us
     - match:
         host: de.sentry.io
         path: /api/0/relays/publickeys/
         method: POST
       action:
         handler: public_keys
-      locale: de
+      locality: de
 
 
 # logging:

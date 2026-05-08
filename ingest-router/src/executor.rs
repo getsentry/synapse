@@ -2,7 +2,7 @@ use crate::config::RelayTimeouts;
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler};
 use crate::http::send_to_upstream;
-use crate::locale::Cells;
+use crate::locality::Cells;
 use crate::metrics_defs::UPSTREAM_REQUEST_DURATION;
 use http::StatusCode;
 use http_body_util::Full;

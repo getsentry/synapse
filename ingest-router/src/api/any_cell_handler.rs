@@ -1,7 +1,7 @@
 use crate::api::utils::normalize_headers;
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};
-use crate::locale::Cells;
+use crate::locality::Cells;
 use async_trait::async_trait;
 use http::StatusCode;
 use hyper::body::Bytes;
@@ -103,12 +103,12 @@ impl Handler for AnyCellHandler {
 mod tests {
     use super::*;
     use crate::config::CellConfig;
-    use crate::locale::Locales;
+    use crate::locality::Localities;
     use std::collections::HashMap;
     use url::Url;
 
     fn create_test_cells() -> Cells {
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![
                 CellConfig {
@@ -123,7 +123,7 @@ mod tests {
                 },
             ],
         )]);
-        Locales::new(locales).get_cells("us").unwrap()
+        Localities::new(localities).get_cells("us").unwrap()
     }
 
     #[tokio::test]

@@ -5,7 +5,7 @@ mod executor;
 pub mod handler;
 pub mod http;
 pub mod ingest_router_service;
-pub mod locale;
+pub mod locality;
 pub mod metrics_defs;
 pub mod router;
 
@@ -22,7 +22,7 @@ pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
     let locator = Locator::new(config.locator.to_client_config()).await?;
 
     let ingest_router_service = ingest_router_service::IngestRouterService::new(
-        router::Router::new(config.routes, config.locales, locator.clone()),
+        router::Router::new(config.routes, config.localities, locator.clone()),
         config.relay_timeouts,
     );
     let admin_service = AdminService::new({

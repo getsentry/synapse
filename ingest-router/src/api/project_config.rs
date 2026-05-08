@@ -284,7 +284,7 @@
 use crate::api::utils::{deserialize_body, normalize_headers, serialize_to_body};
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler, SplitMetadata};
-use crate::locale::Cells;
+use crate::locality::Cells;
 use async_trait::async_trait;
 use http::StatusCode;
 use http::response::Parts;
@@ -576,7 +576,7 @@ impl Handler for ProjectConfigsHandler {
 mod tests {
     use super::*;
     use crate::config::CellConfig;
-    use crate::locale::Locales;
+    use crate::locality::Localities;
     use crate::testutils::create_test_locator;
     use std::collections::HashMap;
     use url::Url;
@@ -604,7 +604,7 @@ mod tests {
         ]);
         let locator = create_test_locator(key_to_cell).await;
 
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![
                 CellConfig {
@@ -620,8 +620,8 @@ mod tests {
             ],
         )]);
 
-        let locales_obj = Locales::new(locales);
-        let cells = locales_obj.get_cells("us").unwrap();
+        let localities_obj = Localities::new(localities);
+        let cells = localities_obj.get_cells("us").unwrap();
 
         let handler = ProjectConfigsHandler::new(locator);
 
@@ -653,7 +653,7 @@ mod tests {
         ]);
         let locator = create_test_locator(key_to_cell).await;
         let handler = ProjectConfigsHandler::new(locator);
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![
                 CellConfig {
@@ -668,8 +668,8 @@ mod tests {
                 },
             ],
         )]);
-        let locales_obj = Locales::new(locales);
-        let cells = locales_obj.get_cells("us").unwrap();
+        let localities_obj = Localities::new(localities);
+        let cells = localities_obj.get_cells("us").unwrap();
         let request2 = build_request(ProjectConfigsRequest {
             public_keys: vec!["key1".to_string(), "key2".to_string(), "key3".to_string()],
             extra_fields: extra.clone(),
@@ -704,7 +704,7 @@ mod tests {
     async fn test_split_request_unknown_key_goes_to_pending() {
         let key_to_cell = HashMap::from([("key1".to_string(), "us1".to_string())]);
         let locator = create_test_locator(key_to_cell).await;
-        let locales = HashMap::from([(
+        let localities = HashMap::from([(
             "us".to_string(),
             vec![CellConfig {
                 id: "us1".to_string(),
@@ -713,8 +713,8 @@ mod tests {
             }],
         )]);
 
-        let locales_obj = Locales::new(locales);
-        let cells = locales_obj.get_cells("us").unwrap();
+        let localities_obj = Localities::new(localities);
+        let cells = localities_obj.get_cells("us").unwrap();
 
         let handler = ProjectConfigsHandler::new(locator);
 

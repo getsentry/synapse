@@ -7,7 +7,7 @@ on:
     workflow_call:
         inputs:
             image_name:
-                description: Image name (matches the wrapper's image_name input).
+                description: Only feeds GHCR naming in the underlying action; unused here since ghcr is disabled, but still required by the action.
                 required: true
                 type: string
             google_ar_image_name:
@@ -15,7 +15,7 @@ on:
                 required: true
                 type: string
             push:
-                description: Whether to assemble the manifest. The wrapper itself decides whether per-arch images get pushed; this only gates the assemble step. Caller typically computes from event/ref.
+                description: Whether to assemble the manifest.
                 type: boolean
                 default: false
             google_workload_identity_provider:

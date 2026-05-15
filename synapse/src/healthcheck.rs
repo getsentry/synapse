@@ -12,7 +12,7 @@ pub fn run(config_path: &Path) -> Result<(), CliError> {
         .ok_or(CliError::InvalidConfig(
             "Missing proxy or ingest-router config",
         ))?;
-    let response = reqwest::blocking::get(format!("http://localhost:{port}/ready"))
+    let response = reqwest::blocking::get(format!("http://localhost:{port}/health"))
         .map_err(|e| CliError::HealthcheckFailed(e.to_string()))?;
     if !response.status().is_success() {
         return Err(CliError::HealthcheckFailed(format!(

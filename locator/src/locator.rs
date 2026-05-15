@@ -553,7 +553,10 @@ mod tests {
             "http://invalid-control-plane:8000".to_string(),
             provider,
             None,
-            Some(HashMap::from([("--monolith--".into(), "--monolith--".into())])),
+            Some(HashMap::from([(
+                "--monolith--".into(),
+                "--monolith--".into(),
+            )])),
         );
 
         tokio::time::sleep(Duration::from_millis(100)).await;

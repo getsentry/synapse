@@ -46,8 +46,8 @@ pub enum ControlPlaneError {
     ReqwestError(#[from] reqwest::Error),
     #[error("invalid URL: {0}")]
     InvalidUrl(String),
-    #[error("control plane unavailable")]
-    ControlPlaneRetriesExceeded,
+    #[error("control plane returned unsuccessful status: {0}")]
+    ControlPlaneStatus(StatusCode),
     #[error("missing cursor in response")]
     MissingCursor,
 }
@@ -201,7 +201,7 @@ impl ControlPlane {
                     retries += 1;
                     continue;
                 } else {
-                    return Err(ControlPlaneError::ControlPlaneRetriesExceeded);
+                    return Err(ControlPlaneError::ControlPlaneStatus(response.status()));
                 }
             }
 

@@ -237,11 +237,11 @@ mod tests {
             upstreams: vec![
                 config::UpstreamConfig {
                     name: "upstream".to_string(),
-                    url: "http://127.0.0.1:9000".to_string(),
+                    url: "http://127.0.0.1:8100".to_string(),
                 },
                 config::UpstreamConfig {
                     name: "invalid_upstream".to_string(),
-                    url: "http://256.256.256.256:9000".to_string(),
+                    url: "http://256.256.256.256:8100".to_string(),
                 },
             ],
             routes: vec![
@@ -298,7 +298,7 @@ mod tests {
         let response = service.call(request).await.expect("Request failed");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers().get("x-custom").unwrap(), "test");
-        assert_eq!(response.headers().get("host").unwrap(), "127.0.0.1:9000");
+        assert_eq!(response.headers().get("host").unwrap(), "127.0.0.1:8100");
         tracing::debug!("response headers: {:?}", response.headers());
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body_bytes.as_ref(), content);

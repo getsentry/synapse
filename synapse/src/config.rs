@@ -96,7 +96,7 @@ mod tests {
     fn proxy_config() {
         let proxy_yaml = r#"
             proxy:
-                upstreams: [{name: local, url: http://127.0.0.1:9000}]
+                upstreams: [{name: local, url: http://127.0.0.1:8100}]
                 routes: [{match: {path: test}, action: {to: local}}]
                 listener:
                     host: 0.0.0.0

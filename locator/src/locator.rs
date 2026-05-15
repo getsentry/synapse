@@ -466,7 +466,7 @@ mod tests {
 
         let locator = Locator::new(
             LocatorDataType::Organization,
-            "http://invalid-control-plane:9000".to_string(),
+            "http://invalid-control-plane:8000".to_string(),
             provider,
             None,
             Some(HashMap::from([("de".into(), "de".into())])),

@@ -56,7 +56,7 @@ pub async fn create_test_locator(key_to_cell: HashMap<String, String>) -> Locato
 
     let service = locator::locator::Locator::new(
         locator::config::LocatorDataType::ProjectKey,
-        "http://invalid-control-plane:9000".to_string(),
+        "http://invalid-control-plane:8000".to_string(),
         provider,
         None,
         None,

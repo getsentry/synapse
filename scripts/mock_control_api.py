@@ -207,7 +207,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     host = args.host or "127.0.0.1"
-    port = args.port or 9000
+    port = args.port or 8000
 
     server = HTTPServer((host, port), MockControlApi)
     print(f"Mock control plane listening on http://{host}:{port}")

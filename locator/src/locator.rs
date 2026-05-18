@@ -297,15 +297,18 @@ impl IdToCell {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.refresh_interval) => {
-                    match self.load_incremental().await {
-                        // Flip ready on first success — handles the case where
-                        // initial snapshot failed but a later incremental succeeded.
-                        Ok(()) => {
-                            if !self.ready.load(Ordering::Relaxed) {
-                                self.ready.store(true, Ordering::Relaxed);
-                            }
+                    // If the initial snapshot failed, keep retrying it (which also writes
+                    // the backup file on success) until we're ready. Only then move to
+                    // incremental updates for steady state.
+                    if self.ready.load(Ordering::Relaxed) {
+                        if let Err(err) = self.load_incremental().await {
+                            tracing::warn!("Incremental load failed: {err:?}; will retry");
                         }
-                        Err(err) => tracing::warn!("Incremental load failed: {err:?}; will retry"),
+                    } else {
+                        match self.load_snapshot().await {
+                            Ok(()) => self.ready.store(true, Ordering::Relaxed),
+                            Err(err) => tracing::warn!("Snapshot retry failed: {err:?}; will retry"),
+                        }
                     }
                 }
                 Some(cmd) = rx.recv() => {

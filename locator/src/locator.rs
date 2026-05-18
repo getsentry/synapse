@@ -300,7 +300,11 @@ impl IdToCell {
                     match self.load_incremental().await {
                         // Flip ready on first success — handles the case where
                         // initial snapshot failed but a later incremental succeeded.
-                        Ok(()) => self.ready.store(true, Ordering::Relaxed),
+                        Ok(()) => {
+                            if !self.ready.load(Ordering::Relaxed) {
+                                self.ready.store(true, Ordering::Relaxed);
+                            }
+                        }
                         Err(err) => tracing::warn!("Incremental load failed: {err:?}; will retry"),
                     }
                 }

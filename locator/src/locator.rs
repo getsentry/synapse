@@ -1,6 +1,6 @@
 use crate::config::LocatorDataType;
 use crate::control_plane::ControlPlane;
-use crate::types::RouteData;
+use crate::types::{Cell, RouteData};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -130,7 +130,10 @@ struct RouteDataWithTimestamp {
 /// This struct is used internally by the Locator.
 struct IdToCell {
     control_plane: ControlPlane,
-    locality_to_default_cell: HashMap<String, String>,
+    // Pre-built default cells keyed by locality. Built once at startup so
+    // default-fallback lookups don't allocate, and stored separately from
+    // `data.cells` so they survive snapshot reloads.
+    locality_to_default_cell: HashMap<String, Arc<Cell>>,
     data: RwLock<RouteDataWithTimestamp>,
     // Keeps track of recently failed lookups to avoid repeated queries against
     // non-existent or recently deleted organizations/project keys from adding load to the system.
@@ -166,9 +169,15 @@ impl IdToCell {
             last_updated: None,
         };
 
+        let locality_to_default_cell = locality_to_default_cell
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(locality, id)| (locality.clone(), Arc::new(Cell { id, locality })))
+            .collect();
+
         IdToCell {
             control_plane: ControlPlane::new(data_type, control_plane_url, localities),
-            locality_to_default_cell: locality_to_default_cell.unwrap_or_default(),
+            locality_to_default_cell,
             data: RwLock::new(data),
             negative_cache: NegativeCache::new(),
             update_lock: Semaphore::new(1),
@@ -186,8 +195,14 @@ impl IdToCell {
         // Returns `Ok(Cell)` if found, or a default applies.
         // Returns an error if locality is passed and the id/locality pair is not valid.
         // Or if a locality is passed but no default cell is found for that locality
+
+        // Before initial load: skip data/refresh paths and serve via default
+        // if one applies, otherwise NotReady.
         if !self.ready.load(Ordering::Relaxed) {
-            return Err(LocatorError::NotReady);
+            return locality
+                .and_then(|loc| self.locality_to_default_cell.get(loc))
+                .map(|cell| cell.id.clone())
+                .ok_or(LocatorError::NotReady);
         }
 
         let start_lookup = Instant::now();
@@ -241,19 +256,9 @@ impl IdToCell {
             maybe_cell
         };
 
-        // If no cell is found, apply locality default
-        let maybe_cell = if maybe_cell.is_none() {
-            if let Some(loc) = locality {
-                let read_guard = self.data.read().await;
-                self.locality_to_default_cell
-                    .get(loc)
-                    .and_then(|default_cell_id| read_guard.data.cells.get(default_cell_id).cloned())
-            } else {
-                None
-            }
-        } else {
-            maybe_cell
-        };
+        // If no cell is found, apply the locality default
+        let maybe_cell = maybe_cell
+            .or_else(|| locality.and_then(|loc| self.locality_to_default_cell.get(loc).cloned()));
 
         let cell = maybe_cell.ok_or(LocatorError::NoCell)?;
 
@@ -274,8 +279,16 @@ impl IdToCell {
     /// command is received. The loop runs indefinitely until the Shutdown
     /// command is received.
     pub async fn start(&self, mut rx: mpsc::Receiver<Command>) -> Result<(), LoadError> {
-        self.load_snapshot().await?;
-        self.ready.store(true, Ordering::Relaxed);
+        // With defaults configured, a failed initial load is non-fatal:
+        // the process stays up, /ready returns 503, and the periodic loop
+        // retries. Without defaults, fail fast as before.
+        match self.load_snapshot().await {
+            Ok(()) => self.ready.store(true, Ordering::Relaxed),
+            Err(err) if !self.locality_to_default_cell.is_empty() => {
+                tracing::warn!("Initial snapshot load failed: {err:?}; will retry");
+            }
+            Err(err) => return Err(err),
+        }
 
         // Once a snapshot is loaded, the worker periodically requests incremental results
         // until the Shutdown command is received.
@@ -284,7 +297,19 @@ impl IdToCell {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.refresh_interval) => {
-                    let _ = self.load_incremental().await;
+                    // If the initial snapshot failed, keep retrying it (which also writes
+                    // the backup file on success) until we're ready. Only then move to
+                    // incremental updates for steady state.
+                    if self.ready.load(Ordering::Relaxed) {
+                        if let Err(err) = self.load_incremental().await {
+                            tracing::warn!("Incremental load failed: {err:?}; will retry");
+                        }
+                    } else {
+                        match self.load_snapshot().await {
+                            Ok(()) => self.ready.store(true, Ordering::Relaxed),
+                            Err(err) => tracing::warn!("Snapshot retry failed: {err:?}; will retry"),
+                        }
+                    }
                 }
                 Some(cmd) = rx.recv() => {
                     match cmd {
@@ -516,6 +541,49 @@ mod tests {
         assert_eq!(
             locator.lookup("invalid_org", Some("us")).await,
             Err(LocatorError::NoCell)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_locator_both_unavailable_with_defaults() {
+        // Cold devservices boot: control plane down, no backup file. With
+        // defaults configured the locator must stay up and serve via default.
+        let dir = tempfile::tempdir().unwrap();
+        let provider = Arc::new(FilesystemRouteProvider::new(
+            dir.path().to_str().unwrap(),
+            "backup.bin",
+            config::Compression::None,
+        ));
+
+        let locator = Locator::new(
+            LocatorDataType::Organization,
+            "http://invalid-control-plane:8000".to_string(),
+            provider,
+            None,
+            Some(HashMap::from([(
+                "--monolith--".into(),
+                "--monolith--".into(),
+            )])),
+        );
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert!(!locator.is_ready());
+
+        // With matching locality: default applies.
+        assert_eq!(
+            locator.lookup("anything", Some("--monolith--")).await,
+            Ok("--monolith--".into())
+        );
+
+        // No matching default → NotReady (data hasn't loaded).
+        assert_eq!(
+            locator.lookup("anything", None).await,
+            Err(LocatorError::NotReady)
+        );
+        assert_eq!(
+            locator.lookup("anything", Some("other")).await,
+            Err(LocatorError::NotReady)
         );
     }
 }

@@ -19,6 +19,8 @@ services:
     ports:
       - "13000:3000"
       - "13001:3001"
+    environment:
+      - SYNAPSE_HMAC_SECRET=synapse-dev-secret
     volumes:
       - ./proxy.yaml:/app/proxy.yaml:ro
       - synapse-proxy-cache:/tmp/synapse-cache
@@ -37,6 +39,8 @@ services:
     ports:
       - "13002:3000"
       - "13003:3001"
+    environment:
+      - SYNAPSE_HMAC_SECRET=synapse-dev-secret
     volumes:
       - ./ingest-router.yaml:/app/ingest-router.yaml:ro
       - synapse-ingest-router-cache:/tmp/synapse-cache

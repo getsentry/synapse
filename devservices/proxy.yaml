@@ -23,7 +23,6 @@ proxy:
       url: http://host.docker.internal:8000
   routes:
     - match:
-        host: localhost
         path: /organizations/{organization}/*
       action:
         resolver: cell_from_organization

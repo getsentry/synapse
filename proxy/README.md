@@ -40,7 +40,7 @@ Routes are matched top down in the order they are defined. For each incoming req
     ```yaml
     - match:
         host: us.sentry.io                                 # matches us.sentry.io only
-        path: /organizations/{organization_id_or_slug}/*   # with {organization_id_or_slug} dynamic segment and trailing wildcard
+        path: /api/0/organizations/{organization_id_or_slug}/*   # with {organization_id_or_slug} dynamic segment and trailing wildcard
     ```
 
 ### Route actions

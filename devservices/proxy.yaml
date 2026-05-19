@@ -22,7 +22,7 @@ proxy:
       url: http://host.docker.internal:8000
   routes:
     - match:
-        path: /organizations/{organization}/*
+        path: /api/0/organizations/{organization}/*
       action:
         resolver: cell_from_organization
         cell_to_upstream:

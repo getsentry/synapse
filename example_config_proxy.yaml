@@ -37,7 +37,7 @@ proxy:
   routes:
     - match:
         host: us.sentry.io
-        path: /organizations/{organization}/*
+        path: /api/0/organizations/{organization}/*
       action:
         resolver: cell_from_organization
         cell_to_upstream:
@@ -46,7 +46,7 @@ proxy:
         default: us1-getsentry
     - match:
         host: us.sentry.io
-        path: /cell/{cell_id}/*
+        path: /api/0/cell/{cell_id}/*
       action:
         resolver: cell_from_id
         cell_to_upstream:

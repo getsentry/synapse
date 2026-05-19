@@ -28,35 +28,30 @@ ingest_router:
 
   routes:
     - match:
-        host: localhost
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
         handler: relay_project_configs
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/live/
         method: GET
       action:
         handler: health
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/register/challenge/
         method: POST
       action:
         handler: register_challenge
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/register/response/
         method: POST
       action:
         handler: register_response
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/publickeys/
         method: POST
       action:

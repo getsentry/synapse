@@ -12,11 +12,16 @@ pub enum Compression {
     Zstd3,
 }
 
+fn default_base_dir() -> String {
+    "/tmp/synapse-cache".into()
+}
+
 #[derive(Clone, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum BackupRouteStoreType {
     Filesystem {
+        #[serde(default = "default_base_dir")]
         base_dir: String,
         filename: String,
         compression: Compression,

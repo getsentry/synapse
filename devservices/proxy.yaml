@@ -11,7 +11,6 @@ proxy:
       url: http://host.docker.internal:8000
     backup_route_store:
       type: filesystem
-      base_dir: /tmp/synapse-cache
       filename: backup.bin
       compression: zstd1
     localities:
@@ -23,13 +22,12 @@ proxy:
       url: http://host.docker.internal:8000
   routes:
     - match:
-        host: localhost
         path: /api/0/organizations/{organization}/*
       action:
         resolver: cell_from_organization
         cell_to_upstream:
           "--monolith--": sentry-dev-monolith
-        # default: sentry-dev-monolith
+        default: sentry-dev-monolith
 
 metrics:
   statsd_host: "127.0.0.1"

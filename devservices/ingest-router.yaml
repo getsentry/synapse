@@ -12,7 +12,6 @@ ingest_router:
       url: http://host.docker.internal:8000
     backup_route_store:
       type: filesystem
-      base_dir: /tmp/synapse-cache
       filename: backup.bin
       compression: zstd1
     localities:
@@ -28,35 +27,30 @@ ingest_router:
 
   routes:
     - match:
-        host: localhost
         path: /api/0/relays/projectconfigs/
         method: POST
       action:
         handler: relay_project_configs
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/live/
         method: GET
       action:
         handler: health
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/register/challenge/
         method: POST
       action:
         handler: register_challenge
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/register/response/
         method: POST
       action:
         handler: register_response
       locality: "--monolith--"
     - match:
-        host: localhost
         path: /api/0/relays/publickeys/
         method: POST
       action:

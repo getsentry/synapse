@@ -23,7 +23,11 @@ ingest_router:
     "--monolith--":
       - id: "--monolith--"
         sentry_url: http://host.docker.internal:8000
-        relay_url: http://relay:7899
+        # Cell's processing relay in sentry's `cell-routing` devservices mode
+        # (replaces the default `relay`). Register + projectconfigs route here;
+        # envelopes bypass synapse and hit relay-cell directly via the
+        # advertised upstream.
+        relay_url: http://relay-cell:7900
 
   routes:
     - match:

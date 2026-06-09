@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_organization_avatar_slug_locator() {
-        // route on first segment after static prefix; org avatars are 
+        // route on first segment after static prefix; org avatars are
         // served from /organization-avatar/{slug}/{id}
         // (the avatar id is captured but ignored)
         let config = RouteConfig {

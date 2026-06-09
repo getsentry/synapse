@@ -371,4 +371,45 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn test_organization_avatar_slug_locator() {
+        // route on first segment after static prefix; org avatars are 
+        // served from /organization-avatar/{slug}/{id}
+        // (the avatar id is captured but ignored)
+        let config = RouteConfig {
+            r#match: crate::config::Match {
+                host: None,
+                path: Some("/organization-avatar/{organization}/{avatar_id}".to_string()),
+            },
+            action: crate::config::Action::Dynamic {
+                resolver: crate::config::Resolver::CellFromOrganization,
+                cell_to_upstream: HashMap::new(),
+                default: None,
+            },
+        };
+
+        let route = Route::try_from(config.clone()).unwrap();
+
+        assert_eq!(
+            route.matches(None, "/organization-avatar/my-org/abc123/"),
+            Some(RouteMatch {
+                params: HashMap::from([
+                    ("organization".to_string(), "my-org".to_string()),
+                    ("avatar_id".to_string(), "abc123".to_string()),
+                ]),
+                action: config.action.clone(),
+            }),
+            "captures the slug as `organization`, not the avatar id"
+        );
+
+        // the explicit two-segment org segment must not match
+        // deprecated, slug-less form (/organization-avatar/{id})
+        assert!(
+            route
+                .matches(None, "/organization-avatar/abc123/")
+                .is_none(),
+            "deprecated slug-less form must not match the slug locator"
+        );
+    }
 }

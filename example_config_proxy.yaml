@@ -46,6 +46,15 @@ proxy:
         default: us1-getsentry
     - match:
         host: us.sentry.io
+        path: /organization-avatar/{organization}/{avatar_id}
+      action:
+        resolver: cell_from_organization
+        cell_to_upstream:
+          us1: us1-getsentry
+          us2: us2-getsentry
+        default: us1-getsentry
+    - match:
+        host: us.sentry.io
         path: /api/0/cell/{cell_id}/*
       action:
         resolver: cell_from_id

@@ -28,6 +28,13 @@ proxy:
         cell_to_upstream:
           "--monolith--": sentry-dev-monolith
         default: sentry-dev-monolith
+    - match:
+        path: /organization-avatar/{organization}/{avatar_id}
+      action:
+        resolver: cell_from_organization
+        cell_to_upstream:
+          "--monolith--": sentry-dev-monolith
+        default: sentry-dev-monolith
 
 metrics:
   statsd_host: "127.0.0.1"

@@ -238,10 +238,10 @@ impl RelayVerifier {
         // Synapse only produces and verifies the default `Regular` (`v0`) algorithm. Reject any
         // other algorithm up front: `key.verify` below only checks `Regular` signatures, so a
         // prehashed (`v1`) or future signature would otherwise fail as an opaque mismatch.
-        if let Some(algo) = header.signature_algorithm.as_deref() {
-            if algo != "v0" {
-                return Err(VerifyError::UnsupportedAlgorithm(algo.to_string()));
-            }
+        if let Some(algo) = header.signature_algorithm.as_deref()
+            && algo != "v0"
+        {
+            return Err(VerifyError::UnsupportedAlgorithm(algo.to_string()));
         }
 
         let mut message = header_json.clone();
@@ -253,8 +253,7 @@ impl RelayVerifier {
         // Reject stale and future-dated signatures (replay protection), matching relay-auth's
         // `is_valid_time`: the timestamp must lie within [now - max_age, now].
         let age = chrono::Utc::now() - header.timestamp;
-        if age < chrono::Duration::zero()
-            || age > chrono::Duration::seconds(SIGNATURE_MAX_AGE_SECS)
+        if age < chrono::Duration::zero() || age > chrono::Duration::seconds(SIGNATURE_MAX_AGE_SECS)
         {
             return Err(VerifyError::Expired);
         }
@@ -324,7 +323,10 @@ mod tests {
         let signer = RelaySigner::from_credentials(credentials).unwrap();
 
         let mut headers = HeaderMap::new();
-        headers.insert(RELAY_ID_HEADER.clone(), HeaderValue::from_static("inbound-relay"));
+        headers.insert(
+            RELAY_ID_HEADER.clone(),
+            HeaderValue::from_static("inbound-relay"),
+        );
         headers.insert(
             RELAY_SIGNATURE_HEADER.clone(),
             HeaderValue::from_static("stale-signature"),
@@ -337,7 +339,11 @@ mod tests {
             headers.get(&RELAY_ID_HEADER).unwrap(),
             "00000000-0000-0000-0000-000000000000"
         );
-        let value = headers.get(&RELAY_SIGNATURE_HEADER).unwrap().to_str().unwrap();
+        let value = headers
+            .get(&RELAY_SIGNATURE_HEADER)
+            .unwrap()
+            .to_str()
+            .unwrap();
         assert!(verify(&verifying_key, body, value));
     }
 
@@ -435,7 +441,10 @@ mod tests {
         );
 
         let mut only_id = HeaderMap::new();
-        only_id.insert(RELAY_ID_HEADER.clone(), HeaderValue::from_static(DOWNSTREAM_ID));
+        only_id.insert(
+            RELAY_ID_HEADER.clone(),
+            HeaderValue::from_static(DOWNSTREAM_ID),
+        );
         assert_eq!(
             verifier.verify_request(&only_id, b"body"),
             Err(VerifyError::MissingSignature)
@@ -459,8 +468,14 @@ mod tests {
         );
 
         let mut headers = HeaderMap::new();
-        headers.insert(RELAY_ID_HEADER.clone(), HeaderValue::from_static(DOWNSTREAM_ID));
-        headers.insert(RELAY_SIGNATURE_HEADER.clone(), HeaderValue::from_str(&value).unwrap());
+        headers.insert(
+            RELAY_ID_HEADER.clone(),
+            HeaderValue::from_static(DOWNSTREAM_ID),
+        );
+        headers.insert(
+            RELAY_SIGNATURE_HEADER.clone(),
+            HeaderValue::from_str(&value).unwrap(),
+        );
         headers
     }
 
@@ -539,6 +554,9 @@ mod tests {
                 public_key: "not-valid-base64-key!!".to_string(),
             },
         )]));
-        assert_eq!(result.err(), Some(VerifyError::InvalidPublicKey("relay-x".to_string())));
+        assert_eq!(
+            result.err(),
+            Some(VerifyError::InvalidPublicKey("relay-x".to_string()))
+        );
     }
 }

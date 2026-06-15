@@ -6,6 +6,18 @@ ingest_router:
     host: "0.0.0.0"
     port: 3001
   
+
+  # relay_keys:
+    # Verified downstream Relays (POPs) can be configured here, as a map of relay id to relay
+    # info.
+    # The relay id (the map key) must be a valid UUIDv4 string. This is the same ID that the
+    # Relay uses in its `X-Sentry-Relay-Id` header, and is used by Sentry to identify the relay.
+    # `public_key` must be the base64url-nopad encoding of the relay's 32 byte ed25519 public
+    # key (the `public_key` field of its credentials.json). This is the same value configured
+    # for the relay in the upstream's `static_relays`.
+    # "00000000-0000-0000-0000-000000000000":
+    #   public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
   # Locator service configuration for routing public keys to cells
   locator:
     type: in_process

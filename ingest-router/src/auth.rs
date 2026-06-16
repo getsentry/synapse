@@ -144,6 +144,26 @@ impl RelaySigner {
     }
 }
 
+/// Generates a fresh relay `credentials.json`, matching the format produced by
+/// `relay credentials generate` and consumed by [`RelaySigner::from_file`]: a new ed25519
+/// keypair (`secret_key` is the 32-byte seed, `public_key` the verifying key, both
+/// base64url-nopad) plus a random UUIDv4 relay `id`.
+///
+/// Returns the pretty-printed JSON to write to disk. The `public_key` must be registered with
+/// the upstream (its `static_relays`) before it will accept synapse's signatures.
+pub fn generate_credentials_json() -> String {
+    let mut seed = [0u8; 32];
+    getrandom::fill(&mut seed).expect("OS entropy is available");
+    let signing_key = SigningKey::from_bytes(&seed);
+
+    let credentials = serde_json::json!({
+        "secret_key": URL_SAFE_NO_PAD.encode(seed),
+        "public_key": URL_SAFE_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
+        "id": uuid::Uuid::new_v4().to_string(),
+    });
+    serde_json::to_string_pretty(&credentials).expect("credentials JSON serializes")
+}
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum VerifyError {
     #[error("invalid trusted relay public key for {0}")]
@@ -371,6 +391,50 @@ mod tests {
             RelaySigner::from_credentials(credentials),
             Err(SigningError::BadKeyLength(16))
         ));
+    }
+
+    fn write_tmp_file(s: &str) -> tempfile::NamedTempFile {
+        use std::io::Write as _;
+        let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
+        write!(tmp, "{s}").expect("write temp file");
+        tmp
+    }
+
+    #[test]
+    fn from_file_missing_file_is_io_error() {
+        let result = RelaySigner::from_file(Path::new("/no/such/credentials.json"));
+        assert!(matches!(result, Err(SigningError::Io(_))));
+    }
+
+    #[test]
+    fn from_file_malformed_json_is_parse_error() {
+        let file = write_tmp_file("this is not json");
+        let result = RelaySigner::from_file(file.path());
+        assert!(matches!(result, Err(SigningError::Parse(_))));
+    }
+
+    #[test]
+    fn generated_credentials_round_trip() {
+        // Generated credentials must load via `from_file` and produce signatures that verify
+        // against the `public_key` embedded in the same file — locking the generator's output
+        // format to what synapse itself consumes.
+        let json = generate_credentials_json();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // `id` is a valid UUID, and the verifier trusts the generated relay's public key.
+        let id = parsed["id"].as_str().unwrap();
+        assert!(uuid::Uuid::parse_str(id).is_ok());
+        let public_key = parsed["public_key"].as_str().unwrap().to_string();
+
+        let file = write_tmp_file(&json);
+        let signer = RelaySigner::from_file(file.path()).unwrap();
+        let verifier =
+            RelayVerifier::from_relays(HashMap::from([(id.to_string(), RelayInfo { public_key })]))
+                .unwrap();
+
+        let body = br#"{"publicKeys":["key1"]}"#;
+        let headers = signed_headers(&signer, body);
+        assert_eq!(verifier.verify_request(&headers, body), Ok(()));
     }
 
     const DOWNSTREAM_ID: &str = "00000000-0000-0000-0000-000000000000";

@@ -169,7 +169,6 @@ impl Locator {
     }
 }
 
-/// Proxy configuration
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Config {
     /// Main listener for incoming requests

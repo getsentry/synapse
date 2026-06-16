@@ -1,6 +1,9 @@
 target/
 .DS_Store
 
+# Generated relay credentials for the ingest-router
+relay-credentials.json
+
 # Python virtual environment
 .venv/
 __pycache__/

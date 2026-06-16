@@ -102,6 +102,10 @@ run-ingest-router:
 	cargo run ingest-router --config-file-path example_config_ingest_router.yaml
 .PHONY: run-ingest-router
 
+generate-credentials:
+	@test -f relay-credentials.json || cargo run generate-relay-credentials > relay-credentials.json
+.PHONY: generate-credentials
+
 run-mock-control-api:
 	python scripts/mock_control_api.py
 .PHONY: run-mock-control-api

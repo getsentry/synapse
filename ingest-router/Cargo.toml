@@ -8,6 +8,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { version = "0.4", features = ["clock", "serde"] }
 ed25519-dalek = "2"
+getrandom = "0.4.2"
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -23,6 +24,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+uuid = { version = "1.23.3", features = ["v4"] }
 
 [dev-dependencies]
 serde_yaml = { workspace = true }

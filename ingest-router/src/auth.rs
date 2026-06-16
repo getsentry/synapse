@@ -65,10 +65,6 @@ pub enum SigningError {
 #[derive(Debug, Deserialize)]
 struct Credentials {
     secret_key: String,
-    // Retained for completeness/diagnostics; the public key lives in the upstream's
-    // `static_relays` config and is not needed to sign.
-    #[allow(dead_code)]
-    public_key: String,
     id: String,
 }
 
@@ -283,7 +279,6 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
         let credentials = Credentials {
             secret_key: URL_SAFE_NO_PAD.encode(signing_key.to_bytes()),
-            public_key: URL_SAFE_NO_PAD.encode(verifying_key.to_bytes()),
             id: "00000000-0000-0000-0000-000000000000".to_string(),
         };
         (credentials, verifying_key)
@@ -354,7 +349,6 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[3u8; 32]);
         let credentials = Credentials {
             secret_key: URL_SAFE_NO_PAD.encode(signing_key.to_keypair_bytes()),
-            public_key: URL_SAFE_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
             id: "11111111-1111-1111-1111-111111111111".to_string(),
         };
 
@@ -371,7 +365,6 @@ mod tests {
     fn rejects_bad_key_length() {
         let credentials = Credentials {
             secret_key: URL_SAFE_NO_PAD.encode([0u8; 16]),
-            public_key: String::new(),
             id: "id".to_string(),
         };
         assert!(matches!(

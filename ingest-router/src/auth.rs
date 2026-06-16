@@ -93,7 +93,7 @@ impl RelaySigner {
             .map_err(|_| SigningError::BadKeyEncoding)?;
 
         // Relay's SecretKey accepts either a 64-byte keypair or a 32-byte seed so we support both too
-        // https://github.com/getsentry/relay/blame/9bfa40d9ea1d5a9225a7332e19d81f4a9b096a21/relay-auth/src/lib.rs#L298-L305
+        // https://github.com/getsentry/relay/blob/0aac0fc04f8b2e1c834385bb4765380cdf63e138/relay-auth/src/lib.rs#L298-L303
         let signing_key = if let Ok(keypair) = <[u8; 64]>::try_from(bytes.as_slice()) {
             SigningKey::from_keypair_bytes(&keypair).map_err(|_| SigningError::BadKeyEncoding)?
         } else if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {

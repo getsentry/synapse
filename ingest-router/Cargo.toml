@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 async-trait = { workspace = true }
+base64 = { workspace = true }
+chrono = { version = "0.4", features = ["clock", "serde"] }
+ed25519-dalek = "2"
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }

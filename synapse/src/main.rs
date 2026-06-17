@@ -15,6 +15,8 @@ enum CliCommand {
     Locator(LocatorArgs),
     Proxy(ProxyArgs),
     IngestRouter(IngestRouterArgs),
+    /// Generate a new ed25519 relay keypair and id as a credentials.json (printed to stdout)
+    GenerateRelayCredentials,
     /// Probe a URL and exit 0 on a 2xx response, non-zero otherwise.
     Healthcheck(HealthcheckArgs),
     /// Show all metrics definitions as markdown table
@@ -84,6 +86,10 @@ fn cli() -> Result<(), CliError> {
 
             run_async(ingest_router::run(ingest_router_config))?;
 
+            Ok(())
+        }
+        CliCommand::GenerateRelayCredentials => {
+            println!("{}", ingest_router::auth::generate_credentials_json());
             Ok(())
         }
         CliCommand::Healthcheck(args) => healthcheck::run(&args.base.config_file_path),

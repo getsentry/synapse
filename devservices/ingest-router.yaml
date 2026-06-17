@@ -6,6 +6,11 @@ ingest_router:
     host: "0.0.0.0"
     port: 3001
 
+  relay_keys:
+    # As defined in https://github.com/getsentry/relay/blob/526f63779017d108dbaef134f65a9205f702d8a4/devservices/config/devservices-credentials.json
+    "88888888-4444-4444-8444-cccccccccccc":
+      public_key: "SMSesqan65THCV6M4qs4kBzPai60LzuDn-xNsvYpuP8"
+
   locator:
     type: in_process
     control_plane:

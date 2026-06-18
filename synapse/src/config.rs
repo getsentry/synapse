@@ -161,12 +161,12 @@ mod tests {
         for entry in std::fs::read_dir(root_dir).unwrap() {
             let path = entry.unwrap().path();
 
-            if path.is_file() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.starts_with("example_config") && name.ends_with(".yaml") {
-                        let _ = Config::from_file(&path).expect("load config");
-                    }
-                }
+            if path.is_file()
+                && let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && name.starts_with("example_config")
+                && name.ends_with(".yaml")
+            {
+                let _ = Config::from_file(&path).expect("load config");
             }
         }
     }

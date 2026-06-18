@@ -10,9 +10,9 @@ use std::sync::Arc;
 pub async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
     let route_data = RouteData::from(
         HashMap::from([
-            ("a".repeat(32).into(), "us1".into()),
-            ("b".repeat(32).into(), "us1".into()),
-            ("c".repeat(32).into(), "de".into()),
+            ("a".repeat(32), "us1".into()),
+            ("b".repeat(32), "us1".into()),
+            ("c".repeat(32), "de".into()),
         ]),
         Some("cursor1".into()),
         HashMap::from([("us1".into(), "us".into()), ("de".into(), "de".into())]),

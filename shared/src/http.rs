@@ -133,6 +133,27 @@ pub fn filter_hop_by_hop(headers: &mut HeaderMap, version: Version) -> &mut Head
     headers
 }
 
+/// Creates an error response with the status message as body.
+pub fn make_error_response(status_code: StatusCode) -> Response<Bytes> {
+    let message = status_code
+        .canonical_reason()
+        .unwrap_or("an error occurred");
+
+    let mut response = Response::new(Bytes::from(message));
+    *response.status_mut() = status_code;
+    response
+}
+
+/// Boxed version for services that need BoxBody (e.g., streaming proxies)
+pub fn make_boxed_error_response<E>(status_code: StatusCode) -> Response<BoxBody<Bytes, E>>
+where
+    E: 'static,
+{
+    make_error_response(status_code)
+        .map(Full::new)
+        .map(|body| body.map_err(|e| match e {}).boxed())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,25 +183,4 @@ mod tests {
         // Case-insensitive match with "cusTOM"
         assert!(filtered.get("custom").is_none());
     }
-}
-
-/// Creates an error response with the status message as body.
-pub fn make_error_response(status_code: StatusCode) -> Response<Bytes> {
-    let message = status_code
-        .canonical_reason()
-        .unwrap_or("an error occurred");
-
-    let mut response = Response::new(Bytes::from(message));
-    *response.status_mut() = status_code;
-    response
-}
-
-/// Boxed version for services that need BoxBody (e.g., streaming proxies)
-pub fn make_boxed_error_response<E>(status_code: StatusCode) -> Response<BoxBody<Bytes, E>>
-where
-    E: 'static,
-{
-    make_error_response(status_code)
-        .map(Full::new)
-        .map(|body| body.map_err(|e| match e {}).boxed())
 }

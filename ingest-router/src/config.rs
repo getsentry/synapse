@@ -352,6 +352,7 @@ routes:
       action:
         handler: health
       locality: us
+relay_keys:
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();

@@ -43,6 +43,7 @@ services:
       - SYNAPSE_HMAC_SECRET=synapse-dev-secret
     volumes:
       - ./ingest-router.yaml:/app/ingest-router.yaml:ro
+      - ./devservices-relay-credentials.json:/app/relay-credentials.json:ro
       - synapse-ingest-router-cache:/tmp/synapse-cache
     networks:
       - devservices

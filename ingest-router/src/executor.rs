@@ -1,3 +1,4 @@
+use crate::auth::{RelaySigner, RelayVerifier};
 use crate::config::RelayTimeouts;
 use crate::errors::IngestRouterError;
 use crate::handler::{CellId, ExecutionMode, Handler};
@@ -26,25 +27,48 @@ static UPSTREAM_REQUEST_COUNT: AtomicU64 = AtomicU64::new(0);
 pub struct Executor {
     client: Client<HttpConnector, Full<Bytes>>,
     timeouts: RelayTimeouts,
+    verifier: Arc<RelayVerifier>,
+    signer: Arc<RelaySigner>,
 }
 
 impl Executor {
-    pub fn new(timeouts: RelayTimeouts) -> Self {
+    pub fn new(timeouts: RelayTimeouts, verifier: RelayVerifier, signer: RelaySigner) -> Self {
         let client = Client::builder(TokioExecutor::new()).build(HttpConnector::new());
-        Self { client, timeouts }
+        Self {
+            client,
+            timeouts,
+            verifier: Arc::new(verifier),
+            signer: Arc::new(signer),
+        }
     }
 
-    // Splits, executes, and merges the responses using the provided handler.
+    // Verifies, splits, executes, and merges the responses using the provided handler.
     pub async fn execute(
         &self,
         handler: Arc<dyn Handler>,
         request: Request<Bytes>,
         cells: Cells,
     ) -> Response<Bytes> {
-        let (split_requests, metadata) = match handler.split_request(request, &cells).await {
+        if handler.requires_relay_auth()
+            && let Err(err) = self
+                .verifier
+                .verify_request(request.headers(), request.body())
+        {
+            tracing::warn!(error = %err, handler = handler.name(), "relay signature verification failed");
+            return make_error_response(StatusCode::UNAUTHORIZED);
+        }
+
+        let (mut split_requests, metadata) = match handler.split_request(request, &cells).await {
             Ok(result) => result,
             Err(_e) => return make_error_response(StatusCode::INTERNAL_SERVER_ERROR),
         };
+
+        if handler.requires_relay_auth() {
+            for (_cell_id, request) in split_requests.iter_mut() {
+                let body = request.body().clone();
+                self.signer.sign_request(request.headers_mut(), &body);
+            }
+        }
 
         let results = match handler.execution_mode() {
             ExecutionMode::Parallel => self.execute_parallel(split_requests, cells).await,
@@ -219,4 +243,88 @@ async fn send_to_cell(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::handler::SplitMetadata;
+    use crate::testutils::make_signing_keypair;
+    use async_trait::async_trait;
+
+    /// Minimal handler that requires relay auth; its split is never reached because verification
+    /// rejects the request first.
+    struct MockHandler {
+        requires_auth: bool,
+    }
+
+    #[async_trait]
+    impl Handler for MockHandler {
+        fn name(&self) -> &'static str {
+            "MockHandler"
+        }
+
+        fn execution_mode(&self) -> ExecutionMode {
+            ExecutionMode::Parallel
+        }
+
+        fn requires_relay_auth(&self) -> bool {
+            self.requires_auth
+        }
+
+        async fn split_request(
+            &self,
+            _request: Request<Bytes>,
+            _cells: &Cells,
+        ) -> Result<(Vec<(CellId, Request<Bytes>)>, SplitMetadata), IngestRouterError> {
+            unreachable!("request is rejected by verification before the split")
+        }
+
+        async fn merge_responses(
+            &self,
+            _responses: Vec<(CellId, Result<Response<Bytes>, IngestRouterError>)>,
+            _metadata: SplitMetadata,
+        ) -> Response<Bytes> {
+            unreachable!("request is rejected by verification before the split")
+        }
+    }
+
+    fn test_cells() -> Cells {
+        use crate::config::CellConfig;
+        use crate::locality::Localities;
+        use std::collections::HashMap;
+        use url::Url;
+
+        Localities::new(HashMap::from([(
+            "us".to_string(),
+            vec![CellConfig {
+                id: "us1".to_string(),
+                sentry_url: Url::parse("http://localhost:8080").unwrap(),
+                relay_url: Url::parse("http://localhost:8090").unwrap(),
+            }],
+        )]))
+        .get_cells("us")
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn execute_rejects_request_with_no_signature_when_handler_requires_auth() {
+        let (signer, verifier) = make_signing_keypair();
+        let executor = Executor::new(RelayTimeouts::default(), verifier, signer);
+
+        // An inbound request carrying no relay signature headers is rejected with 401 before the
+        // handler is ever asked to split it (MockHandler::split_request would panic if reached).
+        let request = Request::new(Bytes::from_static(b"body"));
+        let response = executor
+            .execute(
+                Arc::new(MockHandler {
+                    requires_auth: true,
+                }),
+                request,
+                test_cells(),
+            )
+            .await;
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 }

@@ -23,7 +23,6 @@ static INFLIGHT: AtomicU64 = AtomicU64::new(0);
 pub struct IngestRouterService {
     router: router::Router,
     executor: executor::Executor,
-    verifier: auth::RelayVerifier,
 }
 
 impl IngestRouterService {
@@ -31,13 +30,10 @@ impl IngestRouterService {
         router: router::Router,
         timeouts: config::RelayTimeouts,
         verifier: auth::RelayVerifier,
+        signer: auth::RelaySigner,
     ) -> Self {
-        let executor = executor::Executor::new(timeouts);
-        Self {
-            router,
-            executor,
-            verifier,
-        }
+        let executor = executor::Executor::new(timeouts, verifier, signer);
+        Self { router, executor }
     }
 }
 
@@ -59,11 +55,6 @@ where
         let resolved = self.router.resolve(&req);
         let (parts, body) = req.into_parts();
         let executor = self.executor.clone();
-        // Clone verifier only for requests that require it
-        let maybe_verifier = match &resolved {
-            Some((handler, _)) if handler.requires_relay_auth() => Some(self.verifier.clone()),
-            _ => None,
-        };
 
         Box::pin(async move {
             let (response, handler_name): (Response<Full<Bytes>>, &str) = match resolved {
@@ -71,20 +62,9 @@ where
                     let handler_name = handler.name();
                     match body.collect().await {
                         Ok(c) => {
-                            let body_bytes = c.to_bytes();
-                            if let Some(verifier) = &maybe_verifier
-                                && let Err(err) =
-                                    verifier.verify_request(&parts.headers, &body_bytes)
-                            {
-                                tracing::warn!(error = %err, handler = handler_name, "relay signature verification failed");
-                                let response =
-                                    make_error_response(StatusCode::UNAUTHORIZED).map(Full::new);
-                                (response, handler_name)
-                            } else {
-                                let request = Request::from_parts(parts, body_bytes);
-                                let response = executor.execute(handler, request, cells).await;
-                                (response.map(Full::new), handler_name)
-                            }
+                            let request = Request::from_parts(parts, c.to_bytes());
+                            let response = executor.execute(handler, request, cells).await;
+                            (response.map(Full::new), handler_name)
                         }
                         Err(_) => {
                             let response =
@@ -211,17 +191,8 @@ mod tests {
 
         let (signer, verifier) = make_signing_keypair();
 
-        let service = IngestRouterService::new(
-            router::Router::new(routes_config, localities, locator),
-            config::RelayTimeouts {
-                http_timeout_secs: 5000,
-                task_initial_timeout_secs: 10000,
-                task_subsequent_timeout_secs: 10000,
-            },
-            verifier,
-        );
-
-        // Project configs request — must be signed by a trusted relay
+        // Project configs request — must be signed by a trusted relay. Sign it before the signer
+        // is moved into the service (which re-signs the outbound per-cell requests with it).
         let body = r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#;
         let mut request = Request::builder()
             .method(Method::POST)
@@ -230,6 +201,17 @@ mod tests {
             .body(Full::new(Bytes::from(body)))
             .unwrap();
         signer.sign_request(request.headers_mut(), body.as_bytes());
+
+        let service = IngestRouterService::new(
+            router::Router::new(routes_config, localities, locator),
+            config::RelayTimeouts {
+                http_timeout_secs: 5000,
+                task_initial_timeout_secs: 10000,
+                task_subsequent_timeout_secs: 10000,
+            },
+            verifier,
+            signer,
+        );
 
         let response = service.call(request).await.unwrap();
 

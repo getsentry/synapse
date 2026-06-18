@@ -54,4 +54,7 @@ pub enum IngestRouterError {
 
     #[error("Relay verifier configuration error: {0}")]
     RelayVerifierError(#[from] crate::auth::VerifyError),
+
+    #[error("Relay signer configuration error: {0}")]
+    RelaySignerError(#[from] crate::auth::SigningError),
 }

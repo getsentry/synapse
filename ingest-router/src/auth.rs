@@ -26,7 +26,6 @@ use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
 
 /// Signature freshness window, matching Sentry
 /// https://github.com/getsentry/sentry/blob/c9138b328e9aad58f95f087c0f8a8843a06dbbe9/src/sentry/api/authentication.py#L260
@@ -70,7 +69,6 @@ struct Credentials {
 }
 
 /// Signs outgoing requests with synapse's relay credentials.
-#[derive(Clone)]
 pub struct RelaySigner {
     signing_key: SigningKey,
     relay_id: HeaderValue,
@@ -200,10 +198,9 @@ pub struct RelayInfo {
 /// The trusted set is fixed and small, so keys are configured statically rather than resolved
 /// at runtime via Sentry's `publickeys` endpoint (the mechanism relay-to-relay verification uses
 /// for a dynamic relay set).
-#[derive(Clone, Default)]
 pub struct RelayVerifier {
     /// Trusted downstream relays, keyed by relay id (a UUID).
-    trusted_relays: Arc<HashMap<String, VerifyingKey>>,
+    trusted_relays: HashMap<String, VerifyingKey>,
 }
 
 impl RelayVerifier {
@@ -214,9 +211,7 @@ impl RelayVerifier {
             .into_iter()
             .map(|(id, info)| Ok((id.clone(), parse_public_key(&info.public_key, &id)?)))
             .collect::<Result<HashMap<_, _>, VerifyError>>()?;
-        Ok(Self {
-            trusted_relays: Arc::new(trusted_relays),
-        })
+        Ok(Self { trusted_relays })
     }
 
     /// Verifies the `X-Sentry-Relay-Id` / `X-Sentry-Relay-Signature` headers against `body`.
@@ -483,7 +478,7 @@ mod tests {
     #[test]
     fn rejects_untrusted_relay() {
         let (signer, _) = signer_and_verifier();
-        let verifier = RelayVerifier::default(); // trusts nobody
+        let verifier = RelayVerifier::from_relays(HashMap::new()).unwrap(); // trusts nobody
         let body = b"body";
         let headers = signed_headers(&signer, body);
         assert_eq!(

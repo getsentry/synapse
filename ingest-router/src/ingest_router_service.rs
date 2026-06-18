@@ -1,3 +1,4 @@
+use crate::auth;
 use crate::config;
 use crate::errors::IngestRouterError;
 use crate::executor;
@@ -22,12 +23,21 @@ static INFLIGHT: AtomicU64 = AtomicU64::new(0);
 pub struct IngestRouterService {
     router: router::Router,
     executor: executor::Executor,
+    verifier: auth::RelayVerifier,
 }
 
 impl IngestRouterService {
-    pub fn new(router: router::Router, timeouts: config::RelayTimeouts) -> Self {
+    pub fn new(
+        router: router::Router,
+        timeouts: config::RelayTimeouts,
+        verifier: auth::RelayVerifier,
+    ) -> Self {
         let executor = executor::Executor::new(timeouts);
-        Self { router, executor }
+        Self {
+            router,
+            executor,
+            verifier,
+        }
     }
 }
 
@@ -49,6 +59,11 @@ where
         let resolved = self.router.resolve(&req);
         let (parts, body) = req.into_parts();
         let executor = self.executor.clone();
+        // Clone verifier only for requests that require it
+        let maybe_verifier = match &resolved {
+            Some((handler, _)) if handler.requires_relay_auth() => Some(self.verifier.clone()),
+            _ => None,
+        };
 
         Box::pin(async move {
             let (response, handler_name): (Response<Full<Bytes>>, &str) = match resolved {
@@ -56,9 +71,20 @@ where
                     let handler_name = handler.name();
                     match body.collect().await {
                         Ok(c) => {
-                            let request = Request::from_parts(parts, c.to_bytes());
-                            let response = executor.execute(handler, request, cells).await;
-                            (response.map(Full::new), handler_name)
+                            let body_bytes = c.to_bytes();
+                            if let Some(verifier) = &maybe_verifier
+                                && let Err(err) =
+                                    verifier.verify_request(&parts.headers, &body_bytes)
+                            {
+                                tracing::warn!(error = %err, handler = handler_name, "relay signature verification failed");
+                                let response =
+                                    make_error_response(StatusCode::UNAUTHORIZED).map(Full::new);
+                                (response, handler_name)
+                            } else {
+                                let request = Request::from_parts(parts, body_bytes);
+                                let response = executor.execute(handler, request, cells).await;
+                                (response.map(Full::new), handler_name)
+                            }
                         }
                         Err(_) => {
                             let response =
@@ -110,6 +136,8 @@ mod tests {
     use std::process::{Child, Command};
     use std::time::Duration;
     use url::Url;
+
+    use crate::testutils::make_signing_keypair;
 
     struct TestServer {
         child: Child,
@@ -181,6 +209,8 @@ mod tests {
         )]))
         .await;
 
+        let (signer, verifier) = make_signing_keypair();
+
         let service = IngestRouterService::new(
             router::Router::new(routes_config, localities, locator),
             config::RelayTimeouts {
@@ -188,17 +218,18 @@ mod tests {
                 task_initial_timeout_secs: 10000,
                 task_subsequent_timeout_secs: 10000,
             },
+            verifier,
         );
 
-        // Project configs request
-        let request = Request::builder()
+        // Project configs request — must be signed by a trusted relay
+        let body = r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#;
+        let mut request = Request::builder()
             .method(Method::POST)
             .uri("/api/0/relays/projectconfigs/")
             .header(HOST, "us.sentry.io")
-            .body(Full::new(Bytes::from(
-                r#"{"publicKeys": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], "global": 1}"#,
-            )))
+            .body(Full::new(Bytes::from(body)))
             .unwrap();
+        signer.sign_request(request.headers_mut(), body.as_bytes());
 
         let response = service.call(request).await.unwrap();
 

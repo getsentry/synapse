@@ -402,6 +402,10 @@ impl Handler for ProjectConfigsHandler {
     fn execution_mode(&self) -> ExecutionMode {
         ExecutionMode::Parallel
     }
+
+    fn requires_relay_auth(&self) -> bool {
+        true
+    }
     async fn split_request(
         &self,
         request: Request<Bytes>,

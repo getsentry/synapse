@@ -7,7 +7,7 @@ ingest_router:
     port: 3001
   
 
-  # relay_keys:
+  relay_keys:
     # Verified downstream Relays (POPs) can be configured here, as a map of relay id to relay
     # info.
     # The relay id (the map key) must be a valid UUIDv4 string. This is the same ID that the

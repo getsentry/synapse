@@ -26,6 +26,7 @@ use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Signature freshness window, matching Sentry
 /// https://github.com/getsentry/sentry/blob/c9138b328e9aad58f95f087c0f8a8843a06dbbe9/src/sentry/api/authentication.py#L260
@@ -184,7 +185,7 @@ pub enum VerifyError {
 
 /// Configuration for a single trusted downstream relay, matching the upstream's
 /// `static_relays` entry shape.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct RelayInfo {
     /// base64url-nopad encoding of the relay's 32-byte ed25519 public key.
     pub public_key: String,
@@ -202,7 +203,7 @@ pub struct RelayInfo {
 #[derive(Clone, Default)]
 pub struct RelayVerifier {
     /// Trusted downstream relays, keyed by relay id (a UUID).
-    trusted_relays: HashMap<String, VerifyingKey>,
+    trusted_relays: Arc<HashMap<String, VerifyingKey>>,
 }
 
 impl RelayVerifier {
@@ -212,8 +213,10 @@ impl RelayVerifier {
         let trusted_relays = relays
             .into_iter()
             .map(|(id, info)| Ok((id.clone(), parse_public_key(&info.public_key, &id)?)))
-            .collect::<Result<_, VerifyError>>()?;
-        Ok(Self { trusted_relays })
+            .collect::<Result<HashMap<_, _>, VerifyError>>()?;
+        Ok(Self {
+            trusted_relays: Arc::new(trusted_relays),
+        })
     }
 
     /// Verifies the `X-Sentry-Relay-Id` / `X-Sentry-Relay-Signature` headers against `body`.

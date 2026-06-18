@@ -14,6 +14,7 @@ pub mod router;
 mod testutils;
 
 use crate::errors::IngestRouterError;
+use auth::RelayVerifier;
 use locator::client::Locator;
 use shared::http::run_http_service;
 
@@ -22,9 +23,12 @@ use shared::admin_service::AdminService;
 pub async fn run(config: config::Config) -> Result<(), IngestRouterError> {
     let locator = Locator::new(config.locator.to_client_config()).await?;
 
+    let verifier = RelayVerifier::from_relays(config.relay_keys)?;
+
     let ingest_router_service = ingest_router_service::IngestRouterService::new(
         router::Router::new(config.routes, config.localities, locator.clone()),
         config.relay_timeouts,
+        verifier,
     );
     let admin_service = AdminService::new({
         let locator = locator.clone();

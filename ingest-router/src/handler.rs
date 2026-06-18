@@ -27,6 +27,16 @@ pub trait Handler: Send + Sync {
 
     fn execution_mode(&self) -> ExecutionMode;
 
+    /// Whether this handler participates in synapse's relay auth: verifying the inbound
+    /// signature and re-signing the outbound request with synapse's own credentials.
+    ///
+    /// Signing and verification go together. Handlers that rewrite the body (e.g. project configs)
+    /// invalidate the inbound signature and must re-sign as synapse. Plain pass-through handlers leave
+    /// the inbound signature intact and let the upstream verify, so they default to `false`.
+    fn requires_relay_auth(&self) -> bool {
+        false
+    }
+
     /// Split one request into multiple per-cell requests
     ///
     /// This method routes the request data to appropriate cells and builds

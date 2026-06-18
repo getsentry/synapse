@@ -51,4 +51,7 @@ pub enum IngestRouterError {
 
     #[error("Serde error: {0}")]
     SerdeError(#[from] serde_json::Error),
+
+    #[error("Relay verifier configuration error: {0}")]
+    RelayVerifierError(#[from] crate::auth::VerifyError),
 }

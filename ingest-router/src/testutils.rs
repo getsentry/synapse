@@ -1,8 +1,10 @@
+use crate::auth::{RelayInfo, RelaySigner, RelayVerifier, generate_credentials_json};
 use locator::backup_routes::{BackupRouteProvider, FilesystemRouteProvider};
 use locator::client::Locator;
 use locator::config::Compression;
 use locator::types::RouteData;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 
 pub async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider) {
@@ -24,6 +26,24 @@ pub async fn get_mock_provider() -> (tempfile::TempDir, FilesystemRouteProvider)
     );
     provider.store(&route_data).await.unwrap();
     (dir, provider)
+}
+
+/// A signer plus a verifier that trusts that signer's freshly generated credentials, so signed
+/// requests verify end-to-end.
+pub fn make_signing_keypair() -> (RelaySigner, RelayVerifier) {
+    let json = generate_credentials_json();
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let id = parsed["id"].as_str().unwrap().to_string();
+    let public_key = parsed["public_key"].as_str().unwrap().to_string();
+
+    let mut tmp = tempfile::NamedTempFile::new().unwrap();
+    tmp.write_all(json.as_bytes()).unwrap();
+    let signer = RelaySigner::from_file(tmp.path()).unwrap();
+
+    let verifier =
+        RelayVerifier::from_relays(HashMap::from([(id, RelayInfo { public_key })])).unwrap();
+
+    (signer, verifier)
 }
 
 // Mock backup provider for testing

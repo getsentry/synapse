@@ -1,3 +1,4 @@
+use crate::auth::RelayInfo;
 use locator::client::{LocatorConfig as ClientLocatorConfig, LocatorType as ClientLocatorType};
 use locator::config::{BackupRouteStore, ControlPlane, LocatorDataType};
 use serde::Deserialize;
@@ -187,6 +188,8 @@ pub struct Config {
     /// Timeout configuration for relay handlers
     #[serde(default)]
     pub relay_timeouts: RelayTimeouts,
+    /// Trusted downstream relay public keys, keyed by relay id
+    pub relay_keys: HashMap<String, RelayInfo>,
 }
 
 impl Config {
@@ -349,6 +352,7 @@ routes:
       action:
         handler: health
       locality: us
+relay_keys:
 "#;
 
         let config: Config = serde_yaml::from_str(yaml).unwrap();
@@ -386,6 +390,7 @@ routes:
                 }],
             )]),
             relay_timeouts: RelayTimeouts::default(),
+            relay_keys: HashMap::new(),
             routes: vec![Route {
                 r#match: Match {
                     path: Some("/api/".to_string()),

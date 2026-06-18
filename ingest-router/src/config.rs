@@ -188,9 +188,7 @@ pub struct Config {
     /// Timeout configuration for relay handlers
     #[serde(default)]
     pub relay_timeouts: RelayTimeouts,
-    /// Trusted downstream relay public keys, keyed by relay id (a UUID). Requests to handlers that
-    /// require relay auth (e.g. project configs) must carry a valid signature from one of these
-    /// relays; other routes pass through and are verified by the upstream directly.
+    /// Trusted downstream relay public keys, keyed by relay id
     pub relay_keys: HashMap<String, RelayInfo>,
 }
 

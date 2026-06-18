@@ -84,7 +84,10 @@ fn cli() -> Result<(), CliError> {
                 .ingest_router
                 .ok_or(CliError::InvalidConfig("Missing ingest-router config"))?;
 
-            run_async(ingest_router::run(ingest_router_config))?;
+            run_async(ingest_router::run(
+                ingest_router_config,
+                &ingest_router_args.credentials_path,
+            ))?;
 
             Ok(())
         }
@@ -252,6 +255,8 @@ struct ProxyArgs {
 struct IngestRouterArgs {
     #[command(flatten)]
     base: BaseArgs,
+    #[arg(long)]
+    credentials_path: PathBuf,
 }
 
 #[derive(Args, Debug)]

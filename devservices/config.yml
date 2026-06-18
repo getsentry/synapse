@@ -35,7 +35,7 @@ services:
 
   synapse-ingest-router:
     image: us-docker.pkg.dev/sentryio/synapse/image:latest
-    command: ["ingest-router", "--config-file-path", "/app/ingest-router.yaml"]
+    command: ["ingest-router", "--config-file-path", "/app/ingest-router.yaml", "--credentials-path", "/app/relay-credentials.json"]
     ports:
       - "13002:3000"
       - "13003:3001"

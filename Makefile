@@ -98,8 +98,8 @@ run-proxy:
 	cargo run proxy --config-file-path example_config_proxy.yaml
 .PHONY: run-proxy
 
-run-ingest-router:
-	cargo run ingest-router --config-file-path example_config_ingest_router.yaml
+run-ingest-router: generate-credentials
+	cargo run ingest-router --config-file-path example_config_ingest_router.yaml --credentials-path relay-credentials.json
 .PHONY: run-ingest-router
 
 generate-credentials:

@@ -28,15 +28,11 @@ proxy:
         cell_to_upstream:
           "--monolith--": sentry-dev-monolith
         default: sentry-dev-monolith
-    # legacy project paths: /api/0/projects/{organization}/... is equivalent to
-    # /api/0/organizations/{organization}/projects/... in Sentry. The path is
-    # forwarded unchanged; we only extract {organization} to route.
+    # legacy project paths: /api/0/projects/{organization}/...
     - match:
         path: /api/0/projects/{organization}/*
       action: *monolith_org
-    # legacy team paths: /api/0/teams/{organization}/... is equivalent to
-    # /api/0/organizations/{organization}/teams/... in Sentry. The path is
-    # forwarded unchanged; we only extract {organization} to route.
+    # legacy team paths: /api/0/teams/{organization}/...
     - match:
         path: /api/0/teams/{organization}/*
       action: *monolith_org

@@ -44,16 +44,12 @@ proxy:
           us1: us1-getsentry
           us2: us2-getsentry
         default: us1-getsentry
-    # legacy project paths: /api/0/projects/{organization}/... is equivalent to
-    # /api/0/organizations/{organization}/projects/... in Sentry. The path is
-    # forwarded unchanged; we only extract {organization} to route.
+    # legacy project paths: /api/0/projects/{organization}/...
     - match:
         host: us.sentry.io
         path: /api/0/projects/{organization}/*
       action: *us_org
-    # legacy team paths: /api/0/teams/{organization}/... is equivalent to
-    # /api/0/organizations/{organization}/teams/... in Sentry. The path is
-    # forwarded unchanged; we only extract {organization} to route.
+    # legacy team paths: /api/0/teams/{organization}/...
     - match:
         host: us.sentry.io
         path: /api/0/teams/{organization}/*

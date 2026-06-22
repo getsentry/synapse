@@ -23,18 +23,22 @@ proxy:
   routes:
     - match:
         path: /api/0/organizations/{organization}/*
-      action:
+      action: &monolith_org
         resolver: cell_from_organization
         cell_to_upstream:
           "--monolith--": sentry-dev-monolith
         default: sentry-dev-monolith
+    # legacy project paths: /api/0/projects/{organization}/...
+    - match:
+        path: /api/0/projects/{organization}/*
+      action: *monolith_org
+    # legacy team paths: /api/0/teams/{organization}/...
+    - match:
+        path: /api/0/teams/{organization}/*
+      action: *monolith_org
     - match:
         path: /organization-avatar/{organization}/{avatar_id}
-      action:
-        resolver: cell_from_organization
-        cell_to_upstream:
-          "--monolith--": sentry-dev-monolith
-        default: sentry-dev-monolith
+      action: *monolith_org
 
 metrics:
   statsd_host: "127.0.0.1"

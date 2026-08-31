@@ -186,7 +186,7 @@ impl MetadataClient {
     pub async fn get_cursor(&self) -> Result<Option<Cursor>, BackupError> {
         let full_url = format!(
             "{}/storage/v1/b/{}/o/{}",
-            self.base_url, self.bucket_name, &self.object_key
+            self.base_url, self.bucket_name, self.object_key
         );
 
         let resp = self.client.get(&full_url).send().await?;
@@ -240,7 +240,7 @@ impl GcsRouteProvider {
         let metadata_client = MetadataClient::new(&bucket, &object_key);
 
         // In GCS, bucket names are globally unique, project is not specified
-        let bucket_name = format!("projects/_/buckets/{}", &bucket);
+        let bucket_name = format!("projects/_/buckets/{}", bucket);
 
         Ok(GcsRouteProvider {
             bucket_name,

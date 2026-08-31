@@ -40,12 +40,25 @@ sequenceDiagram
   Relay-Pop->>Cell-2 Processing Relay: POST /envelope {error2, error4}
 ```
 
-### Endpoints needing clarification
+### Endpoints that any cell can answer
+
+The remaining relay endpoints don't need per-key resolution: any cell can answer,
+because Sentry coordinates the underlying state across cells through outboxes.
+`AnyCellHandler` tries cells in config order and returns the first success, so these
+keep working with a cell down.
 
 ```
-POST /api/0/relays/register/challenge/
-POST /api/0/relays/register/response/
-POST /api/0/relays/publickeys/
-GET /api/0/relays/ - This seems to be called from frontend. Need not be handled by the ingest router.
-POST /api/0/relays/projectconfigs/ - This is fetching project ids from public keys. Might be similar to the project configs endpoint.
+GET  /api/0/relays/live/               - health
+POST /api/0/relays/register/challenge/ - register_challenge
+POST /api/0/relays/register/response/  - register_response
+POST /api/0/relays/publickeys/         - public_keys
+```
+
+Each must be declared in the `routes` config per locality — see
+`example_config_ingest_router.yaml`.
+
+### Endpoints intentionally not handled
+
+```
+GET /api/0/relays/ - Called from the frontend, not relay. Out of scope.
 ```

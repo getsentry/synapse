@@ -10,18 +10,18 @@ use shared::http::make_error_response;
 
 /// Handler for endpoints that can be routed to any cell.
 ///
-/// This handler clones the request to all cells and returns the first
+/// This handler tries cells in configured order and returns the first
 /// successful response (failover mode). It's suitable for endpoints where:
 /// - Any cell can handle the request
 /// - The Sentry upstream handles cross-cell coordination via outboxes
 /// - Success from one cell is sufficient -- synapse operates even if one cell is down
-///
 ///
 /// # Used for:
 ///
 /// - `GET /api/0/relays/live/` - Health check
 /// - `POST /api/0/relays/register/challenge/` - Relay registration challenge
 /// - `POST /api/0/relays/register/response/` - Relay registration response
+/// - `POST /api/0/relays/publickeys/` - Relay public key queries
 pub struct AnyCellHandler {
     name: &'static str,
 }
@@ -50,7 +50,7 @@ impl Handler for AnyCellHandler {
         let (mut parts, body) = request.into_parts();
         normalize_headers(&mut parts.headers, parts.version);
 
-        // Send the request to all cells
+        // One candidate request per cell; the executor tries them in order
         let cell_requests = cells
             .cell_list()
             .map(|cell_id| {

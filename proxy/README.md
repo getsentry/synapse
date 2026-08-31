@@ -39,9 +39,13 @@ Routes are matched top down in the order they are defined. For each incoming req
 3. Path prefix match with dynamic segment
     ```yaml
     - match:
-        host: us.sentry.io                                 # matches us.sentry.io only
-        path: /api/0/organizations/{organization_id_or_slug}/*   # with {organization_id_or_slug} dynamic segment and trailing wildcard
+        host: us.sentry.io                            # matches us.sentry.io only
+        path: /api/0/organizations/{organization}/*   # with {organization} dynamic segment and trailing wildcard
     ```
+
+    The parameter name must match what the resolver reads: `cell_from_organization`
+    reads `{organization}`, `cell_from_id` reads `{id}`. Anything else resolves
+    nothing and falls back to `default` — or 404s if no default is set.
 
 ### Route actions
 

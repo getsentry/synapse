@@ -14,7 +14,7 @@ jobs:
             image_name: synapse
             google_ar_image_name: us-docker.pkg.dev/sentryio/synapse/image
             google_workload_identity_provider: projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool
-            google_service_account: gha-gcr-push@sac-prod-sa.iam.gserviceaccount.com
+            google_service_account: gha-synapse-push@sac-prod-sa.iam.gserviceaccount.com
             push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
     # Gate job — keeps `build-docker` as a single branch-protection check.
